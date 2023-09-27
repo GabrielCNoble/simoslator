@@ -3,7 +3,11 @@
 
 #include "ui.h"
 
-uint32_t in_text_input;
+uint32_t            in_text_input;
+float               in_mouse_x;
+float               in_mouse_y;
+extern uint32_t     m_window_width;
+extern uint32_t     m_window_height;
 
 uint32_t in_ReadInput()
 {
@@ -21,6 +25,8 @@ uint32_t in_ReadInput()
 
             case SDL_MOUSEMOTION:
                 ui_MouseMoveEvent((float)event.motion.x, (float)event.motion.y);
+                in_mouse_x = ((float)event.motion.x / (float)m_window_width) * 2.0f - 1.0f;
+                in_mouse_y = 1.0f - ((float)event.motion.y / (float)m_window_height) * 2.0f;
             break;
 
             case SDL_KEYDOWN:

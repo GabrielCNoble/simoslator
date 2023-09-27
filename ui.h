@@ -22,6 +22,8 @@ void ui_BeginFrame();
 
 void ui_EndFrame();
 
+uint32_t ui_IsMouseAvailable();
+
 
 
 #endif

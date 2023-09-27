@@ -4,9 +4,11 @@
 #include "SDL2/SDL.h"
 #include <stdio.h>
 
-struct list_t   sim_update_devices;
-struct list_t   sim_update_wires;
-uint32_t        sim_cur_step;
+struct list_t               sim_update_devices;
+struct list_t               sim_update_wires;
+uint32_t                    sim_cur_step;
+extern struct pool_t        dev_devices;
+extern struct dev_desc_t    dev_device_descs[];
 
 void sim_Init()
 {
@@ -59,6 +61,24 @@ void sim_QueueWire(struct wire_t *wire)
     }
 }
 
+void sim_BeginSimulation()
+{
+    for(uint32_t index = 0; index < dev_devices.cursor; index++)
+    {
+        struct dev_t *device = pool_GetValidElement(&dev_devices, index);
+        if(device != NULL)
+        {
+            struct dev_desc_t *desc = dev_device_descs + device->type;
+            for(uint32_t pin_index = 0; pin_index < desc->pin_count; pin_index++)
+            {
+                struct dev_pin_t *pin = dev_GetDevicePin(device, pin_index);
+                pin->value = WIRE_VALUE_U;
+            }
+            sim_QueueDevice(device);
+        }
+    }
+}
+
 void sim_Step()
 {
     sim_cur_step = SIM_STEP_DEVICE;
@@ -77,6 +97,7 @@ void sim_Step()
                 }
 
                 sim_update_devices.cursor = 0;
+                sim_cur_step = SIM_STEP_WIRE;
             }
             break;
 
@@ -90,6 +111,7 @@ void sim_Step()
                 }
 
                 sim_update_wires.cursor = 0;
+                sim_cur_step = SIM_STEP_DEVICE;
             }
             break;
         }

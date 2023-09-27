@@ -22,6 +22,7 @@ const char *d_draw_primitive_vertex_shader =
     "   int pos_y;\n"
     "   int size;\n"
     "   int coord_offset;\n"
+    "   int rot_flip;\n"
     "};\n"
     "layout (std430) buffer d_primitive_data_buffer\n"
     "{\n"
@@ -37,7 +38,48 @@ const char *d_draw_primitive_vertex_shader =
     "   size = ivec2(data.size & 0xffff, (data.size >> 16) & 0xffff);\n"
     "   tex_coords = d_tex_coords;\n"
     "   coord_offset = ivec2(data.coord_offset & 0xffff, (data.coord_offset >> 16) & 0xffff);\n"
-    "   vec4 position = vec4(d_position.x * float(size.x) + float(data.pos_x), d_position.y * float(size.y) + float(data.pos_y), 0, 1);\n"
+    "   vec4 position = vec4(d_position.x * float(size.x), d_position.y * float(size.y), 0, 1);\n"
+    "   int rotation = data.rot_flip & 0xffff;\n"
+    "   int flip = (data.rot_flip >> 16) & 0xffff;\n"
+    "   switch(rotation)\n"
+    "   {\n"
+    "       case 1:\n"
+    "       {\n"
+    "           float temp = position.y;\n"
+    "           position.y = position.x;\n"
+    "           position.x = -temp;\n"
+    "       }\n"
+    "       break;\n"
+
+    "       case 2:\n"
+    "       {\n"
+    "           float temp = position.x;\n"
+    "           position.y = -position.y;\n"
+    "           position.x = -position.x;\n"
+    "       }\n"
+    "       break;\n"
+    
+    "       case 3:\n"
+    "       {\n"
+    "           float temp = position.y;\n"
+    "           position.y = -position.x;\n"
+    "           position.x = temp;\n"
+    "       }\n"
+    "       break;\n"
+    "   }\n"
+
+    "   if((flip & 1) != 0)\n"
+    "   {\n"
+    "       position.x = -position.x;\n"
+    "   }\n"
+
+    "   if((flip & 2) != 0)\n"
+    "   {\n"
+    "       position.y = -position.y;\n"
+    "   }\n"
+
+    "   position.x += float(data.pos_x);\n"
+    "   position.y += float(data.pos_y);\n"
     "   gl_Position = d_model_view_projection_matrix * position;\n"
     "}\n";
 
@@ -51,7 +93,7 @@ const char *d_draw_primitive_fragment_shader =
     "{\n"
     "   ivec2 coords = ivec2(float(coord_offset.x) + float(size.x) * tex_coords.x, float(coord_offset.y) + float(size.y) * tex_coords.y);\n"
     "   vec4 color = texelFetch(d_texture, coords, 0);\n"
-    "   gl_FragColor = vec4(vec3(1.0f - color.r) * vec3(0, color.g, 0), color.a);\n"
+    "   gl_FragColor = color;\n"
     "}\n";
 
 GLuint                      d_draw_primitive_shader;
@@ -61,7 +103,7 @@ GLuint                      d_index_buffer;
 GLuint                      d_primitive_storage_buffer;
 uint32_t                    d_draw_primitive_shader_model_view_projection_matrix;
 uint32_t                    d_draw_primitive_shader_texture;
-struct d_primitive_data_t * d_primitive_data;
+struct d_device_data_t *    d_device_data;
 
 float                       d_model_view_projection_matrix[16] = {
     1, 0, 0, 0,
@@ -70,11 +112,15 @@ float                       d_model_view_projection_matrix[16] = {
     0, 0, 0, 1
 };
 
-extern struct pool_t    dev_devices;
-extern GLuint           dev_devices_texture;
-extern uint32_t         dev_device_texture_offsets[][2];
-extern uint32_t         m_window_width;
-extern uint32_t         m_window_height;
+extern struct pool_t        dev_devices;
+extern GLuint               dev_devices_texture;
+extern uint32_t             dev_device_texture_offsets[][2];
+extern struct dev_desc_t    dev_device_descs[];
+extern uint32_t             m_window_width;
+extern uint32_t             m_window_height;
+extern float                m_zoom;
+extern float                m_offset_x;
+extern float                m_offset_y;
 
 
 void d_Init()
@@ -92,13 +138,13 @@ void d_Init()
 
     glGenBuffers(1, &d_primitive_storage_buffer);
     glBindBuffer(GL_SHADER_STORAGE_BUFFER, d_primitive_storage_buffer);
-    glBufferData(GL_SHADER_STORAGE_BUFFER, D_PRIMITIVE_STORAGE_BUFFER_SIZE * sizeof(struct d_primitive_data_t), NULL, GL_DYNAMIC_DRAW);
+    glBufferData(GL_SHADER_STORAGE_BUFFER, D_PRIMITIVE_STORAGE_BUFFER_SIZE * sizeof(struct d_device_data_t), NULL, GL_DYNAMIC_DRAW);
 
     struct d_vert_t vertices[] = {
-        {.position = {-1.0, 1.0}, .tex_coords = {0.0, 1.0}},
-        {.position = {-1.0,-1.0}, .tex_coords = {0.0, 0.0}},
-        {.position = { 1.0,-1.0}, .tex_coords = {1.0, 0.0}},
-        {.position = { 1.0, 1.0}, .tex_coords = {1.0, 1.0}},
+        {.position = {-1.0, 1.0}, .tex_coords = {0.0, 0.0}},
+        {.position = {-1.0,-1.0}, .tex_coords = {0.0, 1.0}},
+        {.position = { 1.0,-1.0}, .tex_coords = {1.0, 1.0}},
+        {.position = { 1.0, 1.0}, .tex_coords = {1.0, 0.0}},
     };
 
     uint32_t indices[] = {
@@ -112,7 +158,7 @@ void d_Init()
     glShaderSource(vertex_shader, 1, &d_draw_primitive_vertex_shader, NULL);
     glCompileShader(vertex_shader);
 
-    d_primitive_data = calloc(D_PRIMITIVE_STORAGE_BUFFER_SIZE, sizeof(struct d_primitive_data_t));
+    d_device_data = calloc(D_PRIMITIVE_STORAGE_BUFFER_SIZE, sizeof(struct d_device_data_t));
 
     GLint status;
     glGetShaderiv(vertex_shader, GL_COMPILE_STATUS, &status);
@@ -180,25 +226,28 @@ void d_Shutdown()
 
 void d_DrawDevices()
 {
-    d_model_view_projection_matrix[0] = 2.0 / (float)m_window_width;
-    d_model_view_projection_matrix[5] = 2.0 / (float)m_window_height;
+    d_model_view_projection_matrix[0] = 2.0 / ((float)m_window_width / m_zoom);
+    d_model_view_projection_matrix[5] = 2.0 / ((float)m_window_height / m_zoom);
+    d_model_view_projection_matrix[12] = -m_offset_x * d_model_view_projection_matrix[0];
+    d_model_view_projection_matrix[13] = -m_offset_y * d_model_view_projection_matrix[1];
 
     for(uint32_t index = 0; index < dev_devices.cursor; index++)
     {
         struct dev_t *device = pool_GetElement(&dev_devices, index);
-        struct d_primitive_data_t *data = d_primitive_data + index;
+        struct d_device_data_t *data = d_device_data + index;
+        struct dev_desc_t *desc = dev_device_descs + device->type;
         data->pos_x = device->position[0];
         data->pos_y = device->position[1];
-        data->size = (42 << 16) | 24;
-        data->coord_offset = (dev_device_texture_offsets[device->type][1] << 16) | dev_device_texture_offsets[device->type][0];
-        // glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, (void *)0);
+        data->size = (desc->height << 16) | desc->width;
+        data->rot_flip = (device->flip << 16) | device->rotation;
+        data->coord_offset = (desc->offset_y << 16) | desc->offset_x;
     }
 
     glBindBuffer(GL_ARRAY_BUFFER, d_vertex_buffer);
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, d_index_buffer);
     // glBindBuffer(GL_SHADER_STORAGE_BUFFER, d_primitive_storage_buffer);
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, d_primitive_storage_buffer);
-    glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, D_PRIMITIVE_STORAGE_BUFFER_SIZE * sizeof(struct d_primitive_data_t), d_primitive_data);
+    glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, D_PRIMITIVE_STORAGE_BUFFER_SIZE * sizeof(struct d_device_data_t), d_device_data);
 
     glUseProgram(d_draw_primitive_shader);
     glEnableVertexAttribArray(0);

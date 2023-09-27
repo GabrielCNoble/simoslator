@@ -22,6 +22,8 @@ void sim_QueueDevice(struct dev_t *device);
 
 void sim_QueueWire(struct wire_t *wire);
 
+void sim_BeginSimulation();
+
 void sim_Step();
 
 

@@ -34,14 +34,23 @@ struct wire_pin_t
     uint64_t pin:       16;
 };
 
+#define WIRE_PIN_BLOCK_PIN_COUNT 8
+
 struct wire_pin_block_t
 {
-    struct wire_pin_t pins[8];
+    struct wire_pin_t pins[WIRE_PIN_BLOCK_PIN_COUNT];
 };
 
+#define WIRE_DEV_BLOCK_DEV_COUNT 8
 struct wire_dev_block_t
 {
-    uint64_t devices[8];
+    // uint64_t devices[WIRE_DEV_BLOCK_DEV_COUNT];
+    struct wire_pin_t devices[WIRE_DEV_BLOCK_DEV_COUNT];
+};
+
+struct wire_segment_t
+{
+    int32_t position[2];
 };
 
 struct wire_t
@@ -52,6 +61,8 @@ struct wire_t
     uint32_t    pin_block_count;
     uint32_t    first_dev_block;
     uint32_t    dev_block_count;
+    uint32_t    first_segment;
+    uint32_t    segment_count;
     uint32_t    queued;
     uint8_t     value;
 };
@@ -61,6 +72,8 @@ void w_Init();
 void w_Shutdown();
 
 struct wire_t *w_CreateWire();
+
+struct wire_t *w_GetWire(uint32_t wire_index);
 
 void w_ConnectWire(struct wire_t *wire, struct dev_t *device, uint16_t pin);
 
