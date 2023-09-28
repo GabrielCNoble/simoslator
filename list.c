@@ -133,6 +133,26 @@ void list_RemoveElement(struct list_t *list, uint64_t index)
     }
 }
 
+uint64_t list_ShiftAndInsertAt(struct list_t *list, uint64_t index, uint64_t count)
+{
+    for(uint64_t add_index = 0; add_index < count; add_index++)
+    {
+        list_AddElement(list, NULL);
+    }
+
+    uint64_t first_element = list->cursor - count;
+
+    if(index < first_element)
+    {
+        
+    }
+}
+
+uint64_t list_RemoveAtAndShift(struct list_t *list, uint64_t index, uint64_t count)
+{
+
+}
+
 void list_Qsort(struct list_t *list, int32_t (*predicate)(const void *a, const void *b))
 {
     list_QsortRange(list, predicate, 0, (int64_t)list->cursor - 1);

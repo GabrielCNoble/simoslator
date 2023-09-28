@@ -322,8 +322,8 @@ int main(int argc, char *argv[])
                         if(cur_selected_device_type != DEV_DEVICE_TYPE_LAST)
                         {
                             struct dev_t *device = dev_CreateDevice(cur_selected_device_type);
-                            device->position[0] = mouse_x;
-                            device->position[1] = mouse_y;
+                            device->position[0] = 20 * (mouse_x / 20);
+                            device->position[1] = 20 * (mouse_y / 20);
                             if(device->type == DEV_DEVICE_TYPE_CLOCK)
                             {
                                 clock = device;
@@ -360,18 +360,18 @@ int main(int argc, char *argv[])
                             struct dev_pin_t *pin1 = dev_GetDevicePin(second_pin.device, second_pin.pin);
                             struct wire_t *wire;
                             
-                            if(pin0->wire == DEV_INVALID_WIRE && pin1->wire == DEV_INVALID_WIRE)
+                            if(pin0->wire == WIRE_INVALID_WIRE && pin1->wire == WIRE_INVALID_WIRE)
                             {
                                 wire = w_CreateWire();
                                 w_ConnectWire(wire, first_pin.device, first_pin.pin);
                                 w_ConnectWire(wire, second_pin.device, second_pin.pin);
                             }
-                            else if(pin0->wire == DEV_INVALID_WIRE)
+                            else if(pin0->wire == WIRE_INVALID_WIRE)
                             {
                                 wire = w_GetWire(pin1->wire);
                                 w_ConnectWire(wire, first_pin.device, first_pin.pin);
                             }
-                            else if(pin1->wire == DEV_INVALID_WIRE)
+                            else if(pin1->wire == WIRE_INVALID_WIRE)
                             {
                                 wire = w_GetWire(pin0->wire);
                                 w_ConnectWire(wire, second_pin.device, second_pin.pin);

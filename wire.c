@@ -180,9 +180,10 @@ uint32_t w_AddDevBlocksAt(uint32_t index, uint32_t count)
 
 void w_ConnectWire(struct wire_t *wire, struct dev_t *device, uint16_t pin)
 {
-    uint32_t block_index = pin / DEV_PIN_BLOCK_PIN_COUNT;
-    uint32_t dev_pin_index = pin % DEV_PIN_BLOCK_PIN_COUNT;
-    struct dev_pin_block_t *dev_pin_block = list_GetElement(&dev_pin_blocks, device->first_pin_block + block_index);
+    // uint32_t block_index = pin / DEV_PIN_BLOCK_PIN_COUNT;
+    // uint32_t dev_pin_index = pin % DEV_PIN_BLOCK_PIN_COUNT;
+    // struct dev_pin_block_t *dev_pin_block = list_GetElement(&dev_pin_blocks, device->first_pin_block + block_index);
+    struct dev_pin_t *device_pin = dev_GetDevicePin(device, pin);
     struct dev_desc_t *dev_desc = dev_device_descs + device->type;
     struct dev_pin_desc_t *pin_desc = dev_desc->pins + pin;
 
@@ -198,7 +199,7 @@ void w_ConnectWire(struct wire_t *wire, struct dev_t *device, uint16_t pin)
             wire_dev_block = list_GetElement(&w_dev_blocks, wire->first_dev_block);
             for(uint32_t index = 0; index < WIRE_DEV_BLOCK_DEV_COUNT; index++)
             {
-                wire_dev_block->devices[index].device = WIRE_INVALID_DEVICE;
+                wire_dev_block->devices[index].device = DEV_INVALID_DEVICE;
             }
         }
         else
@@ -207,20 +208,20 @@ void w_ConnectWire(struct wire_t *wire, struct dev_t *device, uint16_t pin)
 
             for(wire_dev_index = 0; wire_dev_index < WIRE_DEV_BLOCK_DEV_COUNT; wire_dev_index++)
             {
-                if(wire_dev_block->devices[wire_dev_index].device == WIRE_INVALID_DEVICE)
+                if(wire_dev_block->devices[wire_dev_index].device == DEV_INVALID_DEVICE)
                 {
                     break;
                 }
             }
 
-            if(wire_dev_index == WIRE_INVALID_DEVICE)
+            if(wire_dev_index == DEV_INVALID_DEVICE)
             {
                 uint32_t block_index = w_AddDevBlocksAt(wire->first_dev_block + wire->dev_block_count, 1);
                 wire->dev_block_count++;
                 wire_dev_block = list_GetElement(&w_dev_blocks, block_index);
                 for(uint32_t index = 0; index < WIRE_DEV_BLOCK_DEV_COUNT; index++)
                 {
-                    wire_dev_block->devices[index].device = WIRE_INVALID_DEVICE;
+                    wire_dev_block->devices[index].device = DEV_INVALID_DEVICE;
                 }   
                 wire_dev_index = 0;
             }
@@ -241,7 +242,7 @@ void w_ConnectWire(struct wire_t *wire, struct dev_t *device, uint16_t pin)
             wire_pin_block = list_GetElement(&w_pin_blocks, wire->first_pin_block);
             for(uint32_t index = 0; index < WIRE_PIN_BLOCK_PIN_COUNT; index++)
             {
-                wire_pin_block->pins[index].device = WIRE_INVALID_DEVICE;
+                wire_pin_block->pins[index].device = DEV_INVALID_DEVICE;
             }
         }
         else
@@ -250,7 +251,7 @@ void w_ConnectWire(struct wire_t *wire, struct dev_t *device, uint16_t pin)
 
             for(wire_pin_index = 0; wire_pin_index < WIRE_PIN_BLOCK_PIN_COUNT; wire_pin_index++)
             {
-                if(wire_pin_block->pins[wire_pin_index].device == WIRE_INVALID_DEVICE)
+                if(wire_pin_block->pins[wire_pin_index].device == DEV_INVALID_DEVICE)
                 {
                     break;
                 }
@@ -263,7 +264,7 @@ void w_ConnectWire(struct wire_t *wire, struct dev_t *device, uint16_t pin)
                 wire_pin_block = list_GetElement(&w_pin_blocks, block_index);
                 for(uint32_t index = 0; index < WIRE_PIN_BLOCK_PIN_COUNT; index++)
                 {
-                    wire_pin_block->pins[index].device = WIRE_INVALID_DEVICE;
+                    wire_pin_block->pins[index].device = DEV_INVALID_DEVICE;
                 }
                 wire_pin_index = 0;
             }
@@ -273,7 +274,8 @@ void w_ConnectWire(struct wire_t *wire, struct dev_t *device, uint16_t pin)
         wire_pin_block->pins[wire_pin_index].pin = pin;
     }
 
-    dev_pin_block->pins[dev_pin_index].wire = wire->element_index;
+    // dev_pin_block->pins[dev_pin_index].wire = wire->element_index;
+    device_pin->wire = wire->element_index;
 }
 
 void w_DisconnectWire(struct wire_t *wire, struct wire_pin_t *pin)
@@ -287,18 +289,19 @@ void w_WireStep(struct wire_t *wire)
 
     for(uint32_t block_index = 0; block_index < wire->pin_block_count; block_index++)
     {
-        struct wire_pin_block_t *block = list_GetElement(&w_pin_blocks, wire->first_pin_block + block_index);
-        uint32_t pin_index = 0;
+        struct wire_pin_block_t *wire_pin_block = list_GetElement(&w_pin_blocks, wire->first_pin_block + block_index);
+        uint32_t wire_pin_index = 0;
 
-        while(block->pins[pin_index].device != WIRE_INVALID_DEVICE && block->pins[pin_index].pin != WIRE_INVALID_PIN)
+        while(wire_pin_block->pins[wire_pin_index].device != DEV_INVALID_DEVICE)
         {
-            struct dev_t *device = pool_GetElement(&dev_devices, block->pins[pin_index].device);
-            // struct dev_pin_block_t *pin_block = dev_GetDevicePinBlock(device, block->pins[pin_index].pin);
-            uint32_t device_pin_index = block->pins[pin_index].pin % DEV_PIN_BLOCK_PIN_COUNT;
-            uint32_t device_pin_block_index = block->pins[pin_index].pin / DEV_PIN_BLOCK_PIN_COUNT;
-            struct dev_pin_block_t *pin_block = list_GetElement(&dev_pin_blocks, device->first_pin_block + device_pin_block_index);
-            wire_value = w_wire_value_resolution[wire_value][pin_block->pins[device_pin_index].value];
-            pin_index++;
+            struct dev_t *device = pool_GetElement(&dev_devices, wire_pin_block->pins[wire_pin_index].device);
+            // uint32_t device_pin_index = wire_pin_block->pins[wire_pin_index].pin % DEV_PIN_BLOCK_PIN_COUNT;
+            // uint32_t device_pin_block_index = wire_pin_block->pins[wire_pin_index].pin / DEV_PIN_BLOCK_PIN_COUNT;
+            // struct dev_pin_block_t *device_pin_block = list_GetElement(&dev_pin_blocks, device->first_pin_block + device_pin_block_index);
+            // wire_value = w_wire_value_resolution[wire_value][device_pin_block->pins[device_pin_index].value];
+            struct dev_pin_t *device_pin = dev_GetDevicePin(device, wire_pin_block->pins[wire_pin_index].pin);
+            wire_value = w_wire_value_resolution[wire_value][device_pin->value];
+            wire_pin_index++;
         }
     }
 
@@ -309,7 +312,7 @@ void w_WireStep(struct wire_t *wire)
             struct wire_dev_block_t *block = list_GetElement(&w_dev_blocks, wire->first_dev_block + block_index);
             uint32_t device_index = 0;
 
-            while(block->devices[device_index].device != WIRE_INVALID_DEVICE)
+            while(block->devices[device_index].device != DEV_INVALID_DEVICE)
             {
                 struct dev_t *device = pool_GetElement(&dev_devices, block->devices[device_index].device);
                 sim_QueueDevice(device);

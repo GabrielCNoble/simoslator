@@ -4,7 +4,12 @@
 #include "SDL2/SDL.h"
 #include <stdio.h>
 
+/* NOTE: maybe it'd be a good idea to keep a list of devices to update per device type. During
+the device step, the simulation would update all devices of one type before going to the next.
+This should improve instruction cache usage somewhat. The problem with this idea is that filling
+those lists will require a fair amount of scattered writes. */
 struct list_t               sim_update_devices;
+
 struct list_t               sim_update_wires;
 uint32_t                    sim_cur_step;
 extern struct pool_t        dev_devices;

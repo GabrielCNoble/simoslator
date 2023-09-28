@@ -4,6 +4,11 @@
 #include <stdint.h>
 #include "pool.h"
 
+#define DEV_MAX_DEVICES     0xffffffffffff
+#define DEV_MAX_DEVICE_PINS 0xffff
+#define DEV_INVALID_DEVICE  DEV_MAX_DEVICES
+#define DEV_INVALID_PIN     DEV_MAX_DEVICE_PINS
+
 #define DEV_MOS_PIN_SOURCE  0
 #define DEV_MOS_PIN_DRAIN   1
 #define DEV_MOS_PIN_GATE    2
@@ -41,10 +46,10 @@ struct dev_desc_t
     struct dev_pin_desc_t *     pins;
 };
 
-#define DEV_PIN_BLOCK_PIN_COUNT 6
+#define DEV_PIN_BLOCK_PIN_COUNT 4
 #define DEV_MAX_DEVICE_PINS 0xffff
 #define DEV_DEVICE_PIN_PIXEL_WIDTH 8
-#define DEV_INVALID_WIRE 0xffffff
+// #define DEV_INVALID_WIRE 0xffffff
 
 enum DEV_DEVICE_ROTATION
 {
@@ -62,13 +67,13 @@ enum DEV_DEVICE_FLIP
 
 struct dev_pin_t
 {
-    uint32_t wire:  28;
-    uint32_t value: 4;
+    uint64_t wire:  48;
+    uint64_t value: 4;
 };
 
 struct dev_pin_block_t
 {
-    uint64_t            device;
+    // uint64_t            device;
     struct dev_pin_t    pins[DEV_PIN_BLOCK_PIN_COUNT];
 };
 

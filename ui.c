@@ -280,6 +280,7 @@ void ui_EndFrame()
     glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, sizeof(struct ImDrawVert), (void *)(offsetof(struct ImDrawVert, pos)));
     glEnableVertexAttribArray(1);
     glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, sizeof(struct ImDrawVert), (void *)(offsetof(struct ImDrawVert, uv)));
+    glVertexAttribDivisor(1, 0);
     glEnableVertexAttribArray(2);
     glVertexAttribPointer(2, 4, GL_UNSIGNED_BYTE, GL_TRUE, sizeof(struct ImDrawVert), (void *)(offsetof(struct ImDrawVert, col)));
 

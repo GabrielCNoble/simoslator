@@ -34,6 +34,10 @@ void *list_GetValidElement(struct list_t *list, uint64_t index);
 
 void list_RemoveElement(struct list_t *list, uint64_t index);
 
+uint64_t list_ShiftAndInsertAt(struct list_t *list, uint64_t index, uint64_t count);
+
+uint64_t list_RemoveAtAndShift(struct list_t *list, uint64_t index, uint64_t count);
+
 void list_Qsort(struct list_t *list, int32_t (*predicate)(const void *a, const void *b));
 
 void list_QsortRange(struct list_t *list, int32_t (*predicate)(const void *a, const void *b), int64_t left, int64_t right);

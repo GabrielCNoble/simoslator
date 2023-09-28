@@ -5,6 +5,9 @@
 #include "pool.h"
 #include "dev.h"
 
+#define WIRE_MAX_WIRES 0xffffffffffff
+#define WIRE_INVALID_WIRE WIRE_MAX_WIRES
+
 enum WIRE_VALUES
 {
     /* strong 0 */
@@ -25,8 +28,8 @@ enum WIRE_VALUES
     WIRE_VALUE_LAST,
 };
 
-#define WIRE_INVALID_DEVICE 0xffffffffffff
-#define WIRE_INVALID_PIN    0xffff
+// #define WIRE_INVALID_DEVICE 0xffffffffffff
+// #define WIRE_INVALID_PIN    0xffff
 
 struct wire_pin_t
 {
@@ -50,7 +53,8 @@ struct wire_dev_block_t
 
 struct wire_segment_t
 {
-    int32_t position[2];
+    int32_t start[2];
+    int32_t end[2];
 };
 
 struct wire_t

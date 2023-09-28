@@ -271,7 +271,8 @@ struct dev_t *dev_CreateDevice(uint32_t type)
 
         for(uint32_t pin_index = 0; pin_index < pin_count; pin_index++)
         {
-            block->pins[pin_index].wire = DEV_INVALID_WIRE;
+            block->pins[pin_index].wire = WIRE_INVALID_WIRE;
+            block->pins[pin_index].value = WIRE_VALUE_Z;
             // block->pins[pin_index] = *pins;
             // pins++;
         }
