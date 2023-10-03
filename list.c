@@ -135,6 +135,8 @@ void list_RemoveElement(struct list_t *list, uint64_t index)
 
 uint64_t list_ShiftAndInsertAt(struct list_t *list, uint64_t index, uint64_t count)
 {
+    uint64_t prev_last_element = list->cursor - 1;
+
     for(uint64_t add_index = 0; add_index < count; add_index++)
     {
         list_AddElement(list, NULL);
@@ -144,13 +146,171 @@ uint64_t list_ShiftAndInsertAt(struct list_t *list, uint64_t index, uint64_t cou
 
     if(index < first_element)
     {
-        
+        first_element = index;
+        uint64_t src_element = prev_last_element;
+        uint64_t dst_element = list->cursor - 1;
+
+        uint64_t dst_buffer_index = dst_element / list->buffer_elem_count;
+        uint64_t dst_buffer_offset = dst_element % list->buffer_elem_count;
+
+        uint64_t src_buffer_index = src_element / list->buffer_elem_count;
+        uint64_t src_buffer_offset = src_element % list->buffer_elem_count;
+
+        uint64_t total_move_size = 1 + (src_element - first_element);
+        uint64_t buffer_size = list->elem_size * (list->buffer_elem_count - 1);
+        uint64_t move_size;
+
+        if(src_buffer_offset > dst_buffer_offset)
+        {
+            move_size = dst_buffer_offset;
+        }
+        else
+        {
+            move_size = src_buffer_offset;
+        }
+
+        do
+        {
+            if(move_size >= total_move_size)
+            {
+                move_size = total_move_size - 1;
+            }
+
+            src_buffer_offset -= move_size;
+            dst_buffer_offset -= move_size;
+            move_size++;
+            total_move_size -= move_size;
+
+            uintptr_t dst = (uintptr_t)list->buffers[dst_buffer_index] + dst_buffer_offset * list->elem_size;
+            uintptr_t src = (uintptr_t)list->buffers[src_buffer_index] + src_buffer_offset * list->elem_size;
+            
+            memmove((void *)dst, (const void *)src, move_size * list->elem_size);
+
+            if(dst_buffer_offset == src_buffer_offset)
+            {
+                src_buffer_index--;
+                src_buffer_offset = list->buffer_elem_count - 1;
+                dst_buffer_index--;
+                dst_buffer_offset = list->buffer_elem_count - 1;
+                move_size = src_buffer_offset;
+            }
+            else if(dst_buffer_offset == 0)
+            {
+                src_buffer_offset--;
+                move_size = src_buffer_offset;
+                dst_buffer_index--;
+                dst_buffer_offset = list->buffer_elem_count - 1;
+            }
+            else if(src_buffer_offset == 0)
+            {
+                dst_buffer_offset--;
+                move_size = dst_buffer_offset;
+                src_buffer_index--;
+                src_buffer_offset = list->buffer_elem_count - 1;
+            }
+            // else
+            // {
+            //     move_size = src_buffer_offset;
+            //     src_buffer_offset = list->buffer_elem_count - 1;
+            //     dst_buffer_offset = list->buffer_elem_count - 1;
+            // }
+        }
+        while(total_move_size != 0);
     }
+
+    return first_element;
 }
 
-uint64_t list_RemoveAtAndShift(struct list_t *list, uint64_t index, uint64_t count)
+void list_RemoveAtAndShift(struct list_t *list, uint64_t index, uint64_t count)
 {
+    // uint64_t prev_last_element = list->cursor - 1;
 
+    // for(uint64_t add_index = 0; add_index < count; add_index++)
+    // {
+    //     list_AddElement(list, NULL);
+    // }
+
+    // uint64_t first_element = list->cursor - count;
+
+    if(list->cursor > 0)
+    {
+        if(count > list->cursor)
+        {
+            count = list->cursor;   
+        }
+        else
+        {
+            uint64_t last_element = list->cursor - 1;
+
+            if(index < last_element)
+            {
+                // uint64_t src_element = list->cursor - count;
+                uint64_t src_element = index + count;
+                uint64_t dst_element = index;
+
+                uint64_t dst_buffer_index = dst_element / list->buffer_elem_count;
+                uint64_t dst_buffer_offset = dst_element % list->buffer_elem_count;
+
+                uint64_t src_buffer_index = src_element / list->buffer_elem_count;
+                uint64_t src_buffer_offset = src_element % list->buffer_elem_count;
+
+                uint64_t total_move_size = list->cursor - src_element;
+                // uint64_t buffer_size = list->elem_size * (list->buffer_elem_count - 1);
+                uint64_t move_size;
+
+                if(src_buffer_offset > dst_buffer_offset)
+                {
+                    move_size = list->buffer_elem_count - src_buffer_offset;
+                }
+                else
+                {
+                    move_size = list->buffer_elem_count - dst_buffer_offset;
+                }
+
+                do
+                {
+                    if(move_size >= total_move_size)
+                    {
+                        move_size = total_move_size;
+                    }
+
+                    total_move_size -= move_size;
+
+                    uintptr_t dst = (uintptr_t)list->buffers[dst_buffer_index] + dst_buffer_offset * list->elem_size;
+                    uintptr_t src = (uintptr_t)list->buffers[src_buffer_index] + src_buffer_offset * list->elem_size;
+
+                    src_buffer_offset += move_size;
+                    dst_buffer_offset += move_size;
+                    
+                    memmove((void *)dst, (const void *)src, move_size * list->elem_size);
+
+                    if(dst_buffer_offset == src_buffer_offset)
+                    {
+                        src_buffer_index++;
+                        src_buffer_offset = 0;
+                        dst_buffer_index++;
+                        dst_buffer_offset = 0;
+                        move_size = list->buffer_elem_count;
+                    }
+                    else if(src_buffer_offset >= list->buffer_elem_count)
+                    {
+                        move_size = list->buffer_elem_count - dst_buffer_offset;
+                        src_buffer_index++;
+                        src_buffer_offset = 0;
+                    }
+                    else
+                    {
+                        move_size = list->buffer_elem_count - src_buffer_offset;
+                        dst_buffer_index++;
+                        dst_buffer_offset = 0;
+                    }
+                }
+                while(total_move_size != 0);
+            }
+        }
+
+        list->cursor -= count;
+    }
 }
 
 void list_Qsort(struct list_t *list, int32_t (*predicate)(const void *a, const void *b))

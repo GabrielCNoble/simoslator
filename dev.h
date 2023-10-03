@@ -20,6 +20,7 @@ enum DEV_DEVICE_TYPES
     DEV_DEVICE_TYPE_GND,
     DEV_DEVICE_TYPE_POW,
     DEV_DEVICE_TYPE_CLOCK,
+    DEV_DEVICE_TYPE_INPUT,
     DEV_DEVICE_TYPE_LAST,
 };
 
@@ -74,19 +75,22 @@ struct dev_pin_t
 struct dev_pin_block_t
 {
     // uint64_t            device;
-    struct dev_pin_t    pins[DEV_PIN_BLOCK_PIN_COUNT];
+    POOL_ELEMENT;
+    struct dev_pin_block_t *    next;
+    struct dev_pin_t            pins[DEV_PIN_BLOCK_PIN_COUNT];
 };
 
 struct dev_t
 {
     POOL_ELEMENT;
-    int32_t     position[2];
-    uint32_t    type;
-    uint32_t    first_pin_block;
-    uint32_t    pin_block_count;
-    uint32_t    queued;
-    uint16_t    rotation;
-    uint16_t    flip;
+    void *                      data;
+    uint64_t                    sim_data;
+    int32_t                     position[2];
+    uint32_t                    type;
+    uint32_t                    selection_index;
+    struct dev_pin_block_t *    pin_blocks;
+    uint16_t                    rotation;
+    uint16_t                    flip;
 };
 
 struct dev_clock_t
@@ -96,27 +100,26 @@ struct dev_clock_t
     uint32_t        frequency;
 };
 
+struct dev_input_t
+{
+    POOL_ELEMENT;
+    struct dev_t *  device;
+    uint8_t         init_value;
+};
+
 void dev_Init();
 
 void dev_Shutdown();
 
-void dev_PMosStep(struct dev_t *device);
-
-void dev_NMosStep(struct dev_t *device);
-
-void dev_PowerStep(struct dev_t *device);
-
-void dev_GroundStep(struct dev_t *device);
-
-void dev_ClockStep(struct dev_t *device);
-
-void dev_DeviceStep(struct dev_t *device);
-
 struct dev_t *dev_CreateDevice(uint32_t type);
+
+struct dev_t *dev_GetDevice(uint64_t device_index);
 
 struct dev_pin_block_t *dev_GetDevicePinBlock(struct dev_t *device, uint16_t pin);
 
 struct dev_pin_t *dev_GetDevicePin(struct dev_t *device, uint16_t pin);
+
+void dev_ToggleInput(struct dev_input_t *input);
 
 
 #endif

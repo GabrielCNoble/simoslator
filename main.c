@@ -23,6 +23,13 @@ float                           m_offset_y = 0.0f;
 GLuint                          m_cursor_texture;
 GLuint                          m_play_texture;
 GLuint                          m_pause_texture;
+int32_t                         m_mouse_x;
+int32_t                         m_mouse_y;
+uint32_t                        m_run_simulation;
+uint32_t                        m_selected_device_type;
+struct dev_t *                  m_selected_device;
+struct list_t                   m_selections;
+
 extern float                    in_mouse_x;
 extern float                    in_mouse_y;
 extern struct pool_t            dev_devices;
@@ -31,6 +38,8 @@ extern GLuint                   dev_devices_texture;
 extern uint32_t                 dev_devices_texture_width;
 extern uint32_t                 dev_devices_texture_height;
 extern struct dev_desc_t        dev_device_descs[];
+
+extern struct list_t            w_wire_segment_positions;
 
 extern float                    d_model_view_projection_matrix[];
 
@@ -47,7 +56,7 @@ struct m_selected_pin_t
     uint16_t        pin;
 };
 
-struct m_selected_pin_t m_GetPinUnderMouse(int32_t mouse_x, int32_t mouse_y)
+struct m_selected_pin_t m_GetPinUnderMouse()
 {
     struct m_selected_pin_t selected_pin = {};
 
@@ -64,13 +73,12 @@ struct m_selected_pin_t m_GetPinUnderMouse(int32_t mouse_x, int32_t mouse_y)
                 pin_position[0] = device->position[0] + pin_desc->offset[0];
                 pin_position[1] = device->position[1] + pin_desc->offset[1];
 
-                if(mouse_x >= pin_position[0] - DEV_DEVICE_PIN_PIXEL_WIDTH && 
-                    mouse_x <= pin_position[0] + DEV_DEVICE_PIN_PIXEL_WIDTH)
+                if(m_mouse_x >= pin_position[0] - DEV_DEVICE_PIN_PIXEL_WIDTH && 
+                    m_mouse_x <= pin_position[0] + DEV_DEVICE_PIN_PIXEL_WIDTH)
                 {
-                    if(mouse_y >= pin_position[1] - DEV_DEVICE_PIN_PIXEL_WIDTH && 
-                        mouse_y <= pin_position[1] + DEV_DEVICE_PIN_PIXEL_WIDTH)
+                    if(m_mouse_y >= pin_position[1] - DEV_DEVICE_PIN_PIXEL_WIDTH && 
+                        m_mouse_y <= pin_position[1] + DEV_DEVICE_PIN_PIXEL_WIDTH)
                     {
-                        // printf("pin %d clicked\n", pin_index);
                         selected_pin.device = device;
                         selected_pin.pin = pin_index;
                         device_index = dev_devices.cursor;
@@ -83,6 +91,42 @@ struct m_selected_pin_t m_GetPinUnderMouse(int32_t mouse_x, int32_t mouse_y)
     }
 
     return selected_pin;
+}
+
+struct dev_t *m_GetDeviceUnderMouse()
+{
+    for(uint32_t device_index = 0; device_index < dev_devices.cursor; device_index++)
+    {
+        struct dev_t *device = pool_GetValidElement(&dev_devices, device_index);
+        
+        struct dev_desc_t *desc = dev_device_descs + device->type;
+        if(m_mouse_x >= device->position[0] - desc->width && m_mouse_x <= device->position[0] + desc->width)
+        {
+            if(m_mouse_y >= device->position[1] - desc->height && m_mouse_y <= device->position[1] + desc->height)
+            {
+                return device;
+            }
+        }        
+    }
+
+    return NULL;
+}
+
+struct dev_input_t *m_GetInputUnderMouse()
+{
+    struct dev_input_t *input = NULL;
+    struct dev_t *device = m_GetDeviceUnderMouse();
+    if(device != NULL && device->type == DEV_DEVICE_TYPE_INPUT)
+    {
+        input = device->data;
+    }
+
+    return input;
+}
+
+void m_SelectDevice(struct dev_t *device, uint32_t multiple)
+{
+    
 }
 
 int main(int argc, char *argv[])
@@ -150,8 +194,38 @@ int main(int argc, char *argv[])
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
     free(pixels);
 
-    
 
+    // struct list_t list = list_Create(sizeof(uint32_t), 8);
+    // list_AddElement(&list, &(uint32_t){0});
+    // list_AddElement(&list, &(uint32_t){1});
+    // list_AddElement(&list, &(uint32_t){2});
+    // list_AddElement(&list, &(uint32_t){3});
+    // list_AddElement(&list, &(uint32_t){4});
+    // list_AddElement(&list, &(uint32_t){5});
+    // list_AddElement(&list, &(uint32_t){6});
+    // list_AddElement(&list, &(uint32_t){7});
+
+    // list_AddElement(&list, &(uint32_t){8});
+    // list_AddElement(&list, &(uint32_t){9});
+    // list_AddElement(&list, &(uint32_t){10});
+
+    // list_ShiftAndInsertAt(&list, 0, 8);
+
+    // for(uint32_t index = 0; index < list.cursor; index++)
+    // {
+    //     uint32_t value = *(uint32_t *)list_GetElement(&list, index);
+    //     printf("%d\n", value);
+    // }
+
+    // list_RemoveAtAndShift(&list, 2, 3);
+    
+    // for(uint32_t index = 0; index < list.cursor; index++)
+    // {
+    //     uint32_t value = *(uint32_t *)list_GetElement(&list, index);
+    //     printf("%d\n", value);
+    // }
+
+    m_selections = list_Create(sizeof(struct dev_t *), 512);
 
     d_Init();
     ui_Init();
@@ -203,15 +277,15 @@ int main(int argc, char *argv[])
     // sim_QueueWire(wire1);
     // sim_QueueWire(wire2);
 
-    uint32_t cur_selected_device_type = DEV_DEVICE_TYPE_LAST;
+    m_selected_device_type = DEV_DEVICE_TYPE_LAST;
     uint32_t cur_edit_mode = M_EDIT_MODE_SELECT;
     uint32_t run_simulation = 0;
 
     struct m_selected_pin_t first_pin = {};
     struct m_selected_pin_t second_pin = {};
 
-    struct dev_t *clock = NULL;
-    struct dev_t *nmos = NULL;
+    // struct dev_t *clock = NULL;
+    // struct dev_t *nmos = NULL;
 
     // struct dev_t *first_device = NULL;
     // uint32_t first_pin;
@@ -258,28 +332,19 @@ int main(int argc, char *argv[])
             }
 
             igSameLine(0, -1);
-            if(igButton("C", (ImVec2){28, 28}))
-            {
-                if(clock != NULL)
-                {
-                    dev_DeviceStep(clock);
-                }
-            }
-
-
-            igSameLine(0, -1);
-            if(run_simulation)
+            if(m_run_simulation)
             {
                 if(igImageButton("##stop_simulation", (void *)(uintptr_t)m_pause_texture, (ImVec2){24, 24}, (ImVec2){}, (ImVec2){1, 1}, (ImVec4){1, 1, 1, 1}, (ImVec4){1, 1, 1, 1}))
                 {
-                    run_simulation = 0;
+                    m_run_simulation = 0;
+                    sim_StopSimulation();
                 }
             }
             else
             {
                 if(igImageButton("##begin_simulation", (void *)(uintptr_t)m_play_texture, (ImVec2){24, 24}, (ImVec2){}, (ImVec2){1, 1}, (ImVec4){1, 1, 1, 1}, (ImVec4){1, 1, 1, 1}))
                 {
-                    run_simulation = 1;
+                    m_run_simulation = 1;
                     sim_BeginSimulation();
                 }
             }
@@ -287,13 +352,14 @@ int main(int argc, char *argv[])
             igSameLine(0, -1);
             igSeparatorEx(ImGuiSeparatorFlags_Vertical, 2.0f);
 
-            int32_t mouse_x = in_mouse_x / d_model_view_projection_matrix[0] + d_model_view_projection_matrix[12];
-            int32_t mouse_y = in_mouse_y / d_model_view_projection_matrix[5] + d_model_view_projection_matrix[13];
+            m_mouse_x = in_mouse_x / d_model_view_projection_matrix[0] + d_model_view_projection_matrix[12];
+            m_mouse_y = in_mouse_y / d_model_view_projection_matrix[5] + d_model_view_projection_matrix[13];
 
             igSameLine(0, -1);
             if(igImageButton("##select_mode", (void *)(uintptr_t)m_cursor_texture, (ImVec2){24, 24}, (ImVec2){}, (ImVec2){1, 1}, (ImVec4){1, 1, 1, 1}, (ImVec4){1, 1, 1, 1}))
             {
                 cur_edit_mode = M_EDIT_MODE_SELECT;
+                m_selected_device_type = DEV_DEVICE_TYPE_LAST;
             }
 
             for(uint32_t device_type = 0; device_type < DEV_DEVICE_TYPE_LAST; device_type++)
@@ -308,7 +374,8 @@ int main(int argc, char *argv[])
                 igPushID_Int(device_type);
                 if(igImageButton("##button", (void *)(uintptr_t)dev_devices_texture, (ImVec2){24, 24}, uv0, uv1, (ImVec4){1, 1, 1, 1}, (ImVec4){1, 1, 1, 1}))
                 {
-                    cur_selected_device_type = device_type;
+                    m_selected_device_type = device_type;
+                    m_selected_device = NULL;
                     cur_edit_mode = M_EDIT_MODE_PLACE;
                 }
                 igPopID();
@@ -317,21 +384,13 @@ int main(int argc, char *argv[])
             switch(cur_edit_mode)
             { 
                 case M_EDIT_MODE_PLACE:
-                    if(igIsMouseClicked_Bool(ImGuiMouseButton_Left, 0) && ui_IsMouseAvailable())
+                    if(igIsMouseClicked_Bool(ImGuiMouseButton_Left, 0) && ui_IsMouseAvailable() && !run_simulation)
                     {
-                        if(cur_selected_device_type != DEV_DEVICE_TYPE_LAST)
+                        if(m_selected_device_type != DEV_DEVICE_TYPE_LAST)
                         {
-                            struct dev_t *device = dev_CreateDevice(cur_selected_device_type);
-                            device->position[0] = 20 * (mouse_x / 20);
-                            device->position[1] = 20 * (mouse_y / 20);
-                            if(device->type == DEV_DEVICE_TYPE_CLOCK)
-                            {
-                                clock = device;
-                            }
-                            else if(device->type == DEV_DEVICE_TYPE_NMOS)
-                            {
-                                nmos = device;
-                            }
+                            struct dev_t *device = dev_CreateDevice(m_selected_device_type);
+                            device->position[0] = 20 * (m_mouse_x / 20);
+                            device->position[1] = 20 * (m_mouse_y / 20);
                         }
                     }
                 break;
@@ -339,13 +398,25 @@ int main(int argc, char *argv[])
                 case M_EDIT_MODE_SELECT:
                     if(igIsMouseClicked_Bool(ImGuiMouseButton_Left, 0) && ui_IsMouseAvailable())
                     {
-                        struct m_selected_pin_t pin = m_GetPinUnderMouse(mouse_x, mouse_y);
-
-                        if(pin.device != NULL)
+                        if(!m_run_simulation)
                         {
-                            printf("picked pin %d of device %p\n", pin.pin, pin.device);
-                            first_pin = pin;
-                            cur_edit_mode = M_EDIT_MODE_DRAG_WIRE;
+                            struct m_selected_pin_t pin = m_GetPinUnderMouse();
+                            if(pin.device != NULL)
+                            {
+                                printf("picked pin %d of device %p\n", pin.pin, pin.device);
+                                first_pin = pin;
+                                cur_edit_mode = M_EDIT_MODE_DRAG_WIRE;
+                            }
+                            else
+                            {
+                                // m_selected_device = m_GetDeviceUnderMouse();
+                                struct dev_t *device = m_GetDeviceUnderMouse();
+                            }
+                        }
+                        else
+                        {
+                            struct dev_input_t *input = m_GetInputUnderMouse();
+                            dev_ToggleInput(input);
                         }
                     }
                 break;
@@ -353,31 +424,11 @@ int main(int argc, char *argv[])
                 case M_EDIT_MODE_DRAG_WIRE:
                     if(igIsMouseClicked_Bool(ImGuiMouseButton_Left, 0) && ui_IsMouseAvailable())
                     {
-                        second_pin = m_GetPinUnderMouse(mouse_x, mouse_y);
+                        second_pin = m_GetPinUnderMouse();
                         if(second_pin.device != NULL && (first_pin.device != second_pin.device || first_pin.pin != second_pin.pin))
                         {
-                            struct dev_pin_t *pin0 = dev_GetDevicePin(first_pin.device, first_pin.pin);
-                            struct dev_pin_t *pin1 = dev_GetDevicePin(second_pin.device, second_pin.pin);
-                            struct wire_t *wire;
-                            
-                            if(pin0->wire == WIRE_INVALID_WIRE && pin1->wire == WIRE_INVALID_WIRE)
-                            {
-                                wire = w_CreateWire();
-                                w_ConnectWire(wire, first_pin.device, first_pin.pin);
-                                w_ConnectWire(wire, second_pin.device, second_pin.pin);
-                            }
-                            else if(pin0->wire == WIRE_INVALID_WIRE)
-                            {
-                                wire = w_GetWire(pin1->wire);
-                                w_ConnectWire(wire, first_pin.device, first_pin.pin);
-                            }
-                            else if(pin1->wire == WIRE_INVALID_WIRE)
-                            {
-                                wire = w_GetWire(pin0->wire);
-                                w_ConnectWire(wire, second_pin.device, second_pin.pin);
-                            }
-
-                            printf("wire %p between pins %d and %d of devices %p and %p\n", wire, first_pin.pin, second_pin.pin, first_pin.device, second_pin.device);
+                            struct wire_t *wire = w_ConnectPins(first_pin.device, first_pin.pin, second_pin.device, second_pin.pin);
+                            printf("wire %p (%d) between pins %d and %d of devices %p and %p\n", wire, wire->element_index, first_pin.pin, second_pin.pin, first_pin.device, second_pin.device);
                         }
 
                         first_pin = (struct m_selected_pin_t){};
@@ -390,13 +441,9 @@ int main(int argc, char *argv[])
         igPopStyleVar(3);
         ui_EndFrame();
 
-        if(run_simulation)
+        if(m_run_simulation)
         {
             sim_Step();
-            struct dev_pin_t *clock_pin = dev_GetDevicePin(clock, 0);
-            struct dev_pin_t *nmos_drain = dev_GetDevicePin(nmos, DEV_MOS_PIN_DRAIN);
-            struct wire_t *drain_wire = w_GetWire(nmos_drain->wire);
-            printf("clock is %d, drain is %d\n", clock_pin->value, drain_wire->value);
         }
 
         d_DrawDevices();

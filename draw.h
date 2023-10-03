@@ -12,7 +12,7 @@ struct d_vert_t
 struct d_wire_vert_t
 {
     float       position[2];
-    uint32_t    wire_id;
+    uint32_t    value;
 };
 
 struct d_device_data_t
@@ -21,7 +21,7 @@ struct d_device_data_t
     int32_t pos_y;
     int32_t size;
     int32_t coord_offset;
-    int32_t rot_flip;
+    int32_t rot_flip_sel;
 };
 
 void d_Init();
