@@ -62,8 +62,8 @@ enum DEV_DEVICE_ROTATION
 
 enum DEV_DEVICE_FLIP
 {
-    DEV_DEVICE_FLIP_X,
     DEV_DEVICE_FLIP_Y,
+    DEV_DEVICE_FLIP_X,
 };
 
 struct dev_pin_t
@@ -85,9 +85,9 @@ struct dev_t
     POOL_ELEMENT;
     void *                      data;
     uint64_t                    sim_data;
+    uint64_t                    selection_index;
     int32_t                     position[2];
     uint32_t                    type;
-    uint32_t                    selection_index;
     struct dev_pin_block_t *    pin_blocks;
     uint16_t                    rotation;
     uint16_t                    flip;

@@ -23,9 +23,17 @@ float                           m_offset_y = 0.0f;
 GLuint                          m_cursor_texture;
 GLuint                          m_play_texture;
 GLuint                          m_pause_texture;
+GLuint                          m_wire_texture;
+GLuint                          m_rotate_texture;
+GLuint                          m_fliph_texture;
+GLuint                          m_flipv_texture;
 int32_t                         m_mouse_x;
 int32_t                         m_mouse_y;
+int32_t                         m_place_device_x;
+int32_t                         m_place_device_y;
 uint32_t                        m_run_simulation;
+uint32_t                        m_cur_edit_func;
+uint32_t                        m_wire_func_stage;
 uint32_t                        m_selected_device_type;
 struct dev_t *                  m_selected_device;
 struct list_t                   m_selections;
@@ -43,11 +51,11 @@ extern struct list_t            w_wire_segment_positions;
 
 extern float                    d_model_view_projection_matrix[];
 
-enum M_EDIT_MODES
+enum M_EDIT_FUNCS
 {
-    M_EDIT_MODE_PLACE,
-    M_EDIT_MODE_SELECT,
-    M_EDIT_MODE_DRAG_WIRE
+    M_EDIT_FUNC_PLACE,
+    M_EDIT_FUNC_SELECT,
+    M_EDIT_FUNC_WIRE
 };
 
 struct m_selected_pin_t
@@ -124,9 +132,68 @@ struct dev_input_t *m_GetInputUnderMouse()
     return input;
 }
 
+void m_ClearSelections()
+{
+    for(uint32_t index = 0; index < m_selections.cursor; index++)
+    {
+        struct dev_t *device = *(struct dev_t **)list_GetElement(&m_selections, index);
+        device->selection_index = INVALID_LIST_INDEX;
+    }
+
+    m_selections.cursor = 0;
+}
+
 void m_SelectDevice(struct dev_t *device, uint32_t multiple)
 {
-    
+    if(device->selection_index != INVALID_LIST_INDEX)
+    {
+        uint64_t index = device->selection_index;
+        device->selection_index = INVALID_LIST_INDEX;   
+
+        if(multiple)
+        {
+            list_RemoveElement(&m_selections, index);
+            if(device->selection_index < m_selections.cursor)
+            {
+                struct dev_t *moved_device = *(struct dev_t **)list_GetElement(&m_selections, index);
+                moved_device->selection_index = index;
+            }
+
+            return;
+        }
+    }
+
+    if(!multiple)
+    {
+        m_ClearSelections();
+    }
+
+    device->selection_index = list_AddElement(&m_selections, &device);
+}
+
+void m_SetEditFunc(uint32_t func)
+{
+    m_cur_edit_func = func;
+    switch(m_cur_edit_func)
+    {
+        case M_EDIT_FUNC_SELECT:
+            m_selected_device_type = DEV_DEVICE_TYPE_LAST;
+            m_wire_func_stage = 0;
+            ui_SetCursor(SDL_SYSTEM_CURSOR_ARROW);
+        break;
+
+        case M_EDIT_FUNC_PLACE:
+            m_wire_func_stage = 0;
+            m_ClearSelections();
+            ui_SetCursor(SDL_SYSTEM_CURSOR_CROSSHAIR);
+        break;
+
+        case M_EDIT_FUNC_WIRE:
+            m_selected_device_type = DEV_DEVICE_TYPE_LAST;
+            m_ClearSelections();
+            ui_SetCursor(SDL_SYSTEM_CURSOR_CROSSHAIR);
+        break;
+    }
 }
 
 int main(int argc, char *argv[])
@@ -185,6 +252,54 @@ int main(int argc, char *argv[])
     pixels = stbi_load("res/pause.png", &width, &height, &channels, STBI_rgb_alpha);
     glGenTextures(1, &m_pause_texture);
     glBindTexture(GL_TEXTURE_2D, m_pause_texture);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_BASE_LEVEL, 0);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_LEVEL, 4);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
+    free(pixels);
+
+    pixels = stbi_load("res/connected.png", &width, &height, &channels, STBI_rgb_alpha);
+    glGenTextures(1, &m_wire_texture);
+    glBindTexture(GL_TEXTURE_2D, m_wire_texture);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_BASE_LEVEL, 0);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_LEVEL, 4);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
+    free(pixels);
+
+    pixels = stbi_load("res/rotate.png", &width, &height, &channels, STBI_rgb_alpha);
+    glGenTextures(1, &m_rotate_texture);
+    glBindTexture(GL_TEXTURE_2D, m_rotate_texture);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_BASE_LEVEL, 0);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_LEVEL, 4);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
+    free(pixels);
+
+    pixels = stbi_load("res/fliph.png", &width, &height, &channels, STBI_rgb_alpha);
+    glGenTextures(1, &m_fliph_texture);
+    glBindTexture(GL_TEXTURE_2D, m_fliph_texture);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_BASE_LEVEL, 0);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_LEVEL, 4);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
+    free(pixels);
+
+    pixels = stbi_load("res/flipv.png", &width, &height, &channels, STBI_rgb_alpha);
+    glGenTextures(1, &m_flipv_texture);
+    glBindTexture(GL_TEXTURE_2D, m_flipv_texture);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_BASE_LEVEL, 0);
@@ -278,11 +393,12 @@ int main(int argc, char *argv[])
     // sim_QueueWire(wire2);
 
     m_selected_device_type = DEV_DEVICE_TYPE_LAST;
-    uint32_t cur_edit_mode = M_EDIT_MODE_SELECT;
-    uint32_t run_simulation = 0;
+    m_cur_edit_func = M_EDIT_FUNC_SELECT;
+    // uint32_t run_simulation = 0;
 
-    struct m_selected_pin_t first_pin = {};
-    struct m_selected_pin_t second_pin = {};
+    // struct m_selected_pin_t first_pin = {};
+    // struct m_selected_pin_t second_pin = {};
+    struct m_selected_pin_t pins[2] = {};
 
     // struct dev_t *clock = NULL;
     // struct dev_t *nmos = NULL;
@@ -304,6 +420,9 @@ int main(int argc, char *argv[])
         {
             igEndMainMenuBar();
         }
+
+        m_mouse_x = in_mouse_x / d_model_view_projection_matrix[0] + d_model_view_projection_matrix[12];
+        m_mouse_y = in_mouse_y / d_model_view_projection_matrix[5] + d_model_view_projection_matrix[13];
 
         igSetNextWindowPos((ImVec2){0, 18}, 0, (ImVec2){});
         igSetNextWindowSize((ImVec2){m_window_width, 32}, 0);
@@ -352,14 +471,118 @@ int main(int argc, char *argv[])
             igSameLine(0, -1);
             igSeparatorEx(ImGuiSeparatorFlags_Vertical, 2.0f);
 
-            m_mouse_x = in_mouse_x / d_model_view_projection_matrix[0] + d_model_view_projection_matrix[12];
-            m_mouse_y = in_mouse_y / d_model_view_projection_matrix[5] + d_model_view_projection_matrix[13];
-
             igSameLine(0, -1);
             if(igImageButton("##select_mode", (void *)(uintptr_t)m_cursor_texture, (ImVec2){24, 24}, (ImVec2){}, (ImVec2){1, 1}, (ImVec4){1, 1, 1, 1}, (ImVec4){1, 1, 1, 1}))
             {
-                cur_edit_mode = M_EDIT_MODE_SELECT;
-                m_selected_device_type = DEV_DEVICE_TYPE_LAST;
+                m_SetEditFunc(M_EDIT_FUNC_SELECT);
+            }
+            if(igIsItemHovered(0))
+            {
+                if(igBeginTooltip())
+                {
+                    igText("Select");
+                    igEndTooltip();
+                }
+            }
+
+
+            igSameLine(0, -1);
+            if(igImageButton("##rotate_ccw", (void *)(uintptr_t)m_rotate_texture, (ImVec2){24, 24}, (ImVec2){}, (ImVec2){1, 1}, (ImVec4){1, 1, 1, 1}, (ImVec4){1, 1, 1, 1}))
+            {
+                for(uint32_t index = 0; index < m_selections.cursor; index++)
+                {
+                    struct dev_t *device = *(struct dev_t **)list_GetElement(&m_selections, index);
+                    device->rotation = (device->rotation + 1) % 4;
+                }
+                m_SetEditFunc(M_EDIT_FUNC_SELECT);
+            }
+            if(igIsItemHovered(0))
+            {
+                if(igBeginTooltip())
+                {
+                    igText("Rotate selection CCW");
+                    igEndTooltip();
+                }
+            }
+
+
+            igSameLine(0, -1);
+            if(igImageButton("##rotate_cw", (void *)(uintptr_t)m_rotate_texture, (ImVec2){24, 24}, (ImVec2){1, 0}, (ImVec2){0, 1}, (ImVec4){1, 1, 1, 1}, (ImVec4){1, 1, 1, 1}))
+            {
+                for(uint32_t index = 0; index < m_selections.cursor; index++)
+                {
+                    struct dev_t *device = *(struct dev_t **)list_GetElement(&m_selections, index);
+                    if(device->rotation == 0)
+                    {
+                        device->rotation = 4;
+                    }
+                    device->rotation--;
+                }
+                m_SetEditFunc(M_EDIT_FUNC_SELECT);
+            }
+            if(igIsItemHovered(0))
+            {
+                if(igBeginTooltip())
+                {
+                    igText("Rotate selection CW");
+                    igEndTooltip();
+                }
+            }
+
+
+            igSameLine(0, -1);
+            if(igImageButton("##flip_h", (void *)(uintptr_t)m_fliph_texture, (ImVec2){24, 24}, (ImVec2){0, 0}, (ImVec2){1, 1}, (ImVec4){1, 1, 1, 1}, (ImVec4){1, 1, 1, 1}))
+            {
+                for(uint32_t index = 0; index < m_selections.cursor; index++)
+                {
+                    struct dev_t *device = *(struct dev_t **)list_GetElement(&m_selections, index);
+                    device->flip ^= 1 << DEV_DEVICE_FLIP_Y;
+                }
+                m_SetEditFunc(M_EDIT_FUNC_SELECT);
+            }
+            if(igIsItemHovered(0))
+            {
+                if(igBeginTooltip())
+                {
+                    igText("Mirror selection horizontally");
+                    igEndTooltip();
+                }
+            }
+
+
+            igSameLine(0, -1);
+            if(igImageButton("##flip_v", (void *)(uintptr_t)m_flipv_texture, (ImVec2){24, 24}, (ImVec2){0, 0}, (ImVec2){1, 1}, (ImVec4){1, 1, 1, 1}, (ImVec4){1, 1, 1, 1}))
+            {
+                for(uint32_t index = 0; index < m_selections.cursor; index++)
+                {
+                    struct dev_t *device = *(struct dev_t **)list_GetElement(&m_selections, index);
+                    device->flip ^= 1 << DEV_DEVICE_FLIP_X;
+                }
+                m_SetEditFunc(M_EDIT_FUNC_SELECT);
+            }
+            if(igIsItemHovered(0))
+            {
+                if(igBeginTooltip())
+                {
+                    igText("Mirror selection vertically");
+                    igEndTooltip();
+                }
+            }
+
+            igSameLine(0, -1);
+            igSeparatorEx(ImGuiSeparatorFlags_Vertical, 2.0f);
+            igSameLine(0, -1);
+            if(igImageButton("##wire_mode", (void *)(uintptr_t)m_wire_texture, (ImVec2){24, 24}, (ImVec2){}, (ImVec2){1, 1}, (ImVec4){1, 1, 1, 1}, (ImVec4){1, 1, 1, 1}))
+            {
+                m_SetEditFunc(M_EDIT_FUNC_WIRE);
+            }
+            if(igIsItemHovered(0))
+            {
+                if(igBeginTooltip())
+                {
+                    igText("Wire");
+                    igEndTooltip();
+                }
             }
 
             for(uint32_t device_type = 0; device_type < DEV_DEVICE_TYPE_LAST; device_type++)
@@ -375,42 +598,58 @@ int main(int argc, char *argv[])
                 if(igImageButton("##button", (void *)(uintptr_t)dev_devices_texture, (ImVec2){24, 24}, uv0, uv1, (ImVec4){1, 1, 1, 1}, (ImVec4){1, 1, 1, 1}))
                 {
                     m_selected_device_type = device_type;
-                    m_selected_device = NULL;
-                    cur_edit_mode = M_EDIT_MODE_PLACE;
+                    m_SetEditFunc(M_EDIT_FUNC_PLACE);
                 }
                 igPopID();
             }
 
-            switch(cur_edit_mode)
+            if(igIsKeyPressed_Bool(ImGuiKey_Escape, 0))
+            {
+                m_SetEditFunc(M_EDIT_FUNC_SELECT);
+            }
+
+            switch(m_cur_edit_func)
             { 
-                case M_EDIT_MODE_PLACE:
-                    if(igIsMouseClicked_Bool(ImGuiMouseButton_Left, 0) && ui_IsMouseAvailable() && !run_simulation)
+                case M_EDIT_FUNC_PLACE:
+                    m_place_device_x = 20 * (m_mouse_x / 20);
+                    m_place_device_y = 20 * (m_mouse_y / 20);
+                    if(igIsMouseClicked_Bool(ImGuiMouseButton_Left, 0) && ui_IsMouseAvailable() && !m_run_simulation)
                     {
                         if(m_selected_device_type != DEV_DEVICE_TYPE_LAST)
                         {
                             struct dev_t *device = dev_CreateDevice(m_selected_device_type);
-                            device->position[0] = 20 * (m_mouse_x / 20);
-                            device->position[1] = 20 * (m_mouse_y / 20);
+                            device->position[0] = m_place_device_x;
+                            device->position[1] = m_place_device_y;
                         }
                     }
                 break;
   
-                case M_EDIT_MODE_SELECT:
+                case M_EDIT_FUNC_SELECT:
                     if(igIsMouseClicked_Bool(ImGuiMouseButton_Left, 0) && ui_IsMouseAvailable())
                     {
                         if(!m_run_simulation)
                         {
-                            struct m_selected_pin_t pin = m_GetPinUnderMouse();
-                            if(pin.device != NULL)
+                            // struct m_selected_pin_t pin = m_GetPinUnderMouse();
+                            // if(pin.device != NULL)
+                            // {
+                            //     printf("picked pin %d of device %p\n", pin.pin, pin.device);
+                            //     first_pin = pin;
+                            //     m_cur_edit_func = M_EDIT_FUNC_WIRE;
+                            // }
+                            // else
+                            // {
+                            //     struct dev_t *device = m_GetDeviceUnderMouse();
+                            //     uint32_t multiple = igIsKeyDown_Nil(ImGuiKey_LeftShift);
+                            //     if(device != NULL)
+                            //     {
+                            //         m_SelectDevice(device, multiple);
+                            //     }
+                            // }
+                            struct dev_t *device = m_GetDeviceUnderMouse();
+                            uint32_t multiple = igIsKeyDown_Nil(ImGuiKey_LeftShift);
+                            if(device != NULL)
                             {
-                                printf("picked pin %d of device %p\n", pin.pin, pin.device);
-                                first_pin = pin;
-                                cur_edit_mode = M_EDIT_MODE_DRAG_WIRE;
-                            }
-                            else
-                            {
-                                // m_selected_device = m_GetDeviceUnderMouse();
-                                struct dev_t *device = m_GetDeviceUnderMouse();
+                                m_SelectDevice(device, multiple);
                             }
                         }
                         else
@@ -421,18 +660,30 @@ int main(int argc, char *argv[])
                     }
                 break;
 
-                case M_EDIT_MODE_DRAG_WIRE:
+                case M_EDIT_FUNC_WIRE:
                     if(igIsMouseClicked_Bool(ImGuiMouseButton_Left, 0) && ui_IsMouseAvailable())
                     {
-                        second_pin = m_GetPinUnderMouse();
-                        if(second_pin.device != NULL && (first_pin.device != second_pin.device || first_pin.pin != second_pin.pin))
+                        pins[m_wire_func_stage] = m_GetPinUnderMouse();
+                        if(pins[m_wire_func_stage].device != NULL)
                         {
-                            struct wire_t *wire = w_ConnectPins(first_pin.device, first_pin.pin, second_pin.device, second_pin.pin);
-                            printf("wire %p (%d) between pins %d and %d of devices %p and %p\n", wire, wire->element_index, first_pin.pin, second_pin.pin, first_pin.device, second_pin.device);
-                        }
+                            m_wire_func_stage++;
 
-                        first_pin = (struct m_selected_pin_t){};
-                        cur_edit_mode = M_EDIT_MODE_SELECT;
+                            if(m_wire_func_stage == 2)
+                            {
+                                if(pins[0].device != pins[1].device || pins[0].pin != pins[1].pin)
+                                {
+                                    struct wire_t *wire = w_ConnectPins(pins[0].device, pins[0].pin, pins[1].device, pins[1].pin);
+                                    printf("wire %p (%d) between pins %d and %d of devices %p and %p\n", wire, wire->element_index, pins[0].pin, pins[1].pin, pins[0].device, pins[1].device);
+                                }
+
+                                m_wire_func_stage = 0;
+                            }
+                        }
+                        else
+                        {
+                            m_cur_edit_func = M_EDIT_FUNC_SELECT;
+                            m_wire_func_stage = 0;
+                        }
                     }
                 break;
             }

@@ -24,6 +24,8 @@ void ui_EndFrame();
 
 uint32_t ui_IsMouseAvailable();
 
+void ui_SetCursor(uint32_t cursor);
+
 
 
 #endif

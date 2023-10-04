@@ -41,7 +41,7 @@ const char *d_draw_device_vertex_shader =
         "size = ivec2(data.size & 0xffff, (data.size >> 16) & 0xffff);\n"
         "tex_coords = d_tex_coords;\n"
         "coord_offset = ivec2(data.coord_offset & 0xffff, (data.coord_offset >> 16) & 0xffff);\n"
-        "vec4 position = vec4(d_position.x * float(size.x), d_position.y * float(size.y), 0, 1);\n"
+        "vec4 position = vec4(d_position.x * float(size.x), d_position.y * float(size.y), 0.1f, 1);\n"
         "int rotation = data.rot_flip_sel & 0xffff;\n"
         "int flip_sel = (data.rot_flip_sel >> 16) & 0xffff;\n"
         "switch(rotation)\n"
@@ -73,12 +73,12 @@ const char *d_draw_device_vertex_shader =
 
         "if((flip_sel & 1) != 0)\n"
         "{\n"
-            "position.x = -position.x;\n"
+            "position.y = -position.y;\n"
         "}\n"
 
         "if((flip_sel & 2) != 0)\n"
         "{\n"
-            "position.y = -position.y;\n"
+            "position.x = -position.x;\n"
         "}\n"
 
         "selected = flip_sel & 4;\n"
@@ -118,7 +118,7 @@ const char *d_draw_wire_vertex_shader =
 
     "void main()\n"
     "{\n"
-        "gl_Position = d_model_view_projection_matrix * d_position;\n"
+        "gl_Position = d_model_view_projection_matrix * vec4(d_position.xy, 0.1f, 1.0f);\n"
         "wire_value = d_wire_value;\n"
     "}\n";
 
@@ -184,6 +184,8 @@ extern uint32_t             m_selected_device_type;
 extern struct dev_t *       m_selected_device;
 extern int32_t              m_mouse_x;
 extern int32_t              m_mouse_y;
+extern int32_t              m_place_device_x;
+extern int32_t              m_place_device_y;
 
 extern struct list_t        sim_wire_data;
 
@@ -373,7 +375,7 @@ void d_DrawDevices()
 
     glDisable(GL_CULL_FACE);
     glDisable(GL_SCISSOR_TEST);
-    glDisable(GL_DEPTH_TEST);
+    glEnable(GL_DEPTH_TEST);
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
@@ -417,7 +419,7 @@ void d_DrawDevices()
                 data->pos_x = device->position[0];
                 data->pos_y = device->position[1];
                 data->size = (desc->height << 16) | desc->width;
-                data->rot_flip_sel = (device->flip << 16) | device->rotation | ((device == m_selected_device) << 18);
+                data->rot_flip_sel = (device->flip << 16) | device->rotation | ((device->selection_index != INVALID_LIST_INDEX) << 18);
                 data->coord_offset = (desc->offset_y << 16) | desc->offset_x;
                 buffer_offset++;
             }
@@ -438,8 +440,8 @@ void d_DrawDevices()
     if(m_selected_device_type != DEV_DEVICE_TYPE_LAST)
     {
         struct dev_desc_t *desc = dev_device_descs + m_selected_device_type;
-        d_device_data->pos_x = m_mouse_x;
-        d_device_data->pos_y = m_mouse_y;
+        d_device_data->pos_x = m_place_device_x;
+        d_device_data->pos_y = m_place_device_y;
         d_device_data->size = (desc->height << 16) | desc->width;
         d_device_data->rot_flip_sel = 0;
         d_device_data->coord_offset = (desc->offset_y << 16) | desc->offset_x;

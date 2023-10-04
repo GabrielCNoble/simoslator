@@ -62,6 +62,8 @@ uint32_t        ui_mouse_button[] = {
     [SDL_BUTTON_RIGHT]  = ImGuiMouseButton_Right,
 };
 
+SDL_Cursor *ui_cursors[SDL_SYSTEM_CURSOR_SIZEALL];
+
 uint32_t ui_keyboard_map[SDL_NUM_SCANCODES] = {
     [SDL_SCANCODE_1]            = ImGuiKey_1,
     [SDL_SCANCODE_2]            = ImGuiKey_2,
@@ -100,7 +102,9 @@ uint32_t ui_keyboard_map[SDL_NUM_SCANCODES] = {
     [SDL_SCANCODE_N]            = ImGuiKey_N,
     [SDL_SCANCODE_M]            = ImGuiKey_M,
     [SDL_SCANCODE_BACKSPACE]    = ImGuiKey_Backspace,
-    [SDL_SCANCODE_RETURN]       = ImGuiKey_Enter
+    [SDL_SCANCODE_RETURN]       = ImGuiKey_Enter,
+    [SDL_SCANCODE_LSHIFT]       = ImGuiKey_LeftShift,
+    [SDL_SCANCODE_ESCAPE]       = ImGuiKey_Escape,
 };
 
 
@@ -205,6 +209,11 @@ void ui_Init()
     ImFontAtlas_SetTexID(io->Fonts, (ImTextureID)(uintptr_t)ui_atlas_texture);
 
     glActiveTexture(0);
+
+    for(uint32_t index = 0; index < SDL_SYSTEM_CURSOR_SIZEALL; index++)
+    {
+        ui_cursors[index] = SDL_CreateSystemCursor(index);
+    }
 }
 
 void ui_Shutdown()
@@ -266,7 +275,8 @@ void ui_EndFrame()
     // glClearColor(0, 0, 0, 0);
     // glClearDepth(1.0f);
     // glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-    glDisable(GL_DEPTH_TEST);
+    glEnable(GL_DEPTH_TEST);
+    glDepthFunc(GL_LEQUAL);
     glDisable(GL_CULL_FACE);
     glEnable(GL_BLEND);
     glEnable(GL_SCISSOR_TEST);
@@ -315,4 +325,9 @@ void ui_EndFrame()
 uint32_t ui_IsMouseAvailable()
 {
     return !igIsAnyItemHovered() && !igIsWindowHovered(ImGuiHoveredFlags_AnyWindow);
+}
+
+void ui_SetCursor(uint32_t cursor)
+{
+    SDL_SetCursor(ui_cursors[cursor]);
 }

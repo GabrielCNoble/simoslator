@@ -77,14 +77,10 @@ uint8_t w_wire_value_resolution[WIRE_VALUE_LAST][WIRE_VALUE_LAST] = {
 };
 
 struct pool_t               w_wires;
-// struct list_t               w_wire_sim_data;
-// struct list_t               w_wire_pins;
-// struct list_t               w_input_pin_blocks;
-// struct list_t               w_output_pin_blocks;w_wire_segment_copy_buffer
 struct pool_t               w_wire_pin_blocks[2];
 struct pool_t               w_wire_segment_positions;
-// struct list_t               w_wire_segment_copy_buffer;
 struct pool_t               w_wire_segments;
+
 extern struct pool_t        dev_devices;
 extern struct list_t        dev_pin_blocks;
 extern struct dev_desc_t    dev_device_descs[];
@@ -92,13 +88,9 @@ extern struct dev_desc_t    dev_device_descs[];
 void w_Init()
 {
     w_wires = pool_CreateTyped(struct wire_t, 4096);
-    // w_wire_sim_data = list_Create(sizeof(struct wire_sim_data_t), 16384);
-    // w_wire_pins = list_Create(sizeof(struct wire_pin_t), 16384);
     w_wire_pin_blocks[0] = pool_CreateTyped(struct wire_pin_block_t, 16384);
     w_wire_pin_blocks[1] = pool_CreateTyped(struct wire_pin_block_t, 16384);
     w_wire_segment_positions = pool_CreateTyped(struct wire_segment_pos_block_t, 16384);
-    // w_wire_segment_positions = list_Create(sizeof(struct wire_segment_pos_t), 16384);
-    // w_wire_segment_copy_buffer = list_Create(sizeof(struct wire_segment_pos_t), 16384);
     w_wire_segments = pool_CreateTyped(struct wire_segment_t, 16384);
 }
 
