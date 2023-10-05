@@ -15,6 +15,15 @@ const char *d_draw_device_vertex_shader =
     "#extension GL_ARB_shader_storage_buffer_object : require\n"
     "layout (location = 0) in vec4 d_position;\n"
     "layout (location = 1) in vec2 d_tex_coords;\n"
+
+    "#define DEV_DEVICE_ROTATION_0      0\n"
+    "#define DEV_DEVICE_ROTATION_90     1\n"
+    "#define DEV_DEVICE_ROTATION_180    2\n"
+    "#define DEV_DEVICE_ROTATION_270    3\n"
+    
+    "#define DEV_DEVICE_FLIP_X    (1 << 1)\n"
+    "#define DEV_DEVICE_FLIP_Y    (1 << 0)\n"
+
     "struct d_device_data_t\n"
     "{\n"
         "int pos_x;\n"
@@ -44,9 +53,23 @@ const char *d_draw_device_vertex_shader =
         "vec4 position = vec4(d_position.x * float(size.x), d_position.y * float(size.y), 0.1f, 1);\n"
         "int rotation = data.rot_flip_sel & 0xffff;\n"
         "int flip_sel = (data.rot_flip_sel >> 16) & 0xffff;\n"
+
+        "bool flip_x = bool(flip_sel & DEV_DEVICE_FLIP_X);\n"
+        "bool flip_y = bool(flip_sel & DEV_DEVICE_FLIP_Y);\n"
+
+        "if(flip_x)\n"
+        "{\n"
+            "position.x = -position.x;\n"
+        "}\n"
+
+        "if(flip_y)\n"
+        "{\n"
+            "position.y = -position.y;\n"
+        "}\n"
+
         "switch(rotation)\n"
         "{\n"
-            "case 1:\n"
+            "case DEV_DEVICE_ROTATION_90:\n"
             "{\n"
                 "float temp = position.y;\n"
                 "position.y = position.x;\n"
@@ -54,31 +77,20 @@ const char *d_draw_device_vertex_shader =
             "}\n"
             "break;\n"
 
-            "case 2:\n"
+            "case DEV_DEVICE_ROTATION_180:\n"
             "{\n"
-                "float temp = position.x;\n"
                 "position.y = -position.y;\n"
                 "position.x = -position.x;\n"
             "}\n"
             "break;\n"
     
-            "case 3:\n"
+            "case DEV_DEVICE_ROTATION_270:\n"
             "{\n"
                 "float temp = position.y;\n"
                 "position.y = -position.x;\n"
                 "position.x = temp;\n"
             "}\n"
             "break;\n"
-        "}\n"
-
-        "if((flip_sel & 1) != 0)\n"
-        "{\n"
-            "position.y = -position.y;\n"
-        "}\n"
-
-        "if((flip_sel & 2) != 0)\n"
-        "{\n"
-            "position.x = -position.x;\n"
         "}\n"
 
         "selected = flip_sel & 4;\n"
@@ -186,6 +198,7 @@ extern int32_t              m_mouse_x;
 extern int32_t              m_mouse_y;
 extern int32_t              m_place_device_x;
 extern int32_t              m_place_device_y;
+extern struct list_t        m_wire_segments;
 
 extern struct list_t        sim_wire_data;
 
@@ -517,23 +530,30 @@ void d_DrawDevices()
                     }
                     segment_block = segment_block->next;
                 }
-
-                // for(uint32_t segment_index = 0; segment_index < wire->segment_pos_count; segment_index++)
-                // {
-                //     struct wire_segment_pos_t *segment = list_GetElement(&w_wire_segment_positions, wire->first_segment_pos + segment_index);
-                //     d_wire_vertices[buffer_offset].position[0] = segment->start[0];
-                //     d_wire_vertices[buffer_offset].position[1] = segment->start[1];
-                //     d_wire_vertices[buffer_offset].value = wire->value;
-                //     buffer_offset++;
-
-                //     d_wire_vertices[buffer_offset].position[0] = segment->end[0];
-                //     d_wire_vertices[buffer_offset].position[1] = segment->end[1];
-                //     d_wire_vertices[buffer_offset].value = wire->value;
-                //     buffer_offset++;
-                // }
             }
         }
         glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(struct d_wire_vert_t) * buffer_offset, d_wire_vertices);
         glDrawArrays(GL_LINES, 0, buffer_offset);
     }
+
+    if(m_wire_segments.cursor != 0)
+    {
+        uint32_t buffer_offset = 0;
+        for(uint32_t index = 0; index < m_wire_segments.cursor; index++)
+        {
+            struct wire_segment_pos_t *segment = list_GetElement(&m_wire_segments, index);
+            d_wire_vertices[buffer_offset].position[0] = segment->start[0];
+            d_wire_vertices[buffer_offset].position[1] = segment->start[1];
+            d_wire_vertices[buffer_offset].value = WIRE_VALUE_Z;
+            buffer_offset++;
+
+            d_wire_vertices[buffer_offset].position[0] = segment->end[0];
+            d_wire_vertices[buffer_offset].position[1] = segment->end[1];
+            d_wire_vertices[buffer_offset].value = WIRE_VALUE_Z;
+            buffer_offset++;
+        }
+
+        glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(struct d_wire_vert_t) * buffer_offset, d_wire_vertices);
+        glDrawArrays(GL_LINES, 0, buffer_offset);
+    }    
 }

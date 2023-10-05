@@ -113,7 +113,11 @@ void dev_Shutdown();
 
 struct dev_t *dev_CreateDevice(uint32_t type);
 
+void dev_DestroyDeviced(struct dev_t *device);
+
 struct dev_t *dev_GetDevice(uint64_t device_index);
+
+void dev_GetDevicePinLocalPosition(struct dev_t *device, uint16_t pin, int32_t *pin_position);
 
 struct dev_pin_block_t *dev_GetDevicePinBlock(struct dev_t *device, uint16_t pin);
 

@@ -5,6 +5,9 @@
 #include "dev.h"
 #include "wire.h"
 
+/* 1 ns per step */
+#define SIM_STEPS_PER_SECOND 1000000000
+
 enum SIM_STEPS
 {
     SIM_STEP_DEVICE,
@@ -16,19 +19,22 @@ struct sim_wire_data_t
 {
     uint32_t first_pin[2];
     uint16_t pin_count[2];
-    // uint32_t first_input_pin;
-    // uint32_t first_output_pin;
-    // uint16_t input_pin_count;
-    // uint16_t output_pin_count;
     uint16_t queued;
     uint16_t value;
 };
 
 struct sim_dev_data_t
 {
-    uint32_t first_pin;
-    uint16_t queued;
-    uint16_t type;
+    struct dev_t *  device;
+    uint32_t        first_pin;
+    uint16_t        queued;
+    uint16_t        type;
+};
+
+struct sim_queued_clock_t
+{
+    struct dev_clock_t *    clock;
+    uint64_t                next_count;
 };
 
 void sim_Init();

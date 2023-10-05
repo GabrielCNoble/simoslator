@@ -9,6 +9,7 @@
 // struct pool_t dev_primitives;
 struct pool_t                       dev_devices;
 struct pool_t                       dev_inputs;
+struct pool_t                       dev_clocks;
 struct pool_t                       dev_pin_blocks;
 struct dev_pin_t *                  dev_prev_pin_values;
 extern struct pool_t                w_wires;
@@ -150,10 +151,10 @@ void (*dev_DeviceFuncs[DEV_DEVICE_TYPE_LAST])(struct sim_dev_data_t *device) = {
 
 struct dev_desc_t dev_device_descs[DEV_DEVICE_TYPE_LAST] = {
     [DEV_DEVICE_TYPE_PMOS] = {
-        .width = 35,
-        .height = 61,
-        .offset_x = 56,
-        .offset_y = 2,
+        .width = 60,
+        .height = 120,
+        .offset_x = 75,
+        .offset_y = 0,
         .pin_count = 3,
         .pins = (struct dev_pin_desc_t []) {
             [DEV_MOS_PIN_SOURCE]    = {.type = DEV_PIN_TYPE_IN,  .offset = {-30, -54}},
@@ -163,10 +164,10 @@ struct dev_desc_t dev_device_descs[DEV_DEVICE_TYPE_LAST] = {
     },
 
     [DEV_DEVICE_TYPE_NMOS] = {
-        .width = 35,
-        .height = 61,
-        .offset_x = 6,
-        .offset_y = 2,
+        .width = 60,
+        .height = 120,
+        .offset_x = 0,
+        .offset_y = 0,
         .pin_count = 3,
         .pins = (struct dev_pin_desc_t []) {
             [DEV_MOS_PIN_SOURCE]    = {.type = DEV_PIN_TYPE_IN,  .offset = {-30, -54}},
@@ -222,9 +223,9 @@ struct dev_desc_t dev_device_descs[DEV_DEVICE_TYPE_LAST] = {
 
 void dev_Init()
 {
-    // dev_primitives = pool_CreateTyped(struct dev_primitive_t, 4096);
     dev_devices = pool_CreateTyped(struct dev_t, 4096);
     dev_inputs = pool_CreateTyped(struct dev_input_t, 4096);
+    dev_clocks = pool_CreateTyped(struct dev_clock_t, 4096);
     dev_pin_blocks = pool_CreateTyped(struct dev_pin_block_t, 4096);
     dev_prev_pin_values = calloc(DEV_MAX_DEVICE_PINS, sizeof(struct dev_pin_t));
 
@@ -281,6 +282,7 @@ struct dev_t *dev_CreateDevice(uint32_t type)
     device->type = type;
     device->pin_blocks = NULL;
     device->selection_index = INVALID_LIST_INDEX;
+    device->rotation = DEV_DEVICE_ROTATION_0;
 
     uint32_t total_pin_count = dev_device_descs[type].pin_count;
     uint32_t block_count = total_pin_count / DEV_PIN_BLOCK_PIN_COUNT;
@@ -331,14 +333,88 @@ struct dev_t *dev_CreateDevice(uint32_t type)
             device->data = input;
         }
         break;
+
+        case DEV_DEVICE_TYPE_CLOCK:
+        {
+            struct dev_clock_t *clock = pool_AddElement(&dev_clocks, NULL);
+            clock->device = device;
+            clock->frequency = 1;
+            device->data = clock;
+        }
+        break;
     }
 
     return device;
 }
 
+void dev_DestroyDeviced(struct dev_t *device)
+{
+    if(device != NULL)
+    {
+        struct dev_pin_block_t *pin_block = device->pin_blocks;
+        while(pin_block)
+        {
+            pool_RemoveElement(&dev_pin_blocks, pin_block->element_index);
+            pin_block = pin_block->next;
+        }
+
+        switch(device->type)
+        {
+            case DEV_DEVICE_TYPE_INPUT:
+            {
+                struct dev_input_t *input = device->data;
+                pool_RemoveElement(&dev_inputs, input->element_index);
+            }
+            break;
+
+            case DEV_DEVICE_TYPE_CLOCK:
+            {
+                struct dev_clock_t *clock = device->data;
+                pool_RemoveElement(&dev_clocks, clock->element_index);
+            }
+            break;
+        }
+
+        pool_RemoveElement(&dev_devices, device->element_index);
+    }
+}
+
 struct dev_t *dev_GetDevice(uint64_t device_index)
 {
     return pool_GetValidElement(&dev_devices, device_index);
+}
+
+void dev_GetDevicePinLocalPosition(struct dev_t *device, uint16_t pin, int32_t *pin_position)
+{
+    struct dev_desc_t *dev_desc = dev_device_descs + device->type;
+    struct dev_pin_desc_t *pin_desc = dev_desc->pins + pin;
+
+    pin_position[0] = (device->flip & (1 << DEV_DEVICE_FLIP_X)) ? -pin_desc->offset[0] : pin_desc->offset[0];
+    pin_position[1] = (device->flip & (1 << DEV_DEVICE_FLIP_Y)) ? -pin_desc->offset[1] : pin_desc->offset[1];
+
+    switch(device->rotation)
+    {
+        case DEV_DEVICE_ROTATION_90:                        
+        {
+            float temp = pin_position[0];
+            pin_position[0] = -pin_position[1];
+            pin_position[1] = temp;
+        }
+        break;
+
+        case DEV_DEVICE_ROTATION_180:
+            pin_position[0] = -pin_position[0];
+            pin_position[1] = -pin_position[1];
+        break;
+
+        case DEV_DEVICE_ROTATION_270:
+        {
+            float temp = pin_position[0];
+            pin_position[0] = pin_position[1];
+            pin_position[1] = -temp;
+        }
+        break;
+    }
 }
 
 struct dev_pin_block_t *dev_GetDevicePinBlock(struct dev_t *device, uint16_t pin)

@@ -17,6 +17,7 @@ struct list_t               sim_wire_data;
 struct list_t               sim_wire_pins;
 struct list_t               sim_dev_data;
 struct list_t               sim_dev_pins;
+struct list_t               sim_queued_clocks;
 
 extern struct pool_t        dev_devices;
 extern struct pool_t        dev_inputs;
@@ -26,6 +27,10 @@ extern uint8_t              w_wire_value_resolution[][WIRE_VALUE_LAST];
 extern struct pool_t        w_wires;
 
 extern void (*dev_DeviceFuncs[])(struct sim_dev_data_t *device);
+
+uint64_t                    sim_counter_freq;
+uint64_t                    sim_prev_counter;
+uint64_t                    sim_steps_per_count;
 
 void sim_Init()
 {
@@ -37,6 +42,9 @@ void sim_Init()
 
     sim_dev_data = list_Create(sizeof(struct sim_dev_data_t), 16384);
     sim_dev_pins = list_Create(sizeof(struct dev_pin_t), 16384);
+
+    sim_counter_freq = SDL_GetPerformanceFrequency();
+    sim_steps_per_count = SIM_STEPS_PER_SECOND / sim_counter_freq;
 }
 
 void sim_Shutdown()
@@ -148,6 +156,7 @@ void sim_BeginSimulation()
             dev_data->queued = 0;
             dev_data->type = device->type;
             dev_data->first_pin = sim_dev_pins.cursor;
+            dev_data->device = device;
 
             for(uint32_t pin_index = 0; pin_index < desc->pin_count; pin_index++)
             {
@@ -186,6 +195,8 @@ void sim_BeginSimulation()
             sim_QueueDevice(sim_data);
         }
     }
+
+    sim_prev_counter = SDL_GetPerformanceCounter();
 }
 
 void sim_StopSimulation()
@@ -206,27 +217,10 @@ void sim_WireStep(struct sim_wire_data_t *wire)
 
     for(uint32_t pin_index = 0; pin_index < wire->pin_count[DEV_PIN_TYPE_OUT]; pin_index++)
     {
-        // struct wire_pin_block_t *wire_pin_block = list_GetElement(&w_wire_pin_blocks[DEV_PIN_TYPE_OUT], wire->wire_inputs.first_block + block_index);
-        // uint32_t wire_pin_index = 0;
         struct wire_pin_t *wire_pin = list_GetElement(&sim_wire_pins, wire->first_pin[DEV_PIN_TYPE_OUT] + pin_index);
         struct sim_dev_data_t *dev_data = list_GetElement(&sim_dev_data, wire_pin->device);
         struct dev_pin_t *device_pin = list_GetElement(&sim_dev_pins, dev_data->first_pin + wire_pin->pin);
-        // struct dev_t *device = dev_GetDevice(wire_pin->device);
-        // struct sim_dev_data_t 
-        // struct dev_pin_t *device_pin = dev_GetDevicePin(device, wire_pin->pin);
         wire_value = w_wire_value_resolution[wire_value][device_pin->value];
-
-        // while(wire_pin_block->pins[wire_pin_index].device != DEV_INVALID_DEVICE)
-        // {
-        //     struct dev_t *device = pool_GetElement(&dev_devices, wire_pin_block->pins[wire_pin_index].device);
-        //     // uint32_t device_pin_index = wire_pin_block->pins[wire_pin_index].pin % DEV_PIN_BLOCK_PIN_COUNT;
-        //     // uint32_t device_pin_block_index = wire_pin_block->pins[wire_pin_index].pin / DEV_PIN_BLOCK_PIN_COUNT;
-        //     // struct dev_pin_block_t *device_pin_block = list_GetElement(&dev_pin_blocks, device->first_pin_block + device_pin_block_index);
-        //     // wire_value = w_wire_value_resolution[wire_value][device_pin_block->pins[device_pin_index].value];
-        //     struct dev_pin_t *device_pin = dev_GetDevicePin(device, wire_pin_block->pins[wire_pin_index].pin);
-        //     wire_value = w_wire_value_resolution[wire_value][device_pin->value];
-        //     wire_pin_index++;
-        // }
     }
 
     if(wire_value != wire->value)
@@ -236,16 +230,6 @@ void sim_WireStep(struct sim_wire_data_t *wire)
             struct wire_pin_t *wire_pin = list_GetElement(&sim_wire_pins, wire->first_pin[DEV_PIN_TYPE_IN] + pin_index);
             struct sim_dev_data_t *dev_sim_data = list_GetElement(&sim_dev_data, wire_pin->device);
             sim_QueueDevice(dev_sim_data);
-            // struct dev_t *device = dev_GetDevice()
-            // struct wire_pin_block_t *wire_pin_block = list_GetElement(&w_wire_pin_blocks[DEV_PIN_TYPE_IN], wire->wire_outputs.first_block + block_index);
-            // uint32_t device_index = 0;
-
-            // while(wire_pin_block->pins[device_index].device != DEV_INVALID_DEVICE)
-            // {
-            //     struct dev_t *device = pool_GetElement(&dev_devices, wire_pin_block->pins[device_index].device);
-            //     sim_QueueDevice(device);
-            //     device_index++;
-            // }
         }
     }
 
@@ -263,8 +247,11 @@ void sim_DeviceStep(struct sim_dev_data_t *device)
 void sim_Step()
 {
     sim_cur_step = SIM_STEP_DEVICE;
+    uint64_t cur_count = SDL_GetPerformanceCounter();
+    uint64_t step_count = (cur_count - sim_prev_counter) / sim_steps_per_count;
+    sim_prev_counter = cur_count;
     
-    while(sim_update_devices.cursor || sim_update_wires.cursor)
+    while((sim_update_devices.cursor || sim_update_wires.cursor) && step_count)
     {
         switch(sim_cur_step)
         {
@@ -293,6 +280,7 @@ void sim_Step()
 
                 sim_update_wires.cursor = 0;
                 sim_cur_step = SIM_STEP_DEVICE;
+                step_count--;
             }
             break;
         }

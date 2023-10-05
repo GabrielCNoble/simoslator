@@ -3,6 +3,7 @@
 
 #include <stdint.h>
 #include "pool.h"
+#include "list.h"
 #include "dev.h"
 
 #define WIRE_MAX_WIRES 0xffffffffffff
@@ -153,7 +154,7 @@ void w_ConnectWire(struct wire_t *wire, struct dev_t *device, uint16_t pin);
 
 void w_DisconnectWire(struct wire_t *wire, struct wire_pin_t *pin);
 
-struct wire_t *w_ConnectPins(struct dev_t *device_a, uint16_t pin_a, struct dev_t *device_b, uint16_t pin_b);
+struct wire_t *w_ConnectPins(struct dev_t *device_a, uint16_t pin_a, struct dev_t *device_b, uint16_t pin_b, struct list_t *wire_segments);
 
 void w_WireStep(struct wire_t *wire);
 

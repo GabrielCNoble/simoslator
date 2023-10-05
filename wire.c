@@ -439,7 +439,7 @@ void w_DisconnectWire(struct wire_t *wire, struct wire_pin_t *pin)
 
 }
 
-struct wire_t *w_ConnectPins(struct dev_t *device_a, uint16_t pin_a, struct dev_t *device_b, uint16_t pin_b)
+struct wire_t *w_ConnectPins(struct dev_t *device_a, uint16_t pin_a, struct dev_t *device_b, uint16_t pin_b, struct list_t *wire_segments)
 {
     struct dev_pin_t *pin0 = dev_GetDevicePin(device_a, pin_a);
     struct dev_pin_t *pin1 = dev_GetDevicePin(device_b, pin_b);
@@ -468,70 +468,34 @@ struct wire_t *w_ConnectPins(struct dev_t *device_a, uint16_t pin_a, struct dev_
         wire = w_MergeWires(wire_a, wire_b);
     }
 
-    // uint32_t segment_index = list_ShiftAndInsertAt(&w_wire_segment_positions, wire->first_segment_pos + wire->segment_pos_count, 1);
-
-    // struct wire_segment_pos_block_t *segment_block;
-    struct wire_segment_pos_t *segment_pos = wire->last_segment_pos->segments + wire->segment_pos_count % WIRE_SEGMENT_POS_BLOCK_SEGMENT_COUNT;
-    wire->segment_pos_count++;
-
-    if(wire->segment_pos_count % WIRE_SEGMENT_POS_BLOCK_SEGMENT_COUNT == 0)
+    for(uint32_t index = 0; index < wire_segments->cursor; index++)
     {
-        struct wire_segment_pos_block_t *new_block = pool_AddElement(&w_wire_segment_positions, NULL);
-        new_block->prev = wire->last_segment_pos;
-        wire->last_segment_pos->next = new_block;
-        wire->last_segment_pos = new_block;
+        struct wire_segment_pos_t *src_segment = list_GetElement(wire_segments, index);
+        struct wire_segment_pos_t *dst_segment = wire->last_segment_pos->segments + wire->segment_pos_count % WIRE_SEGMENT_POS_BLOCK_SEGMENT_COUNT;
+        wire->segment_pos_count++;
+
+        if(wire->segment_pos_count % WIRE_SEGMENT_POS_BLOCK_SEGMENT_COUNT == 0)
+        {
+            struct wire_segment_pos_block_t *new_block = pool_AddElement(&w_wire_segment_positions, NULL);
+            new_block->prev = wire->last_segment_pos;
+            wire->last_segment_pos->next = new_block;
+            wire->last_segment_pos = new_block;
+        }
+
+        dst_segment->start[0] = src_segment->start[0];
+        dst_segment->start[1] = src_segment->start[1];
+        dst_segment->end[0] = src_segment->end[0];
+        dst_segment->end[1] = src_segment->end[1];
     }
 
-    // if(wire->segment_pos_count / WIRE_SEGMENT_POS_BLOCK_SEGMENT_COUNT >= wire->segment_pos_block_count)
-    // {
-    //     uint64_t block_index = list_AddElement(&w_wire_segment_positions, NULL);
-    //     segment_block = list_GetElement(&w_wire_segment_positions, block_index);
-    //     if(wire->segment_pos == NULL)
-    //     {
-    //         wire->segment_pos = segment_block;
-    //     }
-    //     else
-    //     {
-    //         wire->last_segment_pos->next = segment_block;
-    //     }
-
-    //     segment_block->prev = wire->last_segment_pos;
-    //     wire->last_segment_pos = segment_block;
-    //     wire->segment_pos_block_count++;
-    // }
-
-    // segment_block = wire->last_segment_pos;
-    // uint32_t segment_index = wire->segment_pos_count % WIRE_SEGMENT_POS_BLOCK_SEGMENT_COUNT;
-    // wire->segment_pos_count++;
-
-    // for(uint32_t wire_index = 0; wire_index < w_wires.cursor; wire_index++)
-    // {
-    //     struct wire_t *shift_wire = pool_GetValidElement(&w_wires, wire_index);
-    //     if(shift_wire != NULL && shift_wire != wire)
-    //     {
-    //         if(shift_wire->first_segment_pos >= segment_index)
-    //         {
-    //             shift_wire->first_segment_pos++;
-    //         }
-    //     }
-    // }
-
-    // if(wire->segment_pos_count == 0)
-    // {
-    //     wire->first_segment_pos = segment_index;
-    // }
-
-    // wire->segment_pos_count++;
     
-    // struct wire_segment_pos_t *segment = list_GetElement(&w_wire_segment_positions, segment_index);
-    // struct wire_segment_pos_t *segment = segment_block->segments + segment_index;
-    struct dev_pin_desc_t *desc0 = dev_device_descs[device_a->type].pins + pin_a;
-    struct dev_pin_desc_t *desc1 = dev_device_descs[device_b->type].pins + pin_b;
-    segment_pos->start[0] = device_a->position[0] + desc0->offset[0];
-    segment_pos->start[1] = device_a->position[1] + desc0->offset[1];
 
-    segment_pos->end[0] = device_b->position[0] + desc1->offset[0];
-    segment_pos->end[1] = device_b->position[1] + desc1->offset[1];
+    // dev_GetDevicePinLocalPosition(device_a, pin_a, segment_pos->start);
+    // dev_GetDevicePinLocalPosition(device_b, pin_b, segment_pos->end);
+    // segment_pos->start[0] += device_a->position[0];
+    // segment_pos->start[1] += device_a->position[1];
+    // segment_pos->end[0] += device_b->position[0];
+    // segment_pos->end[1] += device_b->position[1];
 
     return wire;
 }
