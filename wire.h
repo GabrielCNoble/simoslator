@@ -65,7 +65,7 @@ struct wire_pins_t
     uint32_t                    pin_count;
 };
 
-struct wire_segment_pos_t
+struct wire_seg_pos_t
 {
     int32_t                     start[2];
     int32_t                     end[2];
@@ -73,12 +73,12 @@ struct wire_segment_pos_t
 
 #define WIRE_SEGMENT_POS_BLOCK_SEGMENT_COUNT 16
 
-struct wire_segment_pos_block_t 
+struct wire_seg_pos_block_t 
 {
     POOL_ELEMENT;
-    struct wire_segment_pos_block_t *   prev;
-    struct wire_segment_pos_block_t *   next;
-    struct wire_segment_pos_t           segments[WIRE_SEGMENT_POS_BLOCK_SEGMENT_COUNT];
+    struct wire_seg_pos_block_t *   prev;
+    struct wire_seg_pos_block_t *   next;
+    struct wire_seg_pos_t           segments[WIRE_SEGMENT_POS_BLOCK_SEGMENT_COUNT];
 }; 
 
 enum WIRE_SEGMENT_TYPES
@@ -98,16 +98,6 @@ struct wire_segment_t
     struct wire_segment_t *    prev_junction;
 };
 
-// struct wire_sim_data_t
-// {
-//     uint32_t first_input_pin;
-//     uint32_t first_output_pin;
-//     uint16_t input_pin_count;
-//     uint16_t output_pin_count;
-//     uint16_t queued;
-//     uint16_t value;
-// };
-
 struct wire_t
 {
     POOL_ELEMENT;
@@ -125,17 +115,14 @@ struct wire_t
 
     uint64_t                            sim_data;
 
-    // uint32_t                first_segment_pos;
-    struct wire_segment_pos_block_t *   first_segment_pos;
-    struct wire_segment_pos_block_t *   last_segment_pos;
-    // uint32_t                            first_segment_pos_block;
-    // uint32_t                            segment_pos_block_count;
+    struct wire_seg_pos_block_t *       first_segment_pos;
+    struct wire_seg_pos_block_t *       last_segment_pos;
     uint32_t                            segment_pos_count;
 
     struct wire_segment_t *             segments;
 
-    uint32_t                            queued;
-    uint8_t                             value;
+    // uint32_t                            queued;
+    // uint8_t                             value;
 };
 
 void w_Init();

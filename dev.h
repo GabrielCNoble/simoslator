@@ -41,15 +41,16 @@ struct dev_desc_t
 {
     uint16_t                    width;
     uint16_t                    height;
-    uint32_t                    offset_x;
-    uint32_t                    offset_y;
+    // int32_t                     offset_x;
+    // int32_t                     offset_y;
+    int32_t                     offset[2];
+    int32_t                     origin[2];
     uint32_t                    pin_count;
     struct dev_pin_desc_t *     pins;
 };
 
 #define DEV_PIN_BLOCK_PIN_COUNT 4
 #define DEV_MAX_DEVICE_PINS 0xffff
-#define DEV_DEVICE_PIN_PIXEL_WIDTH 8
 // #define DEV_INVALID_WIRE 0xffffff
 
 enum DEV_DEVICE_ROTATION
@@ -91,6 +92,7 @@ struct dev_t
     struct dev_pin_block_t *    pin_blocks;
     uint16_t                    rotation;
     uint16_t                    flip;
+    uint32_t                    regions[4];
 };
 
 struct dev_clock_t
@@ -117,7 +119,9 @@ void dev_DestroyDeviced(struct dev_t *device);
 
 struct dev_t *dev_GetDevice(uint64_t device_index);
 
-void dev_GetDevicePinLocalPosition(struct dev_t *device, uint16_t pin, int32_t *pin_position);
+void dev_GetDeviceLocalPinPosition(struct dev_t *device, uint16_t pin, int32_t *pin_position);
+
+void dev_GetDeviceLocalBoxPosition(struct dev_t *device, int32_t *min, int32_t *max);
 
 struct dev_pin_block_t *dev_GetDevicePinBlock(struct dev_t *device, uint16_t pin);
 

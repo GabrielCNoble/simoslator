@@ -90,7 +90,7 @@ void w_Init()
     w_wires = pool_CreateTyped(struct wire_t, 4096);
     w_wire_pin_blocks[0] = pool_CreateTyped(struct wire_pin_block_t, 16384);
     w_wire_pin_blocks[1] = pool_CreateTyped(struct wire_pin_block_t, 16384);
-    w_wire_segment_positions = pool_CreateTyped(struct wire_segment_pos_block_t, 16384);
+    w_wire_segment_positions = pool_CreateTyped(struct wire_seg_pos_block_t, 16384);
     w_wire_segments = pool_CreateTyped(struct wire_segment_t, 16384);
 }
 
@@ -132,7 +132,7 @@ struct wire_t *w_CreateWire()
     // wire->first_segment_pos_block = 0;
     // wire->segment_pos_block_count = 0;
     // wire->segment_pos_count = 0;
-    wire->value = WIRE_VALUE_Z;
+    // wire->value = WIRE_VALUE_Z;
     return wire;
 }
 
@@ -344,8 +344,8 @@ struct wire_t *w_MergeWires(struct wire_t *wire_a, struct wire_t *wire_b)
             }
         }
 
-        struct wire_segment_pos_block_t *wire_a_last_block = wire_a->last_segment_pos;
-        struct wire_segment_pos_block_t *wire_b_last_block = wire_b->first_segment_pos;
+        struct wire_seg_pos_block_t *wire_a_last_block = wire_a->last_segment_pos;
+        struct wire_seg_pos_block_t *wire_b_last_block = wire_b->first_segment_pos;
 
         uint32_t wire_a_block_offset = wire_a->segment_pos_count % WIRE_SEGMENT_POS_BLOCK_SEGMENT_COUNT;
         uint32_t wire_b_block_offset = (wire_b->segment_pos_count - 1) % WIRE_SEGMENT_POS_BLOCK_SEGMENT_COUNT;
@@ -470,13 +470,13 @@ struct wire_t *w_ConnectPins(struct dev_t *device_a, uint16_t pin_a, struct dev_
 
     for(uint32_t index = 0; index < wire_segments->cursor; index++)
     {
-        struct wire_segment_pos_t *src_segment = list_GetElement(wire_segments, index);
-        struct wire_segment_pos_t *dst_segment = wire->last_segment_pos->segments + wire->segment_pos_count % WIRE_SEGMENT_POS_BLOCK_SEGMENT_COUNT;
+        struct wire_seg_pos_t *src_segment = list_GetElement(wire_segments, index);
+        struct wire_seg_pos_t *dst_segment = wire->last_segment_pos->segments + wire->segment_pos_count % WIRE_SEGMENT_POS_BLOCK_SEGMENT_COUNT;
         wire->segment_pos_count++;
 
         if(wire->segment_pos_count % WIRE_SEGMENT_POS_BLOCK_SEGMENT_COUNT == 0)
         {
-            struct wire_segment_pos_block_t *new_block = pool_AddElement(&w_wire_segment_positions, NULL);
+            struct wire_seg_pos_block_t *new_block = pool_AddElement(&w_wire_segment_positions, NULL);
             new_block->prev = wire->last_segment_pos;
             wire->last_segment_pos->next = new_block;
             wire->last_segment_pos = new_block;

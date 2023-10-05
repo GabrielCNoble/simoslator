@@ -28,6 +28,8 @@ const char *d_draw_device_vertex_shader =
     "{\n"
         "int pos_x;\n"
         "int pos_y;\n"
+        "int origin_x;\n"
+        "int origin_y;\n"
         "int size;\n"
         "int coord_offset;\n"
         "int rot_flip_sel;\n"
@@ -53,6 +55,9 @@ const char *d_draw_device_vertex_shader =
         "vec4 position = vec4(d_position.x * float(size.x), d_position.y * float(size.y), 0.1f, 1);\n"
         "int rotation = data.rot_flip_sel & 0xffff;\n"
         "int flip_sel = (data.rot_flip_sel >> 16) & 0xffff;\n"
+
+        "position.x -= float(data.origin_x);\n"
+        "position.y -= float(data.origin_y);\n"
 
         "bool flip_x = bool(flip_sel & DEV_DEVICE_FLIP_X);\n"
         "bool flip_y = bool(flip_sel & DEV_DEVICE_FLIP_Y);\n"
@@ -109,7 +114,7 @@ const char *d_draw_device_fragment_shader =
     "uniform sampler2D d_texture;\n"
     "void main()\n"
     "{\n"
-        "ivec2 coords = ivec2(float(coord_offset.x) + float(size.x) * tex_coords.x, float(coord_offset.y) + float(size.y) * tex_coords.y);\n"
+        "ivec2 coords = ivec2(float(coord_offset.x) + float(size.x * 2.0f) * tex_coords.x, float(coord_offset.y) + float(size.y * 2.0f) * tex_coords.y);\n"
         "vec4 color = texelFetch(d_texture, coords, 0);\n"
         "if(selected != 0)\n"
         "{\n"
@@ -429,11 +434,15 @@ void d_DrawDevices()
             {
                 struct d_device_data_t *data = d_device_data + buffer_offset;
                 struct dev_desc_t *desc = dev_device_descs + device->type;
+                int32_t width = desc->width >> 1;
+                int32_t height = desc->height >> 1;
                 data->pos_x = device->position[0];
                 data->pos_y = device->position[1];
-                data->size = (desc->height << 16) | desc->width;
+                data->origin_x = desc->origin[0];
+                data->origin_y = desc->origin[1];
+                data->size = (height << 16) | width;
                 data->rot_flip_sel = (device->flip << 16) | device->rotation | ((device->selection_index != INVALID_LIST_INDEX) << 18);
-                data->coord_offset = (desc->offset_y << 16) | desc->offset_x;
+                data->coord_offset = (desc->offset[1] << 16) | desc->offset[0];
                 buffer_offset++;
             }
         }
@@ -453,11 +462,15 @@ void d_DrawDevices()
     if(m_selected_device_type != DEV_DEVICE_TYPE_LAST)
     {
         struct dev_desc_t *desc = dev_device_descs + m_selected_device_type;
+        int32_t width = desc->width >> 1;
+        int32_t height = desc->height >> 1;
         d_device_data->pos_x = m_place_device_x;
         d_device_data->pos_y = m_place_device_y;
-        d_device_data->size = (desc->height << 16) | desc->width;
+        d_device_data->origin_x = desc->origin[0];
+        d_device_data->origin_y = desc->origin[1];
+        d_device_data->size = (height << 16) | width;
         d_device_data->rot_flip_sel = 0;
-        d_device_data->coord_offset = (desc->offset_y << 16) | desc->offset_x;
+        d_device_data->coord_offset = (desc->offset[1] << 16) | desc->offset[0];
 
         glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(struct d_device_data_t), d_device_data);
         glDrawElementsInstanced(GL_TRIANGLES, 6, GL_UNSIGNED_INT, (void *)0, 1);
@@ -473,7 +486,7 @@ void d_DrawDevices()
     glVertexAttribIPointer(1, 1, GL_INT, sizeof(struct d_wire_vert_t), (void *)(offsetof(struct d_wire_vert_t, value)));
 
     glUniformMatrix4fv(d_draw_wire_shader_model_view_projection_matrix, 1, GL_FALSE, d_model_view_projection_matrix);
-    glLineWidth(4.0f);
+    glLineWidth(2.0f);
 
     uint32_t vertex_count = w_wire_segment_positions.cursor * 2;
     update_count = vertex_count / D_WIRE_VERTEX_BUFFER_SIZE;
@@ -501,7 +514,7 @@ void d_DrawDevices()
                     break;
                 }
 
-                struct wire_segment_pos_block_t *segment_block = wire->first_segment_pos;
+                struct wire_seg_pos_block_t *segment_block = wire->first_segment_pos;
                 struct sim_wire_data_t *wire_data = list_GetValidElement(&sim_wire_data, wire->sim_data);
                 uint8_t wire_value = m_run_simulation ? wire_data->value : WIRE_VALUE_Z;
                 uint32_t total_segment_count = wire->segment_pos_count;
@@ -517,7 +530,7 @@ void d_DrawDevices()
 
                     for(uint32_t segment_index = 0; segment_index < segment_count; segment_index++)
                     {
-                        struct wire_segment_pos_t *segment = segment_block->segments + segment_index;
+                        struct wire_seg_pos_t *segment = segment_block->segments + segment_index;
                         d_wire_vertices[buffer_offset].position[0] = segment->start[0];
                         d_wire_vertices[buffer_offset].position[1] = segment->start[1];
                         d_wire_vertices[buffer_offset].value = wire_value;
@@ -541,7 +554,7 @@ void d_DrawDevices()
         uint32_t buffer_offset = 0;
         for(uint32_t index = 0; index < m_wire_segments.cursor; index++)
         {
-            struct wire_segment_pos_t *segment = list_GetElement(&m_wire_segments, index);
+            struct wire_seg_pos_t *segment = list_GetElement(&m_wire_segments, index);
             d_wire_vertices[buffer_offset].position[0] = segment->start[0];
             d_wire_vertices[buffer_offset].position[1] = segment->start[1];
             d_wire_vertices[buffer_offset].value = WIRE_VALUE_Z;

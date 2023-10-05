@@ -151,50 +151,48 @@ void (*dev_DeviceFuncs[DEV_DEVICE_TYPE_LAST])(struct sim_dev_data_t *device) = {
 
 struct dev_desc_t dev_device_descs[DEV_DEVICE_TYPE_LAST] = {
     [DEV_DEVICE_TYPE_PMOS] = {
-        .width = 60,
-        .height = 120,
-        .offset_x = 75,
-        .offset_y = 0,
+        .width = 40,
+        .height = 80,
+        .offset = {50, 0},
         .pin_count = 3,
         .pins = (struct dev_pin_desc_t []) {
-            [DEV_MOS_PIN_SOURCE]    = {.type = DEV_PIN_TYPE_IN,  .offset = {-30, -54}},
-            [DEV_MOS_PIN_GATE]      = {.type = DEV_PIN_TYPE_IN,  .offset = {38, 0}},
-            [DEV_MOS_PIN_DRAIN]     = {.type = DEV_PIN_TYPE_OUT, .offset = {-30,  54}},
+            [DEV_MOS_PIN_SOURCE]    = {.type = DEV_PIN_TYPE_IN,  .offset = {-20, -40}},
+            [DEV_MOS_PIN_GATE]      = {.type = DEV_PIN_TYPE_IN,  .offset = {20, 0}},
+            [DEV_MOS_PIN_DRAIN]     = {.type = DEV_PIN_TYPE_OUT, .offset = {-20,  40}},
         },
     },
 
     [DEV_DEVICE_TYPE_NMOS] = {
-        .width = 60,
-        .height = 120,
-        .offset_x = 0,
-        .offset_y = 0,
+        .width = 40,
+        .height = 80,
+        .offset = {0, 0},
         .pin_count = 3,
         .pins = (struct dev_pin_desc_t []) {
-            [DEV_MOS_PIN_SOURCE]    = {.type = DEV_PIN_TYPE_IN,  .offset = {-30, -54}},
-            [DEV_MOS_PIN_GATE]      = {.type = DEV_PIN_TYPE_IN,  .offset = {38, 0}},
-            [DEV_MOS_PIN_DRAIN]     = {.type = DEV_PIN_TYPE_OUT, .offset = {-30,  54}},
+            [DEV_MOS_PIN_SOURCE]    = {.type = DEV_PIN_TYPE_IN,  .offset = {-20, -40}},
+            [DEV_MOS_PIN_GATE]      = {.type = DEV_PIN_TYPE_IN,  .offset = {20, 0}},
+            [DEV_MOS_PIN_DRAIN]     = {.type = DEV_PIN_TYPE_OUT, .offset = {-20,  40}},
         },
     },
 
     [DEV_DEVICE_TYPE_GND] = {
         .pin_count = 1,
-        .width = 17,
-        .height = 17,
-        .offset_x = 0,
-        .offset_y = 77,
+        .width = 20,
+        .height = 29,
+        .offset = {41, 92}, 
+        .origin = {0, 15},
         .pins = (struct dev_pin_desc_t []) {
-            {.type = DEV_PIN_TYPE_OUT, .offset = {0, 18}},
+            {.type = DEV_PIN_TYPE_OUT, .offset = {0, 0}},
         },
     },
     
     [DEV_DEVICE_TYPE_POW] = {
         .pin_count = 1,
-        .width = 15,
-        .height = 24,
-        .offset_x = 28,
-        .offset_y = 70,
+        .width = 22,
+        .height = 32,
+        .offset = {10, 88}, 
+        .origin = {0, -16},
         .pins = (struct dev_pin_desc_t []) {
-            {.type = DEV_PIN_TYPE_OUT, .offset = {0, -28}},
+            {.type = DEV_PIN_TYPE_OUT, .offset = {0, 0}},
         },
     },
 
@@ -202,8 +200,7 @@ struct dev_desc_t dev_device_descs[DEV_DEVICE_TYPE_LAST] = {
         .pin_count = 1,
         .width = 52,
         .height = 34,
-        .offset_x = 49,
-        .offset_y = 63,
+        .offset = {0, 0}, 
         .pins = (struct dev_pin_desc_t []) {
             {.type = DEV_PIN_TYPE_OUT, .offset = {54, -2}},
         },
@@ -211,12 +208,12 @@ struct dev_desc_t dev_device_descs[DEV_DEVICE_TYPE_LAST] = {
 
     [DEV_DEVICE_TYPE_INPUT] = {
         .pin_count = 1,
-        .width = 29,
-        .height = 18,
-        .offset_x = 96,
-        .offset_y = 22,
+        .width = 44,
+        .height = 26,
+        .offset = {97, 28}, 
+        .origin = {22, 0},
         .pins = (struct dev_pin_desc_t []) {
-            {.type = DEV_PIN_TYPE_OUT, .offset = {36, -2}},
+            {.type = DEV_PIN_TYPE_OUT, .offset = {0, 0}},
         },
     }
 };
@@ -249,10 +246,11 @@ void dev_Init()
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_BASE_LEVEL, 0);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_LEVEL, 4);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_LEVEL, 0);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, dev_devices_texture_width, dev_devices_texture_height, 0, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
+    // glGenerateMipmap(GL_TEXTURE_2D);
     free(pixels);
     // }
 }
@@ -384,7 +382,7 @@ struct dev_t *dev_GetDevice(uint64_t device_index)
     return pool_GetValidElement(&dev_devices, device_index);
 }
 
-void dev_GetDevicePinLocalPosition(struct dev_t *device, uint16_t pin, int32_t *pin_position)
+void dev_GetDeviceLocalPinPosition(struct dev_t *device, uint16_t pin, int32_t *pin_position)
 {
     struct dev_desc_t *dev_desc = dev_device_descs + device->type;
     struct dev_pin_desc_t *pin_desc = dev_desc->pins + pin;
@@ -415,6 +413,44 @@ void dev_GetDevicePinLocalPosition(struct dev_t *device, uint16_t pin, int32_t *
         }
         break;
     }
+}
+
+void dev_GetDeviceLocalBoxPosition(struct dev_t *device, int32_t *min, int32_t *max)
+{
+    struct dev_desc_t *dev_desc = dev_device_descs + device->type;
+    int32_t width = dev_desc->width >> 1;
+    int32_t height = dev_desc->height >> 1;
+
+    min[0] = -width;
+    min[1] = -height;
+
+    max[0] = width;
+    max[1] = height;
+
+    if(device->flip & (1 << DEV_DEVICE_FLIP_X))
+    {
+        min[0] += dev_desc->origin[0];
+        max[0] += dev_desc->origin[0];
+    }
+    else
+    {
+        min[0] -= dev_desc->origin[0];
+        max[0] -= dev_desc->origin[0];
+    }
+
+    if(device->flip & (1 << DEV_DEVICE_FLIP_Y))
+    {
+        min[1] += dev_desc->origin[1];
+        max[1] += dev_desc->origin[1];
+    }
+    else
+    {
+        min[1] -= dev_desc->origin[1];
+        max[1] -= dev_desc->origin[1];
+    }
+
+    // int32_t tx = max[0] - min[0];
+    // int32_t ty = max[1] - min[1];
 }
 
 struct dev_pin_block_t *dev_GetDevicePinBlock(struct dev_t *device, uint16_t pin)
