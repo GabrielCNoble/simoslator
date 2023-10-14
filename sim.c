@@ -115,13 +115,13 @@ void sim_BeginSimulation()
             {
                 wire_data->pin_count[pin_type] = wire->wire_pins[pin_type].pin_count;
 
-                struct wire_pin_block_t *pin_block = wire->wire_pins[pin_type].first_block;
+                struct wire_junc_pin_block_t *pin_block = wire->wire_pins[pin_type].first_block;
                 uint32_t total_pin_count = wire->wire_pins[pin_type].pin_count;
                 wire_data->first_pin[pin_type] = sim_wire_pins.cursor;
 
                 while(pin_block != NULL)
                 {
-                    uint32_t pin_count = WIRE_PIN_BLOCK_PIN_COUNT;
+                    uint32_t pin_count = WIRE_JUNC_PIN_BLOCK_PIN_COUNT;
 
                     if(pin_count > total_pin_count)
                     {
@@ -131,11 +131,11 @@ void sim_BeginSimulation()
 
                     for(uint32_t pin_index = 0; pin_index < pin_count; pin_index++)
                     {
-                        struct wire_pin_t *pin = pin_block->pins + pin_index;
+                        struct wire_junc_pin_t *pin = pin_block->pins + pin_index;
                         uint64_t sim_pin_index = list_AddElement(&sim_wire_pins, NULL);
                         struct wire_pin_t *sim_pin = list_GetElement(&sim_wire_pins, sim_pin_index);
-                        sim_pin->device = pin->device;
-                        sim_pin->pin = pin->pin;
+                        sim_pin->device = pin->pin.device;
+                        sim_pin->pin = pin->pin.pin;
                     }
 
                     pin_block = pin_block->next;

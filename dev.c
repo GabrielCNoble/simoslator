@@ -154,6 +154,7 @@ struct dev_desc_t dev_device_descs[DEV_DEVICE_TYPE_LAST] = {
         .width = 40,
         .height = 80,
         .offset = {50, 0},
+        .origin = {2, 0},
         .pin_count = 3,
         .pins = (struct dev_pin_desc_t []) {
             [DEV_MOS_PIN_SOURCE]    = {.type = DEV_PIN_TYPE_IN,  .offset = {-20, -40}},
@@ -166,6 +167,7 @@ struct dev_desc_t dev_device_descs[DEV_DEVICE_TYPE_LAST] = {
         .width = 40,
         .height = 80,
         .offset = {0, 0},
+        .origin = {2, 0},
         .pin_count = 3,
         .pins = (struct dev_pin_desc_t []) {
             [DEV_MOS_PIN_SOURCE]    = {.type = DEV_PIN_TYPE_IN,  .offset = {-20, -40}},
@@ -208,10 +210,10 @@ struct dev_desc_t dev_device_descs[DEV_DEVICE_TYPE_LAST] = {
 
     [DEV_DEVICE_TYPE_INPUT] = {
         .pin_count = 1,
-        .width = 44,
-        .height = 26,
-        .offset = {97, 28}, 
-        .origin = {22, 0},
+        .width = 38,
+        .height = 22,
+        .offset = {104, 30}, 
+        .origin = {18, 0},
         .pins = (struct dev_pin_desc_t []) {
             {.type = DEV_PIN_TYPE_OUT, .offset = {0, 0}},
         },

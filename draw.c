@@ -5,6 +5,7 @@
 #include "dev.h"
 #include "wire.h"
 #include "sim.h"
+#include "main.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -189,7 +190,8 @@ extern uint32_t             dev_device_texture_offsets[][2];
 extern struct dev_desc_t    dev_device_descs[];
 
 extern struct pool_t        w_wires;
-extern struct list_t        w_wire_segment_positions;
+extern struct list_t        w_wire_seg_pos;
+extern struct list_t        w_wire_junc_pos;
 
 extern uint32_t             m_window_width;
 extern uint32_t             m_window_height;
@@ -203,7 +205,8 @@ extern int32_t              m_mouse_x;
 extern int32_t              m_mouse_y;
 extern int32_t              m_place_device_x;
 extern int32_t              m_place_device_y;
-extern struct list_t        m_wire_segments;
+extern struct list_t        m_wire_seg_pos;
+// extern struct list_t        m_wire_segments;
 
 extern struct list_t        sim_wire_data;
 
@@ -487,8 +490,9 @@ void d_DrawDevices()
 
     glUniformMatrix4fv(d_draw_wire_shader_model_view_projection_matrix, 1, GL_FALSE, d_model_view_projection_matrix);
     glLineWidth(2.0f);
+    glPointSize(4.0f);
 
-    uint32_t vertex_count = w_wire_segment_positions.cursor * 2;
+    uint32_t vertex_count = w_wire_seg_pos.cursor * 2;
     update_count = vertex_count / D_WIRE_VERTEX_BUFFER_SIZE;
 
     if(vertex_count % D_WIRE_VERTEX_BUFFER_SIZE)
@@ -521,7 +525,7 @@ void d_DrawDevices()
 
                 while(segment_block != NULL)
                 {
-                    uint32_t segment_count = WIRE_SEGMENT_POS_BLOCK_SEGMENT_COUNT;
+                    uint32_t segment_count = WIRE_SEGMENT_POS_BLOCK_SIZE;
                     if(segment_count > total_segment_count)
                     {
                         segment_count = total_segment_count;
@@ -549,19 +553,75 @@ void d_DrawDevices()
         glDrawArrays(GL_LINES, 0, buffer_offset);
     }
 
-    if(m_wire_segments.cursor != 0)
+    vertex_count = w_wire_junc_pos.cursor;
+    update_count = vertex_count / D_WIRE_VERTEX_BUFFER_SIZE;
+
+    if(vertex_count % D_WIRE_VERTEX_BUFFER_SIZE)
+    {
+        update_count++;
+    }
+
+    wire_index = 0;
+    last_wire = w_wires.cursor;
+    
+    for(uint32_t update_index = 0; update_index < update_count; update_index++)
     {
         uint32_t buffer_offset = 0;
-        for(uint32_t index = 0; index < m_wire_segments.cursor; index++)
+
+        for(; wire_index < last_wire; wire_index++)
         {
-            struct wire_seg_pos_t *segment = list_GetElement(&m_wire_segments, index);
-            d_wire_vertices[buffer_offset].position[0] = segment->start[0];
-            d_wire_vertices[buffer_offset].position[1] = segment->start[1];
+            struct wire_t *wire = pool_GetValidElement(&w_wires, wire_index);
+
+            if(wire != NULL)
+            {
+                if(wire->junction_pos_count + buffer_offset > D_WIRE_VERTEX_BUFFER_SIZE)
+                {
+                    break;
+                }
+
+                struct wire_junc_pos_block_t *junction_block = wire->first_junction_pos;
+                struct sim_wire_data_t *wire_data = list_GetValidElement(&sim_wire_data, wire->sim_data);
+                uint8_t wire_value = m_run_simulation ? wire_data->value : WIRE_VALUE_Z;
+                uint32_t total_junction_count = wire->junction_pos_count;
+
+                while(junction_block != NULL)
+                {
+                    uint32_t junction_count = WIRE_JUNCTION_POS_BLOCK_SIZE;
+                    if(junction_count > total_junction_count)
+                    {
+                        junction_count = total_junction_count;
+                    }
+                    total_junction_count -= junction_count;
+
+                    for(uint32_t junction_index = 0; junction_index < junction_count; junction_index++)
+                    {
+                        struct wire_junc_pos_t *junction = junction_block->junctions + junction_index;
+                        d_wire_vertices[buffer_offset].position[0] = junction->pos[0];
+                        d_wire_vertices[buffer_offset].position[1] = junction->pos[1];
+                        d_wire_vertices[buffer_offset].value = wire_value;
+                        buffer_offset++;
+                    }
+                    junction_block = junction_block->next;
+                }
+            }
+        }
+        glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(struct d_wire_vert_t) * buffer_offset, d_wire_vertices);
+        glDrawArrays(GL_POINTS, 0, buffer_offset);
+    }
+
+    if(m_wire_seg_pos.cursor != 0)
+    {
+        uint32_t buffer_offset = 0;
+        for(uint32_t index = 0; index < m_wire_seg_pos.cursor; index++)
+        {
+            union m_wire_seg_t *segment = list_GetElement(&m_wire_seg_pos, index);
+            d_wire_vertices[buffer_offset].position[0] = segment->seg_pos.start[0];
+            d_wire_vertices[buffer_offset].position[1] = segment->seg_pos.start[1];
             d_wire_vertices[buffer_offset].value = WIRE_VALUE_Z;
             buffer_offset++;
 
-            d_wire_vertices[buffer_offset].position[0] = segment->end[0];
-            d_wire_vertices[buffer_offset].position[1] = segment->end[1];
+            d_wire_vertices[buffer_offset].position[0] = segment->seg_pos.end[0];
+            d_wire_vertices[buffer_offset].position[1] = segment->seg_pos.end[1];
             d_wire_vertices[buffer_offset].value = WIRE_VALUE_Z;
             buffer_offset++;
         }
