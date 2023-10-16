@@ -115,7 +115,7 @@ void dev_Shutdown();
 
 struct dev_t *dev_CreateDevice(uint32_t type);
 
-void dev_DestroyDeviced(struct dev_t *device);
+void dev_DestroyDevice(struct dev_t *device);
 
 struct dev_t *dev_GetDevice(uint64_t device_index);
 

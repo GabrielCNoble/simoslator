@@ -45,7 +45,7 @@ struct wire_pin_t
 
 struct wire_junc_pin_t
 {
-    struct wire_pin_t   pin;
+    struct wire_pin_t    pin;
     struct wire_junc_t * junction;
 };
 
@@ -76,8 +76,7 @@ struct wire_junc_pins_t
 struct wire_seg_pos_t 
 {
     struct wire_seg_t *         segment;
-    int32_t                     start[2];
-    int32_t                     end[2];
+    int32_t                     ends[2][2];
 };
 
 struct wire_junc_pos_t
@@ -112,8 +111,8 @@ enum WIRE_SEGMENT_TYPES
     WIRE_SEGMENT_TYPE_LAST,
 };
 
-#define WIRE_SEG_START_LINK 0
-#define WIRE_SEG_END_LINK   1
+#define WIRE_SEG_START_INDEX 0
+#define WIRE_SEG_END_INDEX   1
 
 struct wire_seg_junc_t
 {
@@ -136,56 +135,26 @@ struct wire_junc_t
     struct wire_seg_t *             first_segment;
     struct wire_seg_t *             last_segment;
     struct wire_junc_pin_t *        pin;
+    struct wire_junc_pin_block_t *  pin_block;
     struct wire_junc_t *            wire_next;
     struct wire_junc_t *            wire_prev;
+    uint32_t                        selection_index;
 };
 
 struct wire_seg_t
 {
-    struct wire_elem_t                  base;
-    struct wire_seg_pos_t *             pos;
-    struct wire_seg_pos_block_t *       pos_block;
-    struct wire_seg_junc_t              junctions[2];
-    struct wire_seg_t *                 next;
-    struct wire_seg_t *                 prev;
-    struct wire_seg_t *                 wire_next;
-    struct wire_seg_t *                 wire_prev;
+    struct wire_elem_t              base;
+    struct wire_seg_pos_t *         pos;
+    struct wire_seg_pos_block_t *   pos_block;
+    struct wire_seg_junc_t          junctions[2];
 
-    // union
-    // {
-    //     struct
-    //     {
-    //         struct wire_seg_pos_t *             pos;
-    //         struct wire_seg_pos_block_t *       pos_block;
-    //         /* each wire segment can be connected to two different junctions */
-    //         struct wire_seg_junc_t              junctions[2];
-    //         union
-    //         {
-    //             struct
-    //             {
-    //                 struct wire_seg_t *         next;
-    //                 struct wire_seg_t *         prev;
-    //             };
-
-    //             struct
-    //             {
-    //                 /* used only during wire creation, filled in by external code */
-    //                 struct wire_pin_t           device;
-    //                 struct wire_seg_t *         wire;
-    //             };
-    //         };
-    //     } segment;
-
-    //     struct
-    //     {
-    //         struct wire_junc_pos_t *            pos;
-    //         struct wire_junc_pos_block_t *      pos_block;
-    //         /* which wire segments are connected to this junction */
-    //         struct wire_junc_t *                segments;
-    //         /* will be non-null in case this junction is connected to a device pin */
-    //         struct wire_seg_pin_t *             pin;
-    //     } junction;
-    // };
+    /* segments may be linked to one another in whatever orientation */
+    struct wire_seg_t *             segments[2];
+    // struct wire_seg_t *             next;
+    // struct wire_seg_t *             prev;
+    struct wire_seg_t *             wire_next;
+    struct wire_seg_t *             wire_prev;
+    uint32_t                        selection_index;
 };
 
 struct wire_t

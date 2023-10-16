@@ -347,7 +347,7 @@ struct dev_t *dev_CreateDevice(uint32_t type)
     return device;
 }
 
-void dev_DestroyDeviced(struct dev_t *device)
+void dev_DestroyDevice(struct dev_t *device)
 {
     if(device != NULL)
     {

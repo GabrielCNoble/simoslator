@@ -129,15 +129,17 @@ const char *d_draw_wire_vertex_shader =
     "#version 400 core\n"
     "#extension GL_ARB_shader_storage_buffer_object : require\n"
     "layout (location = 0) in vec4 d_position;\n"
-    "layout (location = 1) in int d_wire_value;\n"
+    "layout (location = 1) in int d_value_sel;\n"
 
     "uniform mat4 d_model_view_projection_matrix;\n"
     "flat out int wire_value;\n"
+    "flat out int selected;\n"
 
     "void main()\n"
     "{\n"
         "gl_Position = d_model_view_projection_matrix * vec4(d_position.xy, 0.1f, 1.0f);\n"
-        "wire_value = d_wire_value;\n"
+        "wire_value = d_value_sel & 0xffff;\n"
+        "selected = d_value_sel >> 16;"
     "}\n";
 
 const char *d_draw_wire_fragment_shader = 
@@ -148,9 +150,19 @@ const char *d_draw_wire_fragment_shader =
         "vec4 wire_colors[];\n"
     "};\n"
     "flat in int wire_value;\n"
+    "flat in int selected;\n"
     "void main()\n"
     "{\n"
-        "gl_FragColor = wire_colors[wire_value];\n"
+        "vec4 color;\n"
+        "if(selected != 0)\n"
+        "{\n"
+            "color = vec4(0.0f, 0.5f, 0.8f, 1.0f);\n"
+        "}\n"
+        "else\n"
+        "{\n"
+            "color = wire_colors[wire_value];"
+        "}\n"
+        "gl_FragColor = color;\n"
     "}\n";
  
 #define D_DEVICE_VERTEX_BUFFER_SIZE     4
@@ -206,6 +218,7 @@ extern int32_t              m_mouse_y;
 extern int32_t              m_place_device_x;
 extern int32_t              m_place_device_y;
 extern struct list_t        m_wire_seg_pos;
+extern struct list_t        m_objects[];
 // extern struct list_t        m_wire_segments;
 
 extern struct list_t        sim_wire_data;
@@ -486,7 +499,7 @@ void d_DrawDevices()
     glEnableVertexAttribArray(0);
     glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, sizeof(struct d_wire_vert_t), (void *)(offsetof(struct d_wire_vert_t, position)));
     glEnableVertexAttribArray(1);
-    glVertexAttribIPointer(1, 1, GL_INT, sizeof(struct d_wire_vert_t), (void *)(offsetof(struct d_wire_vert_t, value)));
+    glVertexAttribIPointer(1, 1, GL_INT, sizeof(struct d_wire_vert_t), (void *)(offsetof(struct d_wire_vert_t, value_sel)));
 
     glUniformMatrix4fv(d_draw_wire_shader_model_view_projection_matrix, 1, GL_FALSE, d_model_view_projection_matrix);
     glLineWidth(2.0f);
@@ -535,14 +548,14 @@ void d_DrawDevices()
                     for(uint32_t segment_index = 0; segment_index < segment_count; segment_index++)
                     {
                         struct wire_seg_pos_t *segment = segment_block->segments + segment_index;
-                        d_wire_vertices[buffer_offset].position[0] = segment->start[0];
-                        d_wire_vertices[buffer_offset].position[1] = segment->start[1];
-                        d_wire_vertices[buffer_offset].value = wire_value;
+                        d_wire_vertices[buffer_offset].position[0] = segment->ends[WIRE_SEG_START_INDEX][0];
+                        d_wire_vertices[buffer_offset].position[1] = segment->ends[WIRE_SEG_START_INDEX][1];
+                        d_wire_vertices[buffer_offset].value_sel = wire_value | ((segment->segment->selection_index != 0xffffffff) << 16);
                         buffer_offset++;
 
-                        d_wire_vertices[buffer_offset].position[0] = segment->end[0];
-                        d_wire_vertices[buffer_offset].position[1] = segment->end[1];
-                        d_wire_vertices[buffer_offset].value = wire_value;
+                        d_wire_vertices[buffer_offset].position[0] = segment->ends[WIRE_SEG_END_INDEX][0];
+                        d_wire_vertices[buffer_offset].position[1] = segment->ends[WIRE_SEG_END_INDEX][1];
+                        d_wire_vertices[buffer_offset].value_sel = wire_value | ((segment->segment->selection_index != 0xffffffff) << 16);
                         buffer_offset++;
                     }
                     segment_block = segment_block->next;
@@ -598,7 +611,7 @@ void d_DrawDevices()
                         struct wire_junc_pos_t *junction = junction_block->junctions + junction_index;
                         d_wire_vertices[buffer_offset].position[0] = junction->pos[0];
                         d_wire_vertices[buffer_offset].position[1] = junction->pos[1];
-                        d_wire_vertices[buffer_offset].value = wire_value;
+                        d_wire_vertices[buffer_offset].value_sel = wire_value;
                         buffer_offset++;
                     }
                     junction_block = junction_block->next;
@@ -615,14 +628,14 @@ void d_DrawDevices()
         for(uint32_t index = 0; index < m_wire_seg_pos.cursor; index++)
         {
             union m_wire_seg_t *segment = list_GetElement(&m_wire_seg_pos, index);
-            d_wire_vertices[buffer_offset].position[0] = segment->seg_pos.start[0];
-            d_wire_vertices[buffer_offset].position[1] = segment->seg_pos.start[1];
-            d_wire_vertices[buffer_offset].value = WIRE_VALUE_Z;
+            d_wire_vertices[buffer_offset].position[0] = segment->seg_pos.ends[WIRE_SEG_START_INDEX][0];
+            d_wire_vertices[buffer_offset].position[1] = segment->seg_pos.ends[WIRE_SEG_START_INDEX][1];
+            d_wire_vertices[buffer_offset].value_sel = WIRE_VALUE_Z;
             buffer_offset++;
 
-            d_wire_vertices[buffer_offset].position[0] = segment->seg_pos.end[0];
-            d_wire_vertices[buffer_offset].position[1] = segment->seg_pos.end[1];
-            d_wire_vertices[buffer_offset].value = WIRE_VALUE_Z;
+            d_wire_vertices[buffer_offset].position[0] = segment->seg_pos.ends[WIRE_SEG_END_INDEX][0];
+            d_wire_vertices[buffer_offset].position[1] = segment->seg_pos.ends[WIRE_SEG_END_INDEX][1];
+            d_wire_vertices[buffer_offset].value_sel = WIRE_VALUE_Z;
             buffer_offset++;
         }
 
