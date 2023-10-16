@@ -495,15 +495,13 @@ struct wire_t *m_CreateWire(struct m_picked_object_t *first_contact, struct m_pi
             wire = w_AllocWire();
             start_junction = w_AllocWireJunction(wire);
             end_junction = w_AllocWireJunction(wire);
-            start_junction->pin = w_ConnectWire(wire, first_contact->object->object, first_contact->index);
-            start_junction->pin->junction = start_junction;
-            start_junction->pos->pos[0] = first_segment->seg_pos.ends[WIRE_SEG_START_INDEX][0];
-            start_junction->pos->pos[1] = first_segment->seg_pos.ends[WIRE_SEG_START_INDEX][1];
+            w_ConnectWire(start_junction, first_contact->object->object, first_contact->index);
+            // start_junction->pos->pos[0] = first_segment->seg_pos.ends[WIRE_SEG_START_INDEX][0];
+            // start_junction->pos->pos[1] = first_segment->seg_pos.ends[WIRE_SEG_START_INDEX][1];
             
-            end_junction->pin = w_ConnectWire(wire, second_contact->object->object, second_contact->index);
-            end_junction->pin->junction = end_junction;
-            end_junction->pos->pos[0] = last_segment->seg_pos.ends[WIRE_SEG_END_INDEX][0];
-            end_junction->pos->pos[1] = last_segment->seg_pos.ends[WIRE_SEG_END_INDEX][1];    
+            w_ConnectWire(end_junction, second_contact->object->object, second_contact->index);
+            // end_junction->pos->pos[0] = last_segment->seg_pos.ends[WIRE_SEG_END_INDEX][0];
+            // end_junction->pos->pos[1] = last_segment->seg_pos.ends[WIRE_SEG_END_INDEX][1];    
         }
         else
         {
@@ -544,9 +542,7 @@ struct wire_t *m_CreateWire(struct m_picked_object_t *first_contact, struct m_pi
             device = first_contact->object->object;
             wire_elem = second_contact->object->object;
             start_junction = w_AllocWireJunction(wire_elem->wire);
-            start_junction->pos->pos[0] = first_segment->seg_pos.ends[WIRE_SEG_START_INDEX][0];
-            start_junction->pos->pos[1] = first_segment->seg_pos.ends[WIRE_SEG_START_INDEX][1];
-            w_ConnectWire(wire_elem->wire, device, first_contact->index);
+            w_ConnectWire(start_junction, device, first_contact->index);
 
             if(second_contact->object->type == M_OBJECT_TYPE_SEGMENT)
             {
@@ -562,9 +558,7 @@ struct wire_t *m_CreateWire(struct m_picked_object_t *first_contact, struct m_pi
             device = second_contact->object->object;
             wire_elem = first_contact->object->object;
             end_junction = w_AllocWireJunction(wire_elem->wire);
-            end_junction->pos->pos[0] = last_segment->seg_pos.ends[WIRE_SEG_END_INDEX][0];
-            end_junction->pos->pos[1] = last_segment->seg_pos.ends[WIRE_SEG_END_INDEX][1];
-            w_ConnectWire(wire_elem->wire, device, second_contact->index);
+            w_ConnectWire(end_junction, device, second_contact->index);
 
             if(first_contact->object->type == M_OBJECT_TYPE_SEGMENT)
             {

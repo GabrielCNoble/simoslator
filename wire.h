@@ -130,8 +130,10 @@ struct wire_elem_t
 struct wire_junc_t
 {
     struct wire_elem_t              base;
-    struct wire_junc_pos_t *        pos;
-    struct wire_junc_pos_block_t *  pos_block;
+    // struct wire_junc_pos_t *        pos;
+    // struct wire_junc_pos_block_t *  pos_block;
+    // struct wire_seg_pos_t *         pos;
+    int32_t *                       pos;
     struct wire_seg_t *             first_segment;
     struct wire_seg_t *             last_segment;
     struct wire_junc_pin_t *        pin;
@@ -150,8 +152,6 @@ struct wire_seg_t
 
     /* segments may be linked to one another in whatever orientation */
     struct wire_seg_t *             segments[2];
-    // struct wire_seg_t *             next;
-    // struct wire_seg_t *             prev;
     struct wire_seg_t *             wire_next;
     struct wire_seg_t *             wire_prev;
     uint32_t                        selection_index;
@@ -178,9 +178,11 @@ struct wire_t
     struct wire_seg_pos_block_t *   last_segment_pos;
     uint32_t                        segment_pos_count;
 
-    struct wire_junc_pos_block_t *  first_junction_pos;
-    struct wire_junc_pos_block_t *  last_junction_pos;
-    uint32_t                        junction_pos_count;
+    uint32_t                        junction_count;
+
+    // struct wire_junc_pos_block_t *  first_junction_pos;
+    // struct wire_junc_pos_block_t *  last_junction_pos;
+    // uint32_t                        junction_pos_count;
     
     struct wire_seg_t *             first_segment;
     struct wire_seg_t *             last_segment;
@@ -221,7 +223,7 @@ struct wire_t *w_MergeWires(struct wire_t *wire_a, struct wire_t *wire_b);
 
 void w_SplitWire(struct wire_t *wire, struct wire_seg_t *segment);
 
-struct wire_junc_pin_t *w_ConnectWire(struct wire_t *wire, struct dev_t *device, uint16_t pin);
+struct wire_junc_pin_t *w_ConnectWire(struct wire_junc_t *junction, struct dev_t *device, uint16_t pin);
 
 void w_DisconnectWire(struct wire_t *wire, struct wire_pin_t *pin);
 

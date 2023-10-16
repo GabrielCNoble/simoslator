@@ -202,6 +202,7 @@ extern uint32_t             dev_device_texture_offsets[][2];
 extern struct dev_desc_t    dev_device_descs[];
 
 extern struct pool_t        w_wires;
+extern struct pool_t        w_wire_juncs;
 extern struct list_t        w_wire_seg_pos;
 extern struct list_t        w_wire_junc_pos;
 
@@ -566,7 +567,7 @@ void d_DrawDevices()
         glDrawArrays(GL_LINES, 0, buffer_offset);
     }
 
-    vertex_count = w_wire_junc_pos.cursor;
+    vertex_count = w_wire_juncs.cursor;
     update_count = vertex_count / D_WIRE_VERTEX_BUFFER_SIZE;
 
     if(vertex_count % D_WIRE_VERTEX_BUFFER_SIZE)
@@ -587,34 +588,37 @@ void d_DrawDevices()
 
             if(wire != NULL)
             {
-                if(wire->junction_pos_count + buffer_offset > D_WIRE_VERTEX_BUFFER_SIZE)
+                if(wire->junction_count + buffer_offset > D_WIRE_VERTEX_BUFFER_SIZE)
                 {
                     break;
                 }
 
-                struct wire_junc_pos_block_t *junction_block = wire->first_junction_pos;
+                // struct wire_junc_pos_block_t *junction_block = wire->first_junction_pos;
                 struct sim_wire_data_t *wire_data = list_GetValidElement(&sim_wire_data, wire->sim_data);
                 uint8_t wire_value = m_run_simulation ? wire_data->value : WIRE_VALUE_Z;
-                uint32_t total_junction_count = wire->junction_pos_count;
+                uint32_t total_junction_count = wire->junction_count;
+                struct wire_junc_t *junction = wire->first_junction;
 
-                while(junction_block != NULL)
+
+                while(junction != NULL)
                 {
-                    uint32_t junction_count = WIRE_JUNCTION_POS_BLOCK_SIZE;
-                    if(junction_count > total_junction_count)
-                    {
-                        junction_count = total_junction_count;
-                    }
-                    total_junction_count -= junction_count;
+                    // uint32_t junction_count = WIRE_JUNCTION_POS_BLOCK_SIZE;
+                    // if(junction_count > total_junction_count)
+                    // {
+                    //     junction_count = total_junction_count;
+                    // }
+                    // total_junction_count -= junction_count;
 
-                    for(uint32_t junction_index = 0; junction_index < junction_count; junction_index++)
-                    {
-                        struct wire_junc_pos_t *junction = junction_block->junctions + junction_index;
-                        d_wire_vertices[buffer_offset].position[0] = junction->pos[0];
-                        d_wire_vertices[buffer_offset].position[1] = junction->pos[1];
-                        d_wire_vertices[buffer_offset].value_sel = wire_value;
-                        buffer_offset++;
-                    }
-                    junction_block = junction_block->next;
+                    // for(uint32_t junction_index = 0; junction_index < junction_count; junction_index++)
+                    // {
+                    //     struct wire_junc_pos_t *junction = junction_block->junctions + junction_index;
+                    d_wire_vertices[buffer_offset].position[0] = junction->pos[0];
+                    d_wire_vertices[buffer_offset].position[1] = junction->pos[1];
+                    d_wire_vertices[buffer_offset].value_sel = wire_value;
+                    buffer_offset++;
+                    // }
+                    // junction_block = junction_block->next;
+                    junction = junction->wire_next;
                 }
             }
         }
