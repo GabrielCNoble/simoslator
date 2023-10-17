@@ -130,15 +130,12 @@ struct wire_elem_t
 struct wire_junc_t
 {
     struct wire_elem_t              base;
-    // struct wire_junc_pos_t *        pos;
-    // struct wire_junc_pos_block_t *  pos_block;
-    // struct wire_seg_pos_t *         pos;
     int32_t *                       pos;
     struct wire_seg_t *             first_segment;
     struct wire_seg_t *             last_segment;
-    // uint32_t                        segment_count;
-    struct wire_junc_pin_t *        pin;
-    struct wire_junc_pin_block_t *  pin_block;
+    struct wire_pin_t               pin;
+    // struct wire_junc_pin_t *        pin;
+    // struct wire_junc_pin_block_t *  pin_block;
     struct wire_junc_t *            wire_next;
     struct wire_junc_t *            wire_prev;
     uint64_t                        traversal_id;
@@ -164,16 +161,19 @@ struct wire_t
 {
     POOL_ELEMENT;
 
-    union
-    {
-        struct
-        {
-            struct wire_junc_pins_t wire_inputs;
-            struct wire_junc_pins_t wire_outputs;
-        };
+    // union
+    // {
+    //     struct
+    //     {
+    //         struct wire_junc_pins_t wire_inputs;
+    //         struct wire_junc_pins_t wire_outputs;
+    //     };
 
-        struct wire_junc_pins_t     wire_pins[2];
-    };
+    //     struct wire_junc_pins_t     wire_pins[2];
+    // };
+
+    uint32_t                        input_count;
+    uint32_t                        output_count;
 
     uint64_t                        sim_data;
 
@@ -228,7 +228,7 @@ struct wire_t *w_SplitWire(struct wire_t *wire, struct wire_seg_t *segment);
 
 uint32_t w_TryReachSegment(struct wire_seg_t *target_segment);
 
-struct wire_junc_pin_t *w_ConnectPin(struct wire_junc_t *junction, struct dev_t *device, uint16_t pin);
+void w_ConnectPin(struct wire_junc_t *junction, struct dev_t *device, uint16_t pin);
 
 void w_DisconnectPin(struct wire_junc_pin_t *pin);
 

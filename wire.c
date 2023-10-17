@@ -91,8 +91,8 @@ extern struct dev_desc_t    dev_device_descs[];
 void w_Init()
 {
     w_wires = pool_CreateTyped(struct wire_t, 4096);
-    w_wire_pin_blocks[0] = pool_CreateTyped(struct wire_junc_pin_block_t, 16384);
-    w_wire_pin_blocks[1] = pool_CreateTyped(struct wire_junc_pin_block_t, 16384);
+    // w_wire_pin_blocks[0] = pool_CreateTyped(struct wire_junc_pin_block_t, 16384);
+    // w_wire_pin_blocks[1] = pool_CreateTyped(struct wire_junc_pin_block_t, 16384);
     w_wire_seg_pos = pool_CreateTyped(struct wire_seg_pos_block_t, 16384);
     w_wire_junc_pos = pool_CreateTyped(struct wire_junc_pos_block_t, 16384);
     w_wire_segs = pool_Create(sizeof(struct wire_seg_t), 16384, offsetof(struct wire_seg_t, base.POOL_ELEMENT_NAME));
@@ -102,8 +102,8 @@ void w_Init()
 void w_Shutdown()
 {
     pool_Destroy(&w_wires);
-    pool_Destroy(&w_wire_pin_blocks[0]);
-    pool_Destroy(&w_wire_pin_blocks[1]);
+    // pool_Destroy(&w_wire_pin_blocks[0]);
+    // pool_Destroy(&w_wire_pin_blocks[1]);
     pool_Destroy(&w_wire_seg_pos);
     pool_Destroy(&w_wire_junc_pos);
     pool_Destroy(&w_wire_segs);
@@ -114,16 +114,16 @@ struct wire_t *w_AllocWire()
 {
     struct wire_t *wire = pool_AddElement(&w_wires, NULL);
 
-    for(uint32_t index = 0; index < 2; index++)
-    {
-        wire->wire_pins[index].first_block = pool_AddElement(&w_wire_pin_blocks[index], NULL);
-        wire->wire_pins[index].last_block = wire->wire_pins[index].first_block;
-        wire->wire_pins[index].pin_count = 0;
+    // for(uint32_t index = 0; index < 2; index++)
+    // {
+    //     wire->wire_pins[index].first_block = pool_AddElement(&w_wire_pin_blocks[index], NULL);
+    //     wire->wire_pins[index].last_block = wire->wire_pins[index].first_block;
+    //     wire->wire_pins[index].pin_count = 0;
 
-        struct wire_junc_pin_block_t *pin_block = wire->wire_pins[index].first_block;
-        pin_block->next = NULL;
-        pin_block->prev = NULL;
-    }
+    //     struct wire_junc_pin_block_t *pin_block = wire->wire_pins[index].first_block;
+    //     pin_block->next = NULL;
+    //     pin_block->prev = NULL;
+    // }
 
     wire->first_junction = NULL;
     wire->last_junction = NULL;
@@ -133,6 +133,8 @@ struct wire_t *w_AllocWire()
     wire->first_segment_pos = pool_AddElement(&w_wire_seg_pos, NULL);
     wire->last_segment_pos = wire->first_segment_pos;
     wire->segment_pos_count = 0;
+    wire->input_count = 0;
+    wire->output_count = 0;
 
     // wire->first_junction_pos = pool_AddElement(&w_wire_junc_pos, NULL);
     // wire->last_junction_pos = wire->first_junction_pos;
@@ -204,8 +206,10 @@ void w_FreeWireSegment(struct wire_seg_t *segment)
 struct wire_junc_t *w_AllocWireJunction(struct wire_t *wire)
 {
     struct wire_junc_t *junction = pool_AddElement(&w_wire_juncs, NULL);
-    junction->pin = NULL;
-    junction->first_segment = NULL;
+    // junction->pin = NULL;
+    // junction->first_segment = NULL;
+    junction->pin.device = DEV_INVALID_DEVICE;
+    junction->pin.pin = DEV_INVALID_PIN;
     junction->last_segment = NULL;
     junction->base.wire = wire;
     junction->selection_index = 0xffffffff;
@@ -511,87 +515,87 @@ struct wire_t *w_MergeWires(struct wire_t *wire_a, struct wire_t *wire_b)
 {
     if(wire_a != NULL && wire_b != NULL && wire_a != wire_b)
     {
-        for(uint32_t pin_type = 0; pin_type < 2; pin_type++)
-        {
-            struct wire_junc_pins_t *wire_a_pins = &wire_a->wire_pins[pin_type];
-            struct wire_junc_pins_t *wire_b_pins = &wire_b->wire_pins[pin_type];
+        // for(uint32_t pin_type = 0; pin_type < 2; pin_type++)
+        // {
+        //     struct wire_junc_pins_t *wire_a_pins = &wire_a->wire_pins[pin_type];
+        //     struct wire_junc_pins_t *wire_b_pins = &wire_b->wire_pins[pin_type];
 
-            if(wire_b_pins->pin_count != 0)
-            {
-                struct wire_junc_pin_block_t *wire_b_pin_block = wire_b_pins->first_block;
-                uint32_t total_pin_count = wire_b_pins->pin_count;
+        //     if(wire_b_pins->pin_count != 0)
+        //     {
+        //         struct wire_junc_pin_block_t *wire_b_pin_block = wire_b_pins->first_block;
+        //         uint32_t total_pin_count = wire_b_pins->pin_count;
 
-                while(wire_b_pin_block != NULL)
-                {
-                    uint32_t pin_count = WIRE_JUNC_PIN_BLOCK_PIN_COUNT;
-                    if(pin_count > total_pin_count)
-                    {
-                        pin_count = total_pin_count;
-                    }
+        //         while(wire_b_pin_block != NULL)
+        //         {
+        //             uint32_t pin_count = WIRE_JUNC_PIN_BLOCK_PIN_COUNT;
+        //             if(pin_count > total_pin_count)
+        //             {
+        //                 pin_count = total_pin_count;
+        //             }
 
-                    total_pin_count -= pin_count;
+        //             total_pin_count -= pin_count;
 
-                    for(uint32_t pin_index = 0; pin_index < pin_count; pin_index++)
-                    {
-                        struct wire_junc_pin_t *wire_pin = wire_b_pin_block->pins + pin_index;
-                        struct dev_t *device = dev_GetDevice(wire_pin->pin.device);
-                        struct dev_pin_t *device_pin = dev_GetDevicePin(device, wire_pin->pin.pin);
-                        device_pin->wire = wire_a->element_index;
-                    }
+        //             for(uint32_t pin_index = 0; pin_index < pin_count; pin_index++)
+        //             {
+        //                 struct wire_junc_pin_t *wire_pin = wire_b_pin_block->pins + pin_index;
+        //                 struct dev_t *device = dev_GetDevice(wire_pin->pin.device);
+        //                 struct dev_pin_t *device_pin = dev_GetDevicePin(device, wire_pin->pin.pin);
+        //                 device_pin->wire = wire_a->element_index;
+        //             }
 
-                    if(wire_b_pin_block->next == NULL)
-                    {
-                        break;
-                    }
+        //             if(wire_b_pin_block->next == NULL)
+        //             {
+        //                 break;
+        //             }
 
-                    wire_b_pin_block = wire_b_pin_block->next;
-                }
+        //             wire_b_pin_block = wire_b_pin_block->next;
+        //         }
                 
-                struct wire_junc_pin_block_t *wire_a_pin_block = wire_a_pins->last_block;
-                uint32_t wire_a_pin_index = wire_a_pins->pin_count % WIRE_JUNC_PIN_BLOCK_PIN_COUNT;
-                uint32_t wire_b_pin_index = (wire_b_pins->pin_count - 1) % WIRE_JUNC_PIN_BLOCK_PIN_COUNT;
-                uint32_t move_size = WIRE_JUNC_PIN_BLOCK_PIN_COUNT - (wire_a_pin_index - 1);
+        //         struct wire_junc_pin_block_t *wire_a_pin_block = wire_a_pins->last_block;
+        //         uint32_t wire_a_pin_index = wire_a_pins->pin_count % WIRE_JUNC_PIN_BLOCK_PIN_COUNT;
+        //         uint32_t wire_b_pin_index = (wire_b_pins->pin_count - 1) % WIRE_JUNC_PIN_BLOCK_PIN_COUNT;
+        //         uint32_t move_size = WIRE_JUNC_PIN_BLOCK_PIN_COUNT - (wire_a_pin_index - 1);
 
-                if(move_size >= wire_b_pin_index)
-                {
-                    move_size = wire_b_pin_index + 1;
-                }
+        //         if(move_size >= wire_b_pin_index)
+        //         {
+        //             move_size = wire_b_pin_index + 1;
+        //         }
 
-                while(move_size)
-                {
-                    wire_a_pin_block->pins[wire_a_pin_index] = wire_b_pin_block->pins[wire_b_pin_index];
-                    wire_a_pin_block->pins[wire_a_pin_index].junction->pin = wire_a_pin_block->pins + wire_a_pin_index;
-                    wire_a_pin_block->pins[wire_a_pin_index].junction->pin_block = wire_a_pin_block;
-                    wire_a_pin_index++;
-                    wire_b_pin_index--;
-                    move_size--;
-                }
+        //         while(move_size)
+        //         {
+        //             wire_a_pin_block->pins[wire_a_pin_index] = wire_b_pin_block->pins[wire_b_pin_index];
+        //             wire_a_pin_block->pins[wire_a_pin_index].junction->pin = wire_a_pin_block->pins + wire_a_pin_index;
+        //             wire_a_pin_block->pins[wire_a_pin_index].junction->pin_block = wire_a_pin_block;
+        //             wire_a_pin_index++;
+        //             wire_b_pin_index--;
+        //             move_size--;
+        //         }
 
-                if(wire_b_pin_index == 0xffffffff)
-                {
-                    if(wire_b_pins->first_block == wire_b_pin_block)
-                    {
-                        wire_b_pins->first_block = NULL;
-                        wire_b_pins->last_block = NULL;
-                    }
-                    else
-                    {
-                        wire_b_pins->last_block = wire_b_pins->last_block->prev;
-                        wire_b_pins->last_block->next = NULL;
-                    }
+        //         if(wire_b_pin_index == 0xffffffff)
+        //         {
+        //             if(wire_b_pins->first_block == wire_b_pin_block)
+        //             {
+        //                 wire_b_pins->first_block = NULL;
+        //                 wire_b_pins->last_block = NULL;
+        //             }
+        //             else
+        //             {
+        //                 wire_b_pins->last_block = wire_b_pins->last_block->prev;
+        //                 wire_b_pins->last_block->next = NULL;
+        //             }
 
-                    pool_RemoveElement(&w_wire_pin_blocks[pin_type], wire_b_pin_block->element_index);
-                }
+        //             pool_RemoveElement(&w_wire_pin_blocks[pin_type], wire_b_pin_block->element_index);
+        //         }
 
-                if(wire_b_pins->first_block != NULL)
-                {
-                    wire_a_pins->last_block->next = wire_b_pins->first_block;
-                    wire_a_pins->last_block = wire_b_pins->last_block;
-                }
+        //         if(wire_b_pins->first_block != NULL)
+        //         {
+        //             wire_a_pins->last_block->next = wire_b_pins->first_block;
+        //             wire_a_pins->last_block = wire_b_pins->last_block;
+        //         }
 
-                wire_a_pins->pin_count += wire_b_pins->pin_count;
-            }
-        }
+        //         wire_a_pins->pin_count += wire_b_pins->pin_count;
+        //     }
+        // }
 
         /* move segment stuff over */
         struct wire_seg_t *wire_b_segments = wire_b->first_segment;
@@ -657,13 +661,26 @@ struct wire_t *w_MergeWires(struct wire_t *wire_a, struct wire_t *wire_b)
         struct wire_junc_t *junction = wire_b_junctions;
         while(junction != NULL)
         {
+            struct wire_seg_t *first_segment = junction->first_segment;
+            uint32_t tip_index = first_segment->junctions[WIRE_SEG_END_INDEX].junction == junction;
             junction->base.wire = wire_a;
+            junction->pos = first_segment->pos->ends[tip_index];
+
+            if(junction->pin.device != DEV_INVALID_DEVICE)
+            {
+                struct dev_t *device = dev_GetDevice(junction->pin.device);
+                struct dev_pin_t *pin = dev_GetDevicePin(device, junction->pin.pin);
+                pin->wire = wire_a->element_index;
+            }
+
             junction = junction->wire_next;
         }
 
         wire_a->last_junction->wire_next = wire_b_junctions;
         wire_b_junctions->wire_prev = wire_a->last_junction;
         wire_a->last_junction = wire_b->last_junction;
+        wire_a->input_count += wire_b->input_count;
+        wire_a->output_count += wire_b->output_count;
 
         // struct wire_junc_pos_block_t *wire_a_last_junc_pos_block = wire_a->last_junction_pos;
         // struct wire_junc_pos_block_t *wire_b_last_junc_pos_block = wire_b->first_junction_pos;
@@ -716,48 +733,21 @@ struct wire_t *w_MergeWires(struct wire_t *wire_a, struct wire_t *wire_b)
     return wire_a;
 }
 
-// uint32_t w_TryReachJunction_r(struct wire_junc_t *cur_junction, struct wire_junc_t *target_junction)
-// {
-//     if(cur_junction == target_junction)
-//     {
-//         return 1;
-//     }
+struct wire_t *w_SplitWire(struct wire_t *wire, struct wire_seg_t *segment)
+{
+    struct wire_t *new_wire = NULL;
 
-//     struct wire_seg_t *junction_segment = cur_junction->first_segment;
-//     while(junction_segment)
-//     {
-//         uint32_t junction_segment_tip_index = junction_segment->junctions[WIRE_SEG_END_INDEX].junction == cur_junction;
-//         if(junction_segment->traversal_id != w_traversal_id)
-//         {
-//             struct wire_seg_t *segment = junction_segment;
-//             struct wire_seg_t *prev_segment = NULL;
-//             uint32_t segment_tip_index = !junction_segment_tip_index;
+    if(!w_TryReachSegment(segment))
+    {
+        new_wire = w_AllocWire();
+    }
+    else
+    {
+        new_wire = wire;
+    }
 
-//             while(segment != NULL)
-//             {
-//                 segment->traversal_id = w_traversal_id;
-//                 if(w_TryReachJunction_r(segment->junctions[segment_tip_index].junction, target_junction))
-//                 {
-//                     return 1;
-//                 }
-                
-//                 prev_segment = segment;
-//                 segment = segment->segments[segment_tip_index];
-//                 segment_tip_index = segment->segments[WIRE_SEG_START_INDEX] == prev_segment;
-//             }
-//         }
-
-//         junction_segment = junction_segment->junctions[junction_segment_tip_index].next;
-//     }
-
-//     return 0;
-// }
-
-// uint32_t w_TryReachJunction(struct wire_junc_t *start_junction, struct wire_junc_t *target_junction)
-// {
-//     w_traversal_id++;
-//     return w_TryReachJunction_r(start_junction, target_junction);
-// }
+    return new_wire;
+}
 
 uint32_t w_TryReachSegment_r(struct wire_seg_t *target_segment, struct wire_seg_t *cur_segment, uint32_t begin_tip)
 {
@@ -776,11 +766,8 @@ uint32_t w_TryReachSegment_r(struct wire_seg_t *target_segment, struct wire_seg_
         if(cur_segment->junctions[tip_index].junction != NULL)
         {
             struct wire_junc_t *junction = cur_segment->junctions[tip_index].junction;
-            // if(junction->traversal_id != w_traversal_id)
-            // {
-            // junction->traversal_id = w_traversal_id;
-
             struct wire_seg_t *junction_segment = junction->first_segment;
+
             while(junction_segment != NULL)
             {
                 uint32_t junction_segment_tip_index = junction_segment->junctions[WIRE_SEG_START_INDEX].junction == junction;
@@ -791,7 +778,6 @@ uint32_t w_TryReachSegment_r(struct wire_seg_t *target_segment, struct wire_seg_
 
                 junction_segment = junction_segment->junctions[!junction_segment_tip_index].next;
             }
-            // }
 
             break;
         }
@@ -860,51 +846,39 @@ uint32_t w_TryReachSegment(struct wire_seg_t *target_segment)
     return w_TryReachSegment_r(target_segment, target_segment, WIRE_SEG_END_INDEX);
 }
 
-struct wire_t *w_SplitWire(struct wire_t *wire, struct wire_seg_t *segment)
-{
-    // struct wire_junc_t *start_junction = NULL;
-    struct wire_junc_t *target_junction = NULL;
-
-    // struct wire_seg_t *cur_segment = segment;
-    // struct wire_seg_t *prev_segment = NULL;
-    // uint32_t segment_tip_index = WIRE_SEG_START_INDEX;
-
-    if(w_TryReachSegment(segment))
-    {
-
-    }
-}
-
-struct wire_junc_pin_t *w_ConnectPin(struct wire_junc_t *junction, struct dev_t *device, uint16_t pin)
+void w_ConnectPin(struct wire_junc_t *junction, struct dev_t *device, uint16_t pin)
 {
     struct wire_t *wire = junction->base.wire;
     struct dev_pin_t *device_pin = dev_GetDevicePin(device, pin);
     struct dev_desc_t *dev_desc = dev_device_descs + device->type;
     struct dev_pin_desc_t *pin_desc = dev_desc->pins + pin;
-    struct pool_t *wire_pin_block_list;
-    struct wire_junc_pins_t *wire_pins;
+    // struct pool_t *wire_pin_block_list;
+    // struct wire_junc_pins_t *wire_pins;
 
-    wire_pin_block_list = &w_wire_pin_blocks[pin_desc->type];
-    wire_pins = &wire->wire_pins[pin_desc->type];
+    // wire_pin_block_list = &w_wire_pin_blocks[pin_desc->type];
+    // wire_pins = &wire->wire_pins[pin_desc->type];
 
-    junction->pin = wire_pins->last_block->pins + wire_pins->pin_count % WIRE_JUNC_PIN_BLOCK_PIN_COUNT;
-    junction->pin_block = wire_pins->last_block;
-    wire_pins->pin_count++;
+    // junction->pin = wire_pins->last_block->pins + wire_pins->pin_count % WIRE_JUNC_PIN_BLOCK_PIN_COUNT;
+    // junction->pin_block = wire_pins->last_block;
+    // wire_pins->pin_count++;
 
-    if(wire_pins->pin_count % WIRE_JUNC_PIN_BLOCK_PIN_COUNT == 0)
-    {
-        struct wire_junc_pin_block_t *new_block = pool_AddElement(wire_pin_block_list, NULL);
-        new_block->prev = wire_pins->last_block;
-        wire_pins->last_block->next = new_block;
-        wire_pins->last_block = new_block;
-    }
+    // if(wire_pins->pin_count % WIRE_JUNC_PIN_BLOCK_PIN_COUNT == 0)
+    // {
+    //     struct wire_junc_pin_block_t *new_block = pool_AddElement(wire_pin_block_list, NULL);
+    //     new_block->prev = wire_pins->last_block;
+    //     wire_pins->last_block->next = new_block;
+    //     wire_pins->last_block = new_block;
+    // }
     
-    junction->pin->pin.device = device->element_index;
-    junction->pin->pin.pin = pin;
-    junction->pin->junction = junction;
+    // junction->pin->pin.device = device->element_index;
+    // junction->pin->pin.pin = pin;
+    // junction->pin->junction = junction;
+    junction->pin.device = device->element_index;
+    junction->pin.pin = pin;
     device_pin->wire = wire->element_index;    
 
-    return junction->pin;
+    wire->input_count += pin_desc->type == DEV_PIN_TYPE_IN;
+    wire->output_count += pin_desc->type == DEV_PIN_TYPE_OUT;
 }
 
 void w_DisconnectPin(struct wire_junc_pin_t *pin)
@@ -914,35 +888,40 @@ void w_DisconnectPin(struct wire_junc_pin_t *pin)
     struct dev_t *device = dev_GetDevice(pin->pin.device);
     struct dev_pin_t *device_pin = dev_GetDevicePin(device, pin->pin.pin);
     struct dev_pin_desc_t *pin_desc = dev_device_descs[device->type].pins + pin->pin.pin;
-    struct pool_t *wire_pin_block_list = &w_wire_pin_blocks[pin_desc->type];
-    struct wire_junc_pins_t *wire_pins = &wire->wire_pins[pin_desc->type];
+    // struct pool_t *wire_pin_block_list = &w_wire_pin_blocks[pin_desc->type];
+    // struct wire_junc_pins_t *wire_pins = &wire->wire_pins[pin_desc->type];
 
-    struct wire_junc_pin_block_t *pin_block = junction->pin_block;
-    struct wire_junc_pin_block_t *last_block = wire_pins->last_block;
-    uint32_t pin_index = pin - pin_block->pins;
-    uint32_t last_pin_index = wire_pins->pin_count % WIRE_JUNC_PIN_BLOCK_PIN_COUNT;
+    // struct wire_junc_pin_block_t *pin_block = junction->pin_block;
+    // struct wire_junc_pin_block_t *last_block = wire_pins->last_block;
+    // uint32_t pin_index = pin - pin_block->pins;
+    // uint32_t last_pin_index = wire_pins->pin_count % WIRE_JUNC_PIN_BLOCK_PIN_COUNT;
 
-    if(pin_block != last_block)
-    {
-        if((wire_pins->pin_count % WIRE_JUNC_PIN_BLOCK_PIN_COUNT) == WIRE_JUNC_PIN_BLOCK_PIN_COUNT - 1)
-        {
-            /* there's free space in the previous block of the last block, so get rid of it */
-            wire_pins->last_block = last_block->prev;
-            wire_pins->last_block->next = NULL;
-            pool_RemoveElement(wire_pin_block_list, last_block->element_index);
-            last_block = wire_pins->last_block;
-        }
-    }
+    // if(pin_block != last_block)
+    // {
+    //     if((wire_pins->pin_count % WIRE_JUNC_PIN_BLOCK_PIN_COUNT) == WIRE_JUNC_PIN_BLOCK_PIN_COUNT - 1)
+    //     {
+    //         /* there's free space in the previous block of the last block, so get rid of it */
+    //         wire_pins->last_block = last_block->prev;
+    //         wire_pins->last_block->next = NULL;
+    //         pool_RemoveElement(wire_pin_block_list, last_block->element_index);
+    //         last_block = wire_pins->last_block;
+    //     }
+    // }
 
-    pin_block->pins[pin_index] = last_block->pins[last_pin_index];
-    wire_pins->pin_count--;
+    // pin_block->pins[pin_index] = last_block->pins[last_pin_index];
+    // wire_pins->pin_count--;
 
-    junction->pin = NULL;
-    junction->pin_block = NULL;
+    // junction->pin = NULL;
+    // junction->pin_block = NULL;
     
-    pin->junction->pin = pin;
-    pin->junction->pin_block = pin_block;
+    // pin->junction->pin = pin;
+    // pin->junction->pin_block = pin_block;
     device_pin->wire = WIRE_INVALID_WIRE;
+    junction->pin.device = DEV_INVALID_DEVICE;
+    junction->pin.pin = DEV_INVALID_PIN;
+
+    wire->input_count -= pin_desc->type == DEV_PIN_TYPE_IN;
+    wire->output_count -= pin_desc->type == DEV_PIN_TYPE_OUT;
 }
 
 struct wire_seg_pos_t *w_AllocWireSegPos(struct wire_t *wire)
