@@ -495,13 +495,8 @@ struct wire_t *m_CreateWire(struct m_picked_object_t *first_contact, struct m_pi
             wire = w_AllocWire();
             start_junction = w_AllocWireJunction(wire);
             end_junction = w_AllocWireJunction(wire);
-            w_ConnectWire(start_junction, first_contact->object->object, first_contact->index);
-            // start_junction->pos->pos[0] = first_segment->seg_pos.ends[WIRE_SEG_START_INDEX][0];
-            // start_junction->pos->pos[1] = first_segment->seg_pos.ends[WIRE_SEG_START_INDEX][1];
-            
-            w_ConnectWire(end_junction, second_contact->object->object, second_contact->index);
-            // end_junction->pos->pos[0] = last_segment->seg_pos.ends[WIRE_SEG_END_INDEX][0];
-            // end_junction->pos->pos[1] = last_segment->seg_pos.ends[WIRE_SEG_END_INDEX][1];    
+            w_ConnectPin(start_junction, first_contact->object->object, first_contact->index);            
+            w_ConnectPin(end_junction, second_contact->object->object, second_contact->index);  
         }
         else
         {
@@ -512,10 +507,15 @@ struct wire_t *m_CreateWire(struct m_picked_object_t *first_contact, struct m_pi
             {
                 wire = w_MergeWires(wire_a->wire, wire_b->wire);
             }
+            else
+            {
+                wire = wire_a->wire;
+            }
 
             if(first_contact->object->type == M_OBJECT_TYPE_SEGMENT)
             {
                 start_junction = w_AddJunction(first_contact->object->object, first_segment->seg_pos.ends[WIRE_SEG_START_INDEX]);
+                m_CreateObject(M_OBJECT_TYPE_SEGMENT, start_junction->last_segment);
             }
             else
             {
@@ -525,6 +525,7 @@ struct wire_t *m_CreateWire(struct m_picked_object_t *first_contact, struct m_pi
             if(second_contact->object->type == M_OBJECT_TYPE_SEGMENT)
             {
                 end_junction = w_AddJunction(second_contact->object->object, last_segment->seg_pos.ends[WIRE_SEG_END_INDEX]);
+                m_CreateObject(M_OBJECT_TYPE_SEGMENT, end_junction->last_segment);
             }
             else
             {
@@ -542,11 +543,12 @@ struct wire_t *m_CreateWire(struct m_picked_object_t *first_contact, struct m_pi
             device = first_contact->object->object;
             wire_elem = second_contact->object->object;
             start_junction = w_AllocWireJunction(wire_elem->wire);
-            w_ConnectWire(start_junction, device, first_contact->index);
+            w_ConnectPin(start_junction, device, first_contact->index);
 
             if(second_contact->object->type == M_OBJECT_TYPE_SEGMENT)
             {
                 end_junction = w_AddJunction(second_contact->object->object, last_segment->seg_pos.ends[WIRE_SEG_END_INDEX]);
+                m_CreateObject(M_OBJECT_TYPE_SEGMENT, end_junction->last_segment);
             }
             else
             {
@@ -558,11 +560,12 @@ struct wire_t *m_CreateWire(struct m_picked_object_t *first_contact, struct m_pi
             device = second_contact->object->object;
             wire_elem = first_contact->object->object;
             end_junction = w_AllocWireJunction(wire_elem->wire);
-            w_ConnectWire(end_junction, device, second_contact->index);
+            w_ConnectPin(end_junction, device, second_contact->index);
 
             if(first_contact->object->type == M_OBJECT_TYPE_SEGMENT)
             {
                 start_junction = w_AddJunction(first_contact->object->object, first_segment->seg_pos.ends[WIRE_SEG_START_INDEX]);
+                m_CreateObject(M_OBJECT_TYPE_SEGMENT, start_junction->last_segment);
             }
             else
             {
@@ -793,6 +796,17 @@ int main(int argc, char *argv[])
         else if(igIsKeyPressed_Bool(ImGuiKey_W, 0))
         {
             m_SetEditFunc(M_EDIT_FUNC_WIRE);
+        }
+        else if(igIsKeyPressed_Bool(ImGuiKey_T, 0))
+        {
+            if(m_selections.cursor > 0)
+            {
+                struct m_object_t *object = *(struct m_object_t **)list_GetElement(&m_selections, 0);
+                if(object->type == M_OBJECT_TYPE_SEGMENT)
+                {
+                    printf("%d\n", w_TryReachSegment(object->object));
+                }
+            }
         }
 
         igSetNextWindowPos((ImVec2){0, 18}, 0, (ImVec2){});
