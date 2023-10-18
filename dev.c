@@ -45,9 +45,9 @@ void dev_PMosStep(struct sim_dev_data_t *device)
     struct dev_pin_t *gate_pin = list_GetElement(&sim_dev_pins, device->first_pin + DEV_MOS_PIN_GATE);
     struct dev_pin_t *source_pin = list_GetElement(&sim_dev_pins, device->first_pin + DEV_MOS_PIN_SOURCE);
     struct dev_pin_t *drain_pin = list_GetElement(&sim_dev_pins, device->first_pin + DEV_MOS_PIN_DRAIN);
-    struct sim_wire_data_t *gate_wire = list_GetElement(&sim_wire_data, gate_pin->wire);
-    struct sim_wire_data_t *source_wire = list_GetElement(&sim_wire_data, source_pin->wire);
-    struct sim_wire_data_t *drain_wire = list_GetElement(&sim_wire_data, drain_pin->wire);
+    struct sim_wire_data_t *gate_wire = sim_GetWireSimData(gate_pin->wire, DEV_PIN_TYPE_IN);
+    struct sim_wire_data_t *source_wire = sim_GetWireSimData(source_pin->wire, DEV_PIN_TYPE_IN);
+    struct sim_wire_data_t *drain_wire = sim_GetWireSimData(drain_pin->wire, DEV_PIN_TYPE_OUT);
     uint8_t prev_value = drain_pin->value;
 
     if((gate_wire->value == WIRE_VALUE_0S || gate_wire->value == WIRE_VALUE_0W) && (source_wire->value == WIRE_VALUE_1S || source_wire->value == WIRE_VALUE_1W))
@@ -70,9 +70,9 @@ void dev_NMosStep(struct sim_dev_data_t *device)
     struct dev_pin_t *gate_pin = list_GetElement(&sim_dev_pins, device->first_pin + DEV_MOS_PIN_GATE);
     struct dev_pin_t *source_pin = list_GetElement(&sim_dev_pins, device->first_pin + DEV_MOS_PIN_SOURCE);
     struct dev_pin_t *drain_pin = list_GetElement(&sim_dev_pins, device->first_pin + DEV_MOS_PIN_DRAIN);
-    struct sim_wire_data_t *gate_wire = list_GetElement(&sim_wire_data, gate_pin->wire);
-    struct sim_wire_data_t *source_wire = list_GetElement(&sim_wire_data, source_pin->wire);
-    struct sim_wire_data_t *drain_wire = list_GetElement(&sim_wire_data, drain_pin->wire);
+    struct sim_wire_data_t *gate_wire = sim_GetWireSimData(gate_pin->wire, DEV_PIN_TYPE_IN);
+    struct sim_wire_data_t *source_wire = sim_GetWireSimData(source_pin->wire, DEV_PIN_TYPE_IN);
+    struct sim_wire_data_t *drain_wire = sim_GetWireSimData(drain_pin->wire, DEV_PIN_TYPE_OUT);
     uint8_t prev_value = drain_pin->value;
 
     if((gate_wire->value == WIRE_VALUE_1S || gate_wire->value == WIRE_VALUE_1W) && (source_wire->value == WIRE_VALUE_0S || source_wire->value == WIRE_VALUE_0W))

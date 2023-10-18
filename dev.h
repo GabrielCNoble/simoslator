@@ -93,6 +93,7 @@ struct dev_t
     uint16_t                    rotation;
     uint16_t                    flip;
     uint32_t                    regions[4];
+    uintptr_t                   serialized_index;
 };
 
 struct dev_clock_t

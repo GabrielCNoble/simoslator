@@ -5,6 +5,7 @@
 #include "GL/glew.h"
 #include "stb_image.h"
 #include <stdint.h>
+#include <string.h>
 #include "main.h"
 #include "draw.h"
 #include "ui.h"
@@ -59,6 +60,8 @@ extern uint32_t                 dev_devices_texture_height;
 extern struct dev_desc_t        dev_device_descs[];
 
 extern struct list_t            w_wire_seg_pos;
+extern struct pool_t            w_wire_segs;
+extern struct pool_t            w_wire_juncs;
 extern struct pool_t            w_wires;
 
 extern float                    d_model_view_projection_matrix[];
@@ -604,6 +607,167 @@ struct wire_t *m_CreateWire(struct m_picked_object_t *first_contact, struct m_pi
     return wire;
 }
 
+void m_SerializeCircuit(void **file_buffer, size_t *file_buffer_size)
+{
+    size_t buffer_size = sizeof(struct m_file_header_t);
+    size_t device_count = dev_devices.cursor - (dev_devices.free_indices_top + 1);
+    size_t wire_count = w_wires.cursor - (dev_devices.free_indices_top + 1);
+    size_t segment_count = w_wire_segs.cursor - (w_wire_segs.free_indices_top + 1);
+    size_t junction_count = w_wire_juncs.cursor - (w_wire_juncs.free_indices_top + 1);
+    buffer_size += sizeof(struct m_device_record_t) * device_count;
+    buffer_size += sizeof(struct m_wire_record_t) * wire_count;
+    buffer_size += sizeof(struct m_junction_record_t ) * junction_count;
+
+    *file_buffer_size = buffer_size;
+    uint8_t *buffer = calloc(1, buffer_size);
+    *file_buffer = buffer;
+    uintptr_t out = (uintptr_t)buffer;
+
+    struct m_file_header_t *header = (struct m_file_header_t *)out;
+    out += sizeof(struct m_file_header_t);
+    strcpy(header->magic, M_FILE_HEADER_MAGIC);
+
+    header->devices = out;
+    out += sizeof(struct m_device_record_t) * device_count;
+    header->wires = out;
+    out += sizeof(struct m_wire_record_t) * wire_count;
+    header->segments = out;
+    out += sizeof(struct m_segment_record_t) * segment_count;
+    header->junctions = out;
+    out += sizeof(struct m_junction_record_t) * junction_count;
+
+    struct m_device_record_t *device_records = (struct m_device_record_t *)header->devices;
+    for(uint32_t device_index = 0; device_index < dev_devices.cursor; device_index++)
+    {
+        struct dev_t *device = dev_GetDevice(device_index);
+        if(device != NULL)
+        {
+            device->serialized_index = header->device_count;
+            struct m_device_record_t *record = device_records + header->device_count;
+            header->device_count++;
+
+            record->position[0] = device->position[0];
+            record->position[1] = device->position[1];
+            record->flip = device->flip;
+            record->angle = device->rotation;
+            record->type = device->type;
+            record->extra = 0;
+        }
+    }
+
+    struct m_wire_record_t *wire_records = (struct m_wire_record_t *)header->wires;
+    struct m_segment_record_t *segment_records = (struct m_segment_record_t *)header->segments;
+    struct m_junction_record_t *junction_records = (struct m_junction_record_t *)header->junctions;
+
+    for(uint32_t wire_index = 0; wire_index < w_wires.cursor; wire_index++)
+    {
+        struct wire_t *wire = w_GetWire(wire_index);
+        if(wire != NULL)
+        {
+            struct m_wire_record_t *wire_record = wire_records + header->wire_count;
+            header->wire_count++;
+
+            wire_record->segments = (uintptr_t)(segment_records + header->segment_count);
+            wire_record->junctions = (uintptr_t)(junction_records + header->junction_count);
+
+            struct wire_seg_t *segment = wire->first_segment;
+            while(segment != NULL)
+            {   
+                segment->serialized_index = header->segment_count;
+                struct m_segment_record_t *segment_record = segment_records + header->segment_count;
+                header->segment_count++;
+
+                segment_record->ends[WIRE_SEG_START_INDEX][0] = segment->pos->ends[WIRE_SEG_START_INDEX][0];
+                segment_record->ends[WIRE_SEG_START_INDEX][1] = segment->pos->ends[WIRE_SEG_START_INDEX][1];
+                segment_record->ends[WIRE_SEG_END_INDEX][0] = segment->pos->ends[WIRE_SEG_END_INDEX][0];
+                segment_record->ends[WIRE_SEG_END_INDEX][1] = segment->pos->ends[WIRE_SEG_END_INDEX][1];
+
+                segment = segment->wire_next;
+            }
+
+            struct wire_junc_t *junction = wire->first_junction;
+            while(junction != NULL)
+            {
+                struct m_junction_record_t *junction_record = junction_records + header->junction_count;
+                header->junction_count++;
+
+                if(junction->pin.device != DEV_INVALID_DEVICE)
+                {
+                    struct dev_t *device = dev_GetDevice(junction->pin.device);
+                    junction_record->device = device->serialized_index;
+                    junction_record->pin = junction->pin.pin;
+                }
+                else
+                {
+                    junction_record->device = DEV_INVALID_DEVICE;
+                    junction_record->pin = DEV_INVALID_PIN;
+                }
+
+                junction = junction->wire_next;
+            }
+        }
+    }
+
+    header->devices -= (uintptr_t)buffer;
+    header->wires -= (uintptr_t)buffer;
+    header->segments -= (uintptr_t)buffer;
+    header->junctions -= (uintptr_t)buffer;
+}
+
+void m_DeserializeCircuit(void *file_buffer, size_t file_buffer_size)
+{
+    struct m_file_header_t *file_header = file_buffer;
+    if(!strcmp(file_header->magic, M_FILE_HEADER_MAGIC))
+    {
+        file_header->devices += (uintptr_t)file_buffer;
+        file_header->wires += (uintptr_t)file_buffer;
+        file_header->segments += (uintptr_t)file_buffer;
+        file_header->junctions += (uintptr_t)file_buffer;
+        
+        struct m_device_record_t *device_records = (struct m_device_record_t *)file_header->devices;
+
+        for(uint32_t index = 0; index < file_header->device_count; index++)
+        {
+            struct m_device_record_t *record = device_records + index;
+            struct dev_t *device = dev_CreateDevice(record->type);
+            device->position[0] = record->position[0];
+            device->position[1] = record->position[1];
+            device->flip = record->flip;
+            device->rotation = record->angle;
+            m_CreateObject(M_OBJECT_TYPE_DEVICE, device);
+            record->deserialized_index = device->element_index;
+        }
+    }
+}
+
+void m_SaveCircuit(const char *file_name)
+{
+    void *file_buffer;
+    size_t file_buffer_size;
+    m_SerializeCircuit(&file_buffer, &file_buffer_size);
+    FILE *file = fopen(file_name, "wb");
+    fwrite(file_buffer, file_buffer_size, 1, file);
+    fclose(file);
+    free(file_buffer);
+}
+
+void m_LoadCircuit(const char *file_name)
+{
+    FILE *file = fopen(file_name, "rb");
+    if(file != NULL)
+    {
+        fseek(file, 0, SEEK_END);
+        size_t file_buffer_size = ftell(file);
+        rewind(file);
+
+        void *file_buffer = calloc(1, file_buffer_size);
+        fread(file_buffer, file_buffer_size, 1, file);
+        fclose(file);
+        m_DeserializeCircuit(file_buffer, file_buffer_size);
+        free(file_buffer);
+    }
+}
+
 int main(int argc, char *argv[])
 {
     if(SDL_Init(SDL_INIT_VIDEO) < 0)
@@ -807,6 +971,14 @@ int main(int argc, char *argv[])
                     printf("%d\n", w_TryReachSegment(object->object));
                 }
             }
+        }
+        else if(igIsKeyPressed_Bool(ImGuiKey_S, 0))
+        {
+            m_SaveCircuit("./test.mos");
+        }
+        else if(igIsKeyPressed_Bool(ImGuiKey_L, 0))
+        {
+            m_LoadCircuit("./test.mos");
         }
 
         igSetNextWindowPos((ImVec2){0, 18}, 0, (ImVec2){});

@@ -154,6 +154,7 @@ struct wire_seg_t
     struct wire_seg_t *             wire_next;
     struct wire_seg_t *             wire_prev;
     uint64_t                        traversal_id;
+    uint64_t                        serialized_index; 
     uint32_t                        selection_index;
 };
 

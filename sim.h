@@ -51,6 +51,8 @@ void sim_BeginSimulation();
 
 void sim_StopSimulation();
 
+struct sim_wire_data_t *sim_GetWireSimData(uint64_t wire, uint32_t pin_type);
+
 void sim_WireStep(struct sim_wire_data_t *wire);
 
 void sim_DeviceStep();

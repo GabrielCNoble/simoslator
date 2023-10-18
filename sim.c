@@ -18,6 +18,9 @@ struct list_t               sim_wire_pins;
 struct list_t               sim_dev_data;
 struct list_t               sim_dev_pins;
 struct list_t               sim_queued_clocks;
+struct sim_wire_data_t      sim_invalid_wires[2] = {{.value = WIRE_VALUE_Z}, {.value = WIRE_VALUE_Z}};
+// struct sim_wire_data_t      sim_invalid_input_wire = {.value = WIRE_VALUE_Z};
+// struct sim_wire_data_t      sim_invalid_output_wire = {.value = WIRE_VALUE_Z};
 
 extern struct pool_t        dev_devices;
 extern struct pool_t        dev_inputs;
@@ -84,7 +87,7 @@ void sim_QueueDevice(struct sim_dev_data_t *device)
 
 void sim_QueueWire(struct sim_wire_data_t *wire)
 {
-    if(sim_CmpXchg16(&wire->queued, 0, 1))
+    if(wire != &sim_invalid_wires[DEV_PIN_TYPE_IN] && wire != &sim_invalid_wires[DEV_PIN_TYPE_OUT] && sim_CmpXchg16(&wire->queued, 0, 1))
     {
         uint64_t index = list_AddElement(&sim_update_wires, NULL);
         struct sim_wire_data_t **update_wire = list_GetElement(&sim_update_wires, index);
@@ -250,6 +253,16 @@ void sim_StopSimulation()
     //         wire->value = WIRE_VALUE_Z;
     //     }
     // }
+}
+
+struct sim_wire_data_t *sim_GetWireSimData(uint64_t wire, uint32_t pin_type)
+{
+    if(wire == WIRE_INVALID_WIRE)
+    {
+        return sim_invalid_wires + pin_type;
+    }
+
+    return list_GetElement(&sim_wire_data, wire);
 }
 
 void sim_WireStep(struct sim_wire_data_t *wire)
