@@ -394,6 +394,7 @@ void dev_ClearDevices()
     pool_Reset(&dev_devices);
     pool_Reset(&dev_inputs);
     pool_Reset(&dev_clocks);
+    pool_Reset(&dev_pin_blocks);
 }
 
 struct dev_t *dev_GetDevice(uint64_t device_index)

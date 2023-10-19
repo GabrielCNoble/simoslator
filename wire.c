@@ -155,6 +155,7 @@ void w_ClearWires()
     pool_Reset(&w_wire_segs);
     pool_Reset(&w_wire_juncs);
     pool_Reset(&w_wire_seg_pos);
+    w_seg_junc_count = 0;
 }
 
 struct wire_t *w_GetWire(uint32_t wire_index)
@@ -176,6 +177,8 @@ struct wire_seg_t *w_AllocWireSegment(struct wire_t *wire)
     segment->junctions[1] = (struct wire_seg_junc_t){};
     segment->base.wire = wire;
     segment->selection_index = 0xffffffff;
+    segment->wire_next = NULL;
+    segment->wire_prev = NULL;
 
     segment->base.wire = wire;
     
@@ -295,6 +298,9 @@ void w_UnlinkWireJunction(struct wire_junc_t *junction)
         junction->wire_next->wire_prev = junction->wire_prev;
     }
 
+    junction->wire_next = NULL;
+    junction->wire_prev = NULL;
+
     wire->junction_count--;
 }
 
@@ -306,6 +312,8 @@ struct wire_junc_t *w_AllocWireJunction(struct wire_t *wire)
     junction->first_segment = NULL;
     junction->last_segment = NULL;
     junction->selection_index = 0xffffffff;
+    junction->wire_next = NULL;
+    junction->wire_prev = NULL;
 
     w_LinkWireJunction(wire, junction);
 

@@ -616,7 +616,7 @@ void m_SerializeCircuit(void **file_buffer, size_t *file_buffer_size)
 {
     size_t buffer_size = sizeof(struct m_file_header_t);
     size_t device_count = dev_devices.cursor - (dev_devices.free_indices_top + 1);
-    size_t wire_count = w_wires.cursor - (dev_devices.free_indices_top + 1);
+    size_t wire_count = w_wires.cursor - (w_wires.free_indices_top + 1);
     size_t segment_count = w_wire_segs.cursor - (w_wire_segs.free_indices_top + 1);
     size_t junction_count = w_wire_juncs.cursor - (w_wire_juncs.free_indices_top + 1);
     buffer_size += sizeof(struct m_device_record_t) * device_count;
@@ -766,6 +766,12 @@ void m_SerializeCircuit(void **file_buffer, size_t *file_buffer_size)
     header->segments -= (uintptr_t)buffer;
     header->junctions -= (uintptr_t)buffer;
     header->seg_juncs -= (uintptr_t)buffer;
+
+    printf("buffer size: %d, written size: %d\n", buffer_size, out - (uintptr_t)buffer);
+    printf("device count: %d - %d\n", device_count, header->device_count);
+    printf("wire count: %d - %d\n", wire_count, header->wire_count);
+    printf("segment count: %d - %d\n", segment_count, header->segment_count);
+    printf("junction count: %d - %d\n", junction_count, header->junction_count);
 }
 
 void m_DeserializeCircuit(void *file_buffer, size_t file_buffer_size)
@@ -793,7 +799,7 @@ void m_DeserializeCircuit(void *file_buffer, size_t file_buffer_size)
             device->position[1] = record->position[1];
             device->flip = record->flip;
             device->rotation = record->angle;
-            m_CreateObject(M_OBJECT_TYPE_DEVICE, device);
+            struct m_object_t *object = m_CreateObject(M_OBJECT_TYPE_DEVICE, device);
             record->deserialized_index = device->element_index;
         }
 
@@ -813,6 +819,7 @@ void m_DeserializeCircuit(void *file_buffer, size_t file_buffer_size)
                     segment->pos->ends[tip_index][0] = segment_record->ends[tip_index][0];
                     segment->pos->ends[tip_index][1] = segment_record->ends[tip_index][1];
                 }
+                struct m_object_t *object = m_CreateObject(M_OBJECT_TYPE_SEGMENT, segment);
             }
 
             for(uint32_t segment_index = 0; segment_index < wire_record->segment_count; segment_index++)
@@ -889,6 +896,8 @@ void m_ClearCircuit()
 {
     dev_ClearDevices();
     w_ClearWires();
+    m_objects[M_OBJECT_TYPE_DEVICE].cursor = 0;
+    m_objects[M_OBJECT_TYPE_SEGMENT].cursor = 0;
 }
 
 int main(int argc, char *argv[])
@@ -1056,12 +1065,12 @@ int main(int argc, char *argv[])
 
                 if(igMenuItem_Bool("Save", NULL, 0, 1))
                 {
-                    m_SaveCircuit("./test.mos");
+                    m_SaveCircuit("./test2.mos");
                 }
 
                 if(igMenuItem_Bool("Load", NULL, 0, 1))
                 {
-                    m_LoadCircuit("./test.mos");
+                    m_LoadCircuit("./test2.mos");
                 }
 
                 if(igMenuItem_Bool("Quit", NULL, 0, 1))
