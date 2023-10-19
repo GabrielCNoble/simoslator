@@ -31,6 +31,15 @@ void pool_Destroy(struct pool_t *pool)
     }
 }
 
+void pool_Reset(struct pool_t *pool)
+{
+    if(pool != NULL)
+    {
+        pool->cursor = 0;
+        pool->free_indices_top = INVALID_POOL_INDEX;
+    }
+}
+
 void *pool_AddElement(struct pool_t *pool, void *element)
 {
     uint64_t index = INVALID_POOL_INDEX;

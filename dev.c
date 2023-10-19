@@ -32,6 +32,9 @@ const char *dev_device_texture_names[] = {
 GLuint      dev_devices_texture;
 uint32_t    dev_devices_texture_width;
 uint32_t    dev_devices_texture_height;
+GLuint      dev_devices_texture_small;
+uint32_t    dev_devices_texture_small_width;
+uint32_t    dev_devices_texture_small_height;
 
 // uint32_t dev_device_texture_offsets[DEV_DEVICE_TYPE_LAST][2] = {
 //     [DEV_DEVICE_TYPE_PMOS] = {38, 2},
@@ -228,31 +231,38 @@ void dev_Init()
     dev_pin_blocks = pool_CreateTyped(struct dev_pin_block_t, 4096);
     dev_prev_pin_values = calloc(DEV_MAX_DEVICE_PINS, sizeof(struct dev_pin_t));
 
-    // for(uint32_t index = 0; index < DEV_PRIMITIVE_LAST; index++)
-    // {
-    const char *texture_name = "res/devices.png";
-    // int width;
-    // int height;
     int channels;
-    stbi_uc *pixels = stbi_load(texture_name, &dev_devices_texture_width, &dev_devices_texture_height, &channels, STBI_rgb_alpha);
+    stbi_uc *pixels = stbi_load("res/devices.png", &dev_devices_texture_width, &dev_devices_texture_height, &channels, STBI_rgb_alpha);
 
-    if(pixels == NULL)
-    {
-        printf("couldn't load texture %s!\n", texture_name);
-        return;
-        // continue;
-    }
+    // if(pixels == NULL)
+    // {
+    //     printf("couldn't load texture %s!\n", texture_name);
+    //     return;
+    // }
 
     glGenTextures(1, &dev_devices_texture);
     glBindTexture(GL_TEXTURE_2D, dev_devices_texture);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR_MIPMAP_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_BASE_LEVEL, 0);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_LEVEL, 0);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_LEVEL, 4);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, dev_devices_texture_width, dev_devices_texture_height, 0, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
-    // glGenerateMipmap(GL_TEXTURE_2D);
+    glGenerateMipmap(GL_TEXTURE_2D);
+    free(pixels);
+
+    pixels = stbi_load("res/devices_small.png", &dev_devices_texture_small_width, &dev_devices_texture_small_height, &channels, STBI_rgb_alpha);
+    glGenTextures(1, &dev_devices_texture_small);
+    glBindTexture(GL_TEXTURE_2D, dev_devices_texture_small);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_BASE_LEVEL, 0);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_LEVEL, 4);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, dev_devices_texture_small_width, dev_devices_texture_small_height, 0, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
+    glGenerateMipmap(GL_TEXTURE_2D);
     free(pixels);
     // }
 }
@@ -377,6 +387,13 @@ void dev_DestroyDevice(struct dev_t *device)
 
         pool_RemoveElement(&dev_devices, device->element_index);
     }
+}
+
+void dev_ClearDevices()
+{
+    pool_Reset(&dev_devices);
+    pool_Reset(&dev_inputs);
+    pool_Reset(&dev_clocks);
 }
 
 struct dev_t *dev_GetDevice(uint64_t device_index)

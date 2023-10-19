@@ -37,6 +37,7 @@ int32_t                         m_place_device_y;
 int32_t                         m_snapped_mouse_x;
 int32_t                         m_snapped_mouse_y;
 uint32_t                        m_run_simulation;
+uint32_t                        m_run;
 uint32_t                        m_cur_edit_func;
 uint32_t                        m_wire_func_stage;
 uint32_t                        m_selected_device_type;
@@ -57,12 +58,16 @@ extern struct list_t            dev_pin_blocks;
 extern GLuint                   dev_devices_texture;
 extern uint32_t                 dev_devices_texture_width;
 extern uint32_t                 dev_devices_texture_height;
+extern GLuint                   dev_devices_texture_small;
+extern uint32_t                 dev_devices_texture_small_width;
+extern uint32_t                 dev_devices_texture_small_height;
 extern struct dev_desc_t        dev_device_descs[];
 
 extern struct list_t            w_wire_seg_pos;
 extern struct pool_t            w_wire_segs;
 extern struct pool_t            w_wire_juncs;
 extern struct pool_t            w_wires;
+extern uint64_t                 w_seg_junc_count;
 
 extern float                    d_model_view_projection_matrix[];
 
@@ -580,7 +585,7 @@ struct wire_t *m_CreateWire(struct m_picked_object_t *first_contact, struct m_pi
     }
 
     struct wire_seg_t *prev_segment = NULL;
-
+ 
     for(uint32_t index = 0; index < segments->cursor; index++)
     {
         union m_wire_seg_t *segment_pos = list_GetElement(segments, index);
@@ -616,7 +621,9 @@ void m_SerializeCircuit(void **file_buffer, size_t *file_buffer_size)
     size_t junction_count = w_wire_juncs.cursor - (w_wire_juncs.free_indices_top + 1);
     buffer_size += sizeof(struct m_device_record_t) * device_count;
     buffer_size += sizeof(struct m_wire_record_t) * wire_count;
-    buffer_size += sizeof(struct m_junction_record_t ) * junction_count;
+    buffer_size += sizeof(struct m_segment_record_t) * segment_count;
+    buffer_size += sizeof(struct m_junction_record_t) * junction_count;
+    buffer_size += sizeof(struct m_seg_junc_record_t) * w_seg_junc_count;
 
     *file_buffer_size = buffer_size;
     uint8_t *buffer = calloc(1, buffer_size);
@@ -635,6 +642,10 @@ void m_SerializeCircuit(void **file_buffer, size_t *file_buffer_size)
     out += sizeof(struct m_segment_record_t) * segment_count;
     header->junctions = out;
     out += sizeof(struct m_junction_record_t) * junction_count;
+    header->seg_juncs = out;
+    out += sizeof(struct m_seg_junc_record_t) * w_seg_junc_count;
+    // header->seg_juncs = out;
+    
 
     struct m_device_record_t *device_records = (struct m_device_record_t *)header->devices;
     for(uint32_t device_index = 0; device_index < dev_devices.cursor; device_index++)
@@ -658,6 +669,7 @@ void m_SerializeCircuit(void **file_buffer, size_t *file_buffer_size)
     struct m_wire_record_t *wire_records = (struct m_wire_record_t *)header->wires;
     struct m_segment_record_t *segment_records = (struct m_segment_record_t *)header->segments;
     struct m_junction_record_t *junction_records = (struct m_junction_record_t *)header->junctions;
+    struct m_seg_junc_record_t *seg_junc_records = (struct m_seg_junc_record_t *)header->seg_juncs;
 
     for(uint32_t wire_index = 0; wire_index < w_wires.cursor; wire_index++)
     {
@@ -667,8 +679,10 @@ void m_SerializeCircuit(void **file_buffer, size_t *file_buffer_size)
             struct m_wire_record_t *wire_record = wire_records + header->wire_count;
             header->wire_count++;
 
-            wire_record->segments = (uintptr_t)(segment_records + header->segment_count);
-            wire_record->junctions = (uintptr_t)(junction_records + header->junction_count);
+            wire_record->segments = header->segment_count;
+            wire_record->junctions = header->junction_count;
+            // wire_record->segment_count = header->segment_count;
+            // wire_record->junction_count = header->junction_count;
 
             struct wire_seg_t *segment = wire->first_segment;
             while(segment != NULL)
@@ -677,10 +691,32 @@ void m_SerializeCircuit(void **file_buffer, size_t *file_buffer_size)
                 struct m_segment_record_t *segment_record = segment_records + header->segment_count;
                 header->segment_count++;
 
-                segment_record->ends[WIRE_SEG_START_INDEX][0] = segment->pos->ends[WIRE_SEG_START_INDEX][0];
-                segment_record->ends[WIRE_SEG_START_INDEX][1] = segment->pos->ends[WIRE_SEG_START_INDEX][1];
-                segment_record->ends[WIRE_SEG_END_INDEX][0] = segment->pos->ends[WIRE_SEG_END_INDEX][0];
-                segment_record->ends[WIRE_SEG_END_INDEX][1] = segment->pos->ends[WIRE_SEG_END_INDEX][1];
+                for(uint32_t tip_index = WIRE_SEG_START_INDEX; tip_index <= WIRE_SEG_END_INDEX; tip_index++)
+                {
+                    segment_record->ends[tip_index][0] = segment->pos->ends[tip_index][0];
+                    segment_record->ends[tip_index][1] = segment->pos->ends[tip_index][1];    
+                }
+
+                segment = segment->wire_next;
+            }
+
+            segment = wire->first_segment;
+            while(segment != NULL)
+            {   
+                struct m_segment_record_t *segment_record = segment_records + segment->serialized_index;
+
+                for(uint32_t tip_index = WIRE_SEG_START_INDEX; tip_index <= WIRE_SEG_END_INDEX; tip_index++)
+                {
+                    if(segment->segments[tip_index] != NULL)
+                    {
+                        struct wire_seg_t *linked_segment = segment->segments[tip_index];
+                        segment_record->segments[tip_index] = linked_segment->serialized_index;
+                    }
+                    else
+                    {
+                        segment_record->segments[tip_index] = WIRE_INVALID_WIRE;
+                    }
+                }
 
                 segment = segment->wire_next;
             }
@@ -703,8 +739,25 @@ void m_SerializeCircuit(void **file_buffer, size_t *file_buffer_size)
                     junction_record->pin = DEV_INVALID_PIN;
                 }
 
+                junction_record->first_segment = header->seg_junc_count;
+
+                struct wire_seg_t *segment = junction->first_segment;
+                while(segment)
+                {
+                    struct  m_seg_junc_record_t *seg_junc_record = seg_junc_records + header->seg_junc_count;
+                    header->seg_junc_count++;
+                    junction_record->segment_count++;
+
+                    seg_junc_record->tip_index = segment->junctions[WIRE_SEG_END_INDEX].junction == junction;
+                    seg_junc_record->segment = segment->serialized_index;
+                    segment = segment->junctions[seg_junc_record->tip_index].next;
+                }
+
                 junction = junction->wire_next;
             }
+
+            wire_record->segment_count = header->segment_count - wire_record->segments;
+            wire_record->junction_count = header->junction_count - wire_record->junctions;
         }
     }
 
@@ -712,6 +765,7 @@ void m_SerializeCircuit(void **file_buffer, size_t *file_buffer_size)
     header->wires -= (uintptr_t)buffer;
     header->segments -= (uintptr_t)buffer;
     header->junctions -= (uintptr_t)buffer;
+    header->seg_juncs -= (uintptr_t)buffer;
 }
 
 void m_DeserializeCircuit(void *file_buffer, size_t file_buffer_size)
@@ -723,8 +777,13 @@ void m_DeserializeCircuit(void *file_buffer, size_t file_buffer_size)
         file_header->wires += (uintptr_t)file_buffer;
         file_header->segments += (uintptr_t)file_buffer;
         file_header->junctions += (uintptr_t)file_buffer;
+        file_header->seg_juncs += (uintptr_t)file_buffer;
         
         struct m_device_record_t *device_records = (struct m_device_record_t *)file_header->devices;
+        struct m_wire_record_t *wire_records = (struct m_wire_record_t *)file_header->wires;
+        struct m_segment_record_t *segment_records = (struct m_segment_record_t *)file_header->segments;
+        struct m_junction_record_t *junction_records = (struct m_junction_record_t *)file_header->junctions;
+        struct m_seg_junc_record_t *seg_junc_records = (struct m_seg_junc_record_t *)file_header->seg_juncs;
 
         for(uint32_t index = 0; index < file_header->device_count; index++)
         {
@@ -737,6 +796,64 @@ void m_DeserializeCircuit(void *file_buffer, size_t file_buffer_size)
             m_CreateObject(M_OBJECT_TYPE_DEVICE, device);
             record->deserialized_index = device->element_index;
         }
+
+        for(uint32_t index = 0; index < file_header->wire_count; index++)
+        {
+            struct m_wire_record_t *wire_record = wire_records + index;
+            struct wire_t *wire = w_AllocWire();
+            wire_record->deserialized_index = wire->element_index;
+            
+            for(uint32_t segment_index = 0; segment_index < wire_record->segment_count; segment_index++)
+            {
+                struct m_segment_record_t *segment_record = segment_records + wire_record->segments + segment_index;
+                struct wire_seg_t *segment = w_AllocWireSegment(wire);
+                segment_record->deserialized_index = segment->base.element_index;
+                for(uint32_t tip_index = WIRE_SEG_START_INDEX; tip_index <= WIRE_SEG_END_INDEX; tip_index++)
+                {
+                    segment->pos->ends[tip_index][0] = segment_record->ends[tip_index][0];
+                    segment->pos->ends[tip_index][1] = segment_record->ends[tip_index][1];
+                }
+            }
+
+            for(uint32_t segment_index = 0; segment_index < wire_record->segment_count; segment_index++)
+            {
+                struct m_segment_record_t *segment_record = segment_records + wire_record->segments + segment_index;
+                struct wire_seg_t *segment = pool_GetElement(&w_wire_segs, segment_record->deserialized_index);
+
+                for(uint32_t tip_index = WIRE_SEG_START_INDEX; tip_index <= WIRE_SEG_END_INDEX; tip_index++)
+                {
+                    if(segment_record->segments[tip_index] != WIRE_INVALID_WIRE)
+                    {
+                        struct m_segment_record_t *linked_segment_record = segment_records + segment_record->segments[tip_index];
+                        struct wire_seg_t *linked_segment = pool_GetElement(&w_wire_segs, linked_segment_record->deserialized_index);
+                        segment->segments[tip_index] = linked_segment;
+                    }
+                }
+            }
+
+            for(uint32_t junction_index = 0; junction_index < wire_record->junction_count; junction_index++)
+            {
+                struct m_junction_record_t *junction_record = junction_records + wire_record->junctions + junction_index;
+                struct m_seg_junc_record_t *seg_junc_record = seg_junc_records + junction_record->first_segment;
+                struct wire_junc_t *junction = w_AllocWireJunction(wire);
+
+                for(uint32_t segment_index = 0; segment_index < junction_record->segment_count; segment_index++)
+                {
+                    struct m_seg_junc_record_t *seg_junc = seg_junc_record + segment_index;
+                    struct wire_seg_t *segment = pool_GetElement(&w_wire_segs, seg_junc->segment);
+                    w_LinkSegmentToJunction(segment, junction, seg_junc->tip_index);
+                }
+
+                if(junction_record->device != DEV_INVALID_DEVICE)
+                {
+                    struct m_device_record_t *device_record = device_records + junction_record->device;
+                    struct dev_t *device = dev_GetDevice(device_record->deserialized_index);
+                    w_ConnectPin(junction, device, junction_record->pin);
+                }
+            }
+        }
+
+        
     }
 }
 
@@ -766,6 +883,12 @@ void m_LoadCircuit(const char *file_name)
         m_DeserializeCircuit(file_buffer, file_buffer_size);
         free(file_buffer);
     }
+}
+
+void m_ClearCircuit()
+{
+    dev_ClearDevices();
+    w_ClearWires();
 }
 
 int main(int argc, char *argv[])
@@ -913,8 +1036,8 @@ int main(int argc, char *argv[])
     m_cur_edit_func = M_EDIT_FUNC_SELECT;
     struct m_picked_object_t picked_objects[2] = {};
     // struct m_selected_pin_t pins[2] = {};
-
-    while(!in_ReadInput())
+    m_run = 1;
+    while(!in_ReadInput() && m_run)
     {
         glEnable(GL_DEPTH_TEST);
         glDisable(GL_BLEND);
@@ -924,6 +1047,30 @@ int main(int argc, char *argv[])
         ui_BeginFrame();
         if(igBeginMainMenuBar())
         {
+            if(igBeginMenu("File", 1))
+            {
+                if(igMenuItem_Bool("New", NULL, 0, 1))
+                {
+                    m_ClearCircuit();
+                }
+
+                if(igMenuItem_Bool("Save", NULL, 0, 1))
+                {
+                    m_SaveCircuit("./test.mos");
+                }
+
+                if(igMenuItem_Bool("Load", NULL, 0, 1))
+                {
+                    m_LoadCircuit("./test.mos");
+                }
+
+                if(igMenuItem_Bool("Quit", NULL, 0, 1))
+                {
+                    m_run = 0;
+                }
+
+                igEndMenu();
+            }
             igEndMainMenuBar();
         }
 
@@ -971,14 +1118,6 @@ int main(int argc, char *argv[])
                     printf("%d\n", w_TryReachSegment(object->object));
                 }
             }
-        }
-        else if(igIsKeyPressed_Bool(ImGuiKey_S, 0))
-        {
-            m_SaveCircuit("./test.mos");
-        }
-        else if(igIsKeyPressed_Bool(ImGuiKey_L, 0))
-        {
-            m_LoadCircuit("./test.mos");
         }
 
         igSetNextWindowPos((ImVec2){0, 18}, 0, (ImVec2){});
@@ -1171,20 +1310,65 @@ int main(int argc, char *argv[])
 
             for(uint32_t device_type = 0; device_type < DEV_DEVICE_TYPE_LAST; device_type++)
             {
+                ImVec2 first_cursor_pos;
+                ImVec2 second_cursor_pos;
+                ImVec2 button_size;
                 struct dev_desc_t *desc = dev_device_descs + device_type;
-                ImVec2 uv0 = (ImVec2){(float)desc->offset[0] / (float)dev_devices_texture_width,
-                                      (float)desc->offset[1] / (float)dev_devices_texture_height};
+                ImVec2 uv0 = (ImVec2){((float)desc->offset[0]) / (float)dev_devices_texture_width,
+                                      ((float)desc->offset[1]) / (float)dev_devices_texture_height};
                 
-                ImVec2 uv1 = (ImVec2){(float)(desc->offset[0] + desc->width) / (float)dev_devices_texture_width,
-                                      (float)(desc->offset[1] + desc->height) / (float)dev_devices_texture_height};
+                ImVec2 uv1 = (ImVec2){((float)(desc->offset[0] + desc->width)) / (float)dev_devices_texture_width,
+                                      ((float)(desc->offset[1] + desc->height)) / (float)dev_devices_texture_height};
                 igSameLine(0, -1);
                 igPushID_Int(device_type);
+                igGetCursorScreenPos(&first_cursor_pos);
                 igPushStyleColor_Vec4(ImGuiCol_Button, (m_selected_device_type == device_type) ? button_active_color : button_color);
-                if(igImageButton("##button", (void *)(uintptr_t)dev_devices_texture, (ImVec2){24, 24}, uv0, uv1, (ImVec4){1, 1, 1, 1}, (ImVec4){1, 1, 1, 1}))
+                // if(igImageButton("##button", (void *)(uintptr_t)dev_devices_texture_small, (ImVec2){24, 24}, uv0, uv1, (ImVec4){1, 1, 1, 1}, (ImVec4){1, 1, 1, 1}))
+                // {
+                //     m_selected_device_type = device_type;
+                //     m_SetEditFunc(M_EDIT_FUNC_PLACE);
+                // }
+                if(igImageButton("##button", (void *)(uintptr_t)dev_devices_texture, (ImVec2){24, 24}, (ImVec2){}, (ImVec2){}, (ImVec4){1, 1, 1, 1}, (ImVec4){1, 1, 1, 0}))
                 {
                     m_selected_device_type = device_type;
                     m_SetEditFunc(M_EDIT_FUNC_PLACE);
                 }
+                igGetItemRectSize(&button_size);                
+            
+                ImVec2 image_size;
+                
+                if(desc->width > desc->height)
+                {
+                    float ratio = 24.0f / (float)desc->width;
+                    image_size.x = 24.0f;
+                    image_size.y = (float)desc->height * ratio;
+                }
+                else
+                {
+                    float ratio = 24.0f / (float)desc->height;
+                    image_size.x = (float)desc->width * ratio;
+                    image_size.y = 24.0f;
+                }
+
+                first_cursor_pos.x += (button_size.x - image_size.x) / 2.0f;
+                first_cursor_pos.y += (button_size.y - image_size.y) / 2.0f;
+                ImGuiWindow *window = igGetCurrentWindow();
+                ImVec2 image_min = first_cursor_pos;
+                ImVec2 image_max = (ImVec2){first_cursor_pos.x + image_size.x, first_cursor_pos.y + image_size.y};
+                ImDrawList_AddImage(window->DrawList, (void *)(uintptr_t)dev_devices_texture_small, image_min, image_max, uv0, uv1, igGetColorU32_Vec4((ImVec4){1, 1, 1, 1}));
+                // igSetCursorPos(first_cursor_pos);
+                // igSameLine(0, -1);
+                // igImage((void *)(uintptr_t)dev_devices_texture_small, image_size, uv0, uv1, (ImVec4){1, 1, 1, 1}, (ImVec4){0, 0, 0, 0});
+                // second_cursor_pos.x += 4;
+                // igSetCursorPos(second_cursor_pos);
+                
+                // if(clicked)
+                // {
+                //     m_selected_device_type = device_type;
+                //     m_SetEditFunc(M_EDIT_FUNC_PLACE);
+                // }
+                // igSameLine(0, -1);
+                
                 igPopStyleColor(1);
                 igPopID();
             }

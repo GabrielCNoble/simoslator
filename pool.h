@@ -28,6 +28,8 @@ struct pool_t pool_Create(size_t elem_size, size_t buffer_elem_count, size_t ind
 
 void pool_Destroy(struct pool_t *pool);
 
+void pool_Reset(struct pool_t *pool);
+
 void *pool_AddElement(struct pool_t *pool, void *element);
 
 void *pool_GetElement(struct pool_t *pool, uint64_t index);

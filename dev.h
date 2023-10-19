@@ -118,6 +118,8 @@ struct dev_t *dev_CreateDevice(uint32_t type);
 
 void dev_DestroyDevice(struct dev_t *device);
 
+void dev_ClearDevices();
+
 struct dev_t *dev_GetDevice(uint64_t device_index);
 
 void dev_GetDeviceLocalPinPosition(struct dev_t *device, uint16_t pin, int32_t *pin_position);

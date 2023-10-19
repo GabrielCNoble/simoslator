@@ -134,8 +134,6 @@ struct wire_junc_t
     struct wire_seg_t *             first_segment;
     struct wire_seg_t *             last_segment;
     struct wire_pin_t               pin;
-    // struct wire_junc_pin_t *        pin;
-    // struct wire_junc_pin_block_t *  pin_block;
     struct wire_junc_t *            wire_next;
     struct wire_junc_t *            wire_prev;
     uint64_t                        traversal_id;
@@ -203,6 +201,8 @@ struct wire_t *w_AllocWire();
 
 struct wire_t *w_FreeWire(struct wire_t *wire);
 
+void w_ClearWires();
+
 struct wire_t *w_GetWire(uint32_t wire_index);
 
 struct wire_seg_t *w_AllocWireSegment(struct wire_t *wire);
@@ -225,13 +225,17 @@ void w_RemoveJunction(struct wire_junc_t *junction);
 
 struct wire_t *w_MergeWires(struct wire_t *wire_a, struct wire_t *wire_b);
 
+void w_MoveJunctionToWire(struct wire_t *wire, struct wire_junc_t *junction);
+
+void w_MoveSegmentsToWire(struct wire_t *wire, struct wire_seg_t *segment, uint32_t tip_index);
+
 struct wire_t *w_SplitWire(struct wire_t *wire, struct wire_seg_t *segment);
 
 uint32_t w_TryReachSegment(struct wire_seg_t *target_segment);
 
 void w_ConnectPin(struct wire_junc_t *junction, struct dev_t *device, uint16_t pin);
 
-void w_DisconnectPin(struct wire_junc_pin_t *pin);
+void w_DisconnectPin(struct wire_junc_t *junction);
 
 struct wire_t *w_ConnectPins(struct dev_t *device_a, uint16_t pin_a, struct dev_t *device_b, uint16_t pin_b, struct list_t *wire_segments);
 

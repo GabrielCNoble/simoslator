@@ -80,13 +80,9 @@ struct m_file_header_t
     uintptr_t   segment_count;
     uintptr_t   junctions;
     uintptr_t   junction_count;
+    uintptr_t   seg_juncs;
+    uintptr_t   seg_junc_count;
 };
-
-// struct m_device_section_t
-// {
-//     uintptr_t count;
-//     uintptr_t devices;
-// };
 
 struct m_device_record_t
 {
@@ -98,19 +94,6 @@ struct m_device_record_t
     uint8_t     angle;
     uint32_t    pad;
 };
-
-// struct m_pin_record_t
-// {
-//     uintptr_t deserialized_index;
-//     uintptr_t device;
-//     uintptr_t wire;
-// };
-
-// struct m_wire_section_t
-// {
-//     uintptr_t count;
-//     uintptr_t wires;
-// };
 
 struct m_wire_record_t
 {
@@ -124,15 +107,23 @@ struct m_wire_record_t
 struct m_segment_record_t
 {
     uintptr_t deserialized_index;
-    int32_t   ends[2][2];
     uintptr_t segments[2];
+    int32_t   ends[2][2];
 };
 
-struct m_junction_record_t
+struct m_junction_record_t 
 {
     uintptr_t   deserialized_index;
+    uintptr_t   first_segment;
+    uintptr_t   segment_count;
     uint64_t    device : 48;
     uint64_t    pin : 16;
+};
+
+struct m_seg_junc_record_t
+{
+    uint64_t segment;
+    uint64_t tip_index;
 };
 
 struct m_object_t *m_CreateObject(uint32_t type, void *base_object);
@@ -158,5 +149,7 @@ void m_SerializeCircuit(void **file_buffer, size_t *file_buffer_size);
 void m_DeserializeCircuit(void *file_buffer, size_t file_buffer_size);
 
 void m_SaveCircuit(const char *file_name);
+
+void m_ClearCircuit();
 
 #endif
