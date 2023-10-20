@@ -132,9 +132,10 @@ struct wire_t *w_AllocWire()
     wire->first_segment = NULL;
     wire->last_segment = NULL;
 
-    wire->first_segment_pos = pool_AddElement(&w_wire_seg_pos, NULL);
-    wire->last_segment_pos = wire->first_segment_pos;
-    wire->segment_pos_count = 0;
+    // wire->first_segment_pos = pool_AddElement(&w_wire_seg_pos, NULL);
+    // wire->last_segment_pos = wire->first_segment_pos;
+    wire->segment_count = 0;
+    wire->junction_count = 0;
     wire->input_count = 0;
     wire->output_count = 0;
 
@@ -163,23 +164,8 @@ struct wire_t *w_GetWire(uint32_t wire_index)
     return pool_GetValidElement(&w_wires, wire_index);
 }
 
-void w_LinkWireSegment(struct wire_t *wire, struct wire_seg_t *segment)
+void w_LinkSegmentToWire(struct wire_t *wire, struct wire_seg_t *segment)
 {
-    
-}
-
-struct wire_seg_t *w_AllocWireSegment(struct wire_t *wire)
-{
-    struct wire_seg_t *segment = pool_AddElement(&w_wire_segs, NULL);
-    segment->segments[0] = NULL;
-    segment->segments[1] = NULL;
-    segment->junctions[0] = (struct wire_seg_junc_t){};
-    segment->junctions[1] = (struct wire_seg_junc_t){};
-    segment->base.wire = wire;
-    segment->selection_index = 0xffffffff;
-    segment->wire_next = NULL;
-    segment->wire_prev = NULL;
-
     segment->base.wire = wire;
     
     if(wire->first_segment == NULL)
@@ -193,20 +179,74 @@ struct wire_seg_t *w_AllocWireSegment(struct wire_t *wire)
     }
 
     wire->last_segment = segment;
-    
-    segment->pos = wire->last_segment_pos->segments + wire->segment_pos_count % WIRE_SEGMENT_POS_BLOCK_SIZE;
-    segment->pos_block = wire->last_segment_pos;
-    wire->segment_pos_count++;
-    
-    segment->pos->segment = segment;
+    wire->segment_count++;
+}
 
-    if(wire->segment_pos_count % WIRE_SEGMENT_POS_BLOCK_SIZE == 0)
+void w_UnlinkSegmentFromWire(struct wire_seg_t *segment)
+{
+    struct wire_t *wire = segment->base.wire;
+    segment->base.wire = NULL;
+
+    if(wire->first_segment == segment)
     {
-        struct wire_seg_pos_block_t *new_block = pool_AddElement(&w_wire_seg_pos, NULL);
-        new_block->prev = wire->last_segment_pos;
-        wire->last_segment_pos->next = new_block;
-        wire->last_segment_pos = new_block;
+        wire->first_segment = segment->wire_next;
+
+        if(wire->first_segment != NULL)
+        {
+            wire->first_segment->wire_prev = NULL;
+        }
     }
+    else
+    {
+        segment->wire_prev->wire_next = segment->wire_next;
+    }
+
+    if(wire->last_segment == segment)
+    {
+        wire->last_segment = segment->wire_prev;
+
+        if(wire->last_segment != NULL)
+        {
+            wire->last_segment->wire_next = NULL;
+        }
+    }
+    else
+    {
+        segment->wire_next->wire_prev = segment->wire_prev;
+    }
+
+    segment->wire_next = NULL;
+    segment->wire_prev = NULL;
+
+    wire->segment_count--;
+}
+
+struct wire_seg_t *w_AllocWireSegment(struct wire_t *wire)
+{
+    struct wire_seg_t *segment = pool_AddElement(&w_wire_segs, NULL);
+    segment->segments[0] = NULL;
+    segment->segments[1] = NULL;
+    segment->junctions[0] = (struct wire_seg_junc_t){};
+    segment->junctions[1] = (struct wire_seg_junc_t){};
+    segment->selection_index = 0xffffffff;
+    segment->wire_next = NULL;
+    segment->wire_prev = NULL;
+
+    w_LinkSegmentToWire(wire, segment);    
+    
+    // segment->pos = wire->last_segment_pos->segments + wire->segment_pos_count % WIRE_SEGMENT_POS_BLOCK_SIZE;
+    // segment->pos_block = wire->last_segment_pos;
+    
+    
+    // segment->pos->segment = segment;
+
+    // if(wire->segment_pos_count % WIRE_SEGMENT_POS_BLOCK_SIZE == 0)
+    // {
+    //     struct wire_seg_pos_block_t *new_block = pool_AddElement(&w_wire_seg_pos, NULL);
+    //     new_block->prev = wire->last_segment_pos;
+    //     wire->last_segment_pos->next = new_block;
+    //     wire->last_segment_pos = new_block;
+    // }
 
     return segment;
 }
@@ -214,40 +254,41 @@ struct wire_seg_t *w_AllocWireSegment(struct wire_t *wire)
 void w_FreeWireSegment(struct wire_seg_t *segment)
 {
     struct wire_t *wire = segment->base.wire;
-    struct wire_seg_pos_block_t *pos_block = segment->pos_block;
-    uint32_t pos_index = (segment->pos - pos_block->segments) % WIRE_SEGMENT_POS_BLOCK_SIZE;
-    struct wire_seg_pos_block_t *last_block = wire->last_segment_pos;
-    uint32_t last_pos_index = wire->segment_pos_count % WIRE_SEGMENT_POS_BLOCK_SIZE;
+    // struct wire_seg_pos_block_t *pos_block = segment->pos_block;
+    // uint32_t pos_index = (segment->pos - pos_block->segments) % WIRE_SEGMENT_POS_BLOCK_SIZE;
+    // struct wire_seg_pos_block_t *last_block = wire->last_segment_pos;
+    // uint32_t last_pos_index = wire->segment_pos_count % WIRE_SEGMENT_POS_BLOCK_SIZE;
 
-    if(last_pos_index == WIRE_SEGMENT_POS_BLOCK_SIZE - 1)
-    {
-        wire->last_segment_pos = last_block->prev;
-        wire->last_segment_pos->next = NULL;
+    // if(last_pos_index == WIRE_SEGMENT_POS_BLOCK_SIZE - 1)
+    // {
+    //     wire->last_segment_pos = last_block->prev;
+    //     wire->last_segment_pos->next = NULL;
 
-        pool_RemoveElement(&w_wire_seg_pos, last_block->element_index);
-        last_block = wire->last_segment_pos;
-    }
+    //     pool_RemoveElement(&w_wire_seg_pos, last_block->element_index);
+    //     last_block = wire->last_segment_pos;
+    // }
 
+    w_UnlinkSegmentFromWire(segment);
     pool_RemoveElement(&w_wire_segs, segment->base.element_index);
 
-    pos_block->segments[pos_index] = last_block->segments[last_pos_index];
-    wire->last_segment_pos--;
+    // pos_block->segments[pos_index] = last_block->segments[last_pos_index];
+    // wire->last_segment_pos--;
 
-    struct wire_seg_t *moved_segment = pos_block->segments[pos_index].segment;
-    moved_segment->pos = pos_block->segments + pos_index;
-    moved_segment->pos_block = pos_block;
+    // struct wire_seg_t *moved_segment = pos_block->segments[pos_index].segment;
+    // moved_segment->pos = pos_block->segments + pos_index;
+    // moved_segment->pos_block = pos_block;
 
-    for(uint32_t tip_index = WIRE_SEG_START_INDEX; tip_index <= WIRE_SEG_END_INDEX; tip_index++)
-    {
-        struct wire_junc_t *junction = moved_segment->junctions[tip_index].junction;
-        if(junction != NULL && junction->first_segment == moved_segment)
-        {
-            junction->pos = moved_segment->pos->ends[tip_index];
-        }
-    }
+    // for(uint32_t tip_index = WIRE_SEG_START_INDEX; tip_index <= WIRE_SEG_END_INDEX; tip_index++)
+    // {
+    //     struct wire_junc_t *junction = moved_segment->junctions[tip_index].junction;
+    //     if(junction != NULL && junction->first_segment == moved_segment)
+    //     {
+    //         junction->pos = moved_segment->pos->ends[tip_index];
+    //     }
+    // }
 }
 
-void w_LinkWireJunction(struct wire_t *wire, struct wire_junc_t *junction)
+void w_LinkJunctionToWire(struct wire_t *wire, struct wire_junc_t *junction)
 {
     junction->base.wire = wire;
 
@@ -265,7 +306,7 @@ void w_LinkWireJunction(struct wire_t *wire, struct wire_junc_t *junction)
     wire->junction_count++;
 }
 
-void w_UnlinkWireJunction(struct wire_junc_t *junction)
+void w_UnlinkJunctionFromWire(struct wire_junc_t *junction)
 {
     struct wire_t *wire = junction->base.wire;
     junction->base.wire = NULL;
@@ -315,7 +356,7 @@ struct wire_junc_t *w_AllocWireJunction(struct wire_t *wire)
     junction->wire_next = NULL;
     junction->wire_prev = NULL;
 
-    w_LinkWireJunction(wire, junction);
+    w_LinkJunctionToWire(wire, junction);
 
     return junction;
 }
@@ -329,8 +370,7 @@ void w_FreeWireJunction(struct wire_junc_t *junction)
         w_DisconnectPin(junction);
     }
 
-    w_UnlinkWireJunction(junction);
-    
+    w_UnlinkJunctionFromWire(junction);
     pool_RemoveElement(&w_wire_juncs, junction->base.element_index);
 }
 
@@ -349,7 +389,7 @@ void w_LinkSegmentToJunction(struct wire_seg_t *segment, struct wire_junc_t *jun
     if(junction->first_segment == NULL)
     {
         junction->first_segment = segment;
-        junction->pos = segment->pos->ends[link_index];
+        junction->pos = segment->ends[link_index];
     }
     else
     { 
@@ -420,7 +460,7 @@ void w_UnlinkSegmentLinkIndex(struct wire_seg_t *segment, uint32_t link_index)
         if(junction->first_segment != NULL)
         {
             struct wire_seg_t *first_segment = junction->first_segment;
-            junction->pos = first_segment->pos->ends[(first_segment->junctions[WIRE_SEG_END_INDEX].junction == junction)];
+            junction->pos = first_segment->ends[(first_segment->junctions[WIRE_SEG_END_INDEX].junction == junction)];
         }
     }
     else
@@ -453,14 +493,14 @@ struct wire_junc_t *w_AddJunction(struct wire_seg_t *segment, int32_t *position)
     uint32_t coord0;
     uint32_t coord1;
 
-    coord0 = segment->pos->ends[WIRE_SEG_START_INDEX][0] != segment->pos->ends[WIRE_SEG_END_INDEX][0];
+    coord0 = segment->ends[WIRE_SEG_START_INDEX][0] != segment->ends[WIRE_SEG_END_INDEX][0];
     coord1 = !coord0;
 
-    if(position[coord0] == segment->pos->ends[WIRE_SEG_START_INDEX][coord0])
+    if(position[coord0] == segment->ends[WIRE_SEG_START_INDEX][coord0])
     {
         uint32_t link_index;
         
-        if(position[coord1] == segment->pos->ends[WIRE_SEG_START_INDEX][coord1])
+        if(position[coord1] == segment->ends[WIRE_SEG_START_INDEX][coord1])
         {
             /* junction is to be created at the start of the segment */
             if(segment->junctions[WIRE_SEG_START_INDEX].junction != NULL)
@@ -486,7 +526,7 @@ struct wire_junc_t *w_AddJunction(struct wire_seg_t *segment, int32_t *position)
                 w_LinkSegmentToJunction(segment, junction, WIRE_SEG_START_INDEX);
             }
         }
-        else if(position[coord1] == segment->pos->ends[WIRE_SEG_END_INDEX][coord1])
+        else if(position[coord1] == segment->ends[WIRE_SEG_END_INDEX][coord1])
         {
             /* junction is to be created at the end of the segment */
             if(segment->junctions[WIRE_SEG_END_INDEX].junction != NULL)
@@ -517,12 +557,12 @@ struct wire_junc_t *w_AddJunction(struct wire_seg_t *segment, int32_t *position)
             /* junction is to be created at the middle of the segment */
             junction = w_AllocWireJunction(wire);
             struct wire_seg_t *split = w_AllocWireSegment(wire);
-            split->pos->ends[WIRE_SEG_START_INDEX][0] = position[0];
-            split->pos->ends[WIRE_SEG_START_INDEX][1] = position[1];
-            split->pos->ends[WIRE_SEG_END_INDEX][0] = segment->pos->ends[WIRE_SEG_END_INDEX][0];
-            split->pos->ends[WIRE_SEG_END_INDEX][1] = segment->pos->ends[WIRE_SEG_END_INDEX][1];
-            segment->pos->ends[WIRE_SEG_END_INDEX][0] = position[0];
-            segment->pos->ends[WIRE_SEG_END_INDEX][1] = position[1];
+            split->ends[WIRE_SEG_START_INDEX][0] = position[0];
+            split->ends[WIRE_SEG_START_INDEX][1] = position[1];
+            split->ends[WIRE_SEG_END_INDEX][0] = segment->ends[WIRE_SEG_END_INDEX][0];
+            split->ends[WIRE_SEG_END_INDEX][1] = segment->ends[WIRE_SEG_END_INDEX][1];
+            segment->ends[WIRE_SEG_END_INDEX][0] = position[0];
+            segment->ends[WIRE_SEG_END_INDEX][1] = position[1];
 
             split->segments[WIRE_SEG_END_INDEX] = segment->segments[WIRE_SEG_END_INDEX];
             
@@ -572,8 +612,8 @@ void w_RemoveJunction(struct wire_junc_t *junction)
             uint32_t second_link_index = second_segment->junctions[WIRE_SEG_END_INDEX].junction == junction;
             w_UnlinkSegmentLinkIndex(second_segment, second_link_index);
 
-            uint32_t coord0 = first_segment->pos->ends[WIRE_SEG_START_INDEX][1] == first_segment->pos->ends[WIRE_SEG_END_INDEX][1];
-            uint32_t coord1 = second_segment->pos->ends[WIRE_SEG_START_INDEX][1] == second_segment->pos->ends[WIRE_SEG_END_INDEX][1];
+            uint32_t coord0 = first_segment->ends[WIRE_SEG_START_INDEX][1] == first_segment->ends[WIRE_SEG_END_INDEX][1];
+            uint32_t coord1 = second_segment->ends[WIRE_SEG_START_INDEX][1] == second_segment->ends[WIRE_SEG_END_INDEX][1];
 
             if(coord0 == coord1)
             {
@@ -600,13 +640,14 @@ void w_RemoveJunction(struct wire_junc_t *junction)
                 second_segment->segments[second_segment->segments[WIRE_SEG_END_INDEX] == NULL] = first_segment;
             }
         }
-        else if(junction->pin.device != DEV_INVALID_DEVICE)
-        {
-            w_DisconnectPin(junction);
-        }
-
-        w_FreeWireJunction(junction);
     }
+
+    if(junction->pin.device != DEV_INVALID_DEVICE)
+    {
+        w_DisconnectPin(junction);
+    }
+
+    w_FreeWireJunction(junction);
 }
 
 struct wire_t *w_MergeWires(struct wire_t *wire_a, struct wire_t *wire_b)
@@ -708,50 +749,50 @@ struct wire_t *w_MergeWires(struct wire_t *wire_a, struct wire_t *wire_b)
         wire_b_segments->wire_prev = wire_a->last_segment;
         wire_a->last_segment = wire_b->last_segment;
 
-        struct wire_seg_pos_block_t *wire_a_last_seg_pos_block = wire_a->last_segment_pos;
-        struct wire_seg_pos_block_t *wire_b_last_seg_pos_block = wire_b->first_segment_pos;
+        // struct wire_seg_pos_block_t *wire_a_last_seg_pos_block = wire_a->last_segment_pos;
+        // struct wire_seg_pos_block_t *wire_b_last_seg_pos_block = wire_b->first_segment_pos;
 
-        uint32_t wire_a_block_offset = wire_a->segment_pos_count % WIRE_SEGMENT_POS_BLOCK_SIZE;
-        uint32_t wire_b_block_offset = (wire_b->segment_pos_count - 1) % WIRE_SEGMENT_POS_BLOCK_SIZE;
-        uint32_t move_size = WIRE_SEGMENT_POS_BLOCK_SIZE - wire_a_block_offset;
-        if(move_size >= wire_b_block_offset)
-        {
-            move_size = wire_b_block_offset + 1;
-        }
+        // uint32_t wire_a_block_offset = wire_a->segment_pos_count % WIRE_SEGMENT_POS_BLOCK_SIZE;
+        // uint32_t wire_b_block_offset = (wire_b->segment_pos_count - 1) % WIRE_SEGMENT_POS_BLOCK_SIZE;
+        // uint32_t move_size = WIRE_SEGMENT_POS_BLOCK_SIZE - wire_a_block_offset;
+        // if(move_size >= wire_b_block_offset)
+        // {
+        //     move_size = wire_b_block_offset + 1;
+        // }
 
-        while(move_size)
-        {
-            wire_a_last_seg_pos_block->segments[wire_a_block_offset] = wire_b_last_seg_pos_block->segments[wire_b_block_offset];
-            wire_a_last_seg_pos_block->segments[wire_a_block_offset].segment->pos = wire_a_last_seg_pos_block->segments + wire_a_block_offset;
-            wire_a_last_seg_pos_block->segments[wire_a_block_offset].segment->pos_block = wire_a_last_seg_pos_block;
-            wire_a_block_offset++;
-            wire_b_block_offset--;
-            move_size--;
-        }
+        // while(move_size)
+        // {
+        //     wire_a_last_seg_pos_block->segments[wire_a_block_offset] = wire_b_last_seg_pos_block->segments[wire_b_block_offset];
+        //     wire_a_last_seg_pos_block->segments[wire_a_block_offset].segment->pos = wire_a_last_seg_pos_block->segments + wire_a_block_offset;
+        //     wire_a_last_seg_pos_block->segments[wire_a_block_offset].segment->pos_block = wire_a_last_seg_pos_block;
+        //     wire_a_block_offset++;
+        //     wire_b_block_offset--;
+        //     move_size--;
+        // }
 
-        if(wire_b_block_offset == 0xffffffff)
-        {
-            /* there were less elements in wire_b_last_seg_pos_block, so get rid of it */
-            if(wire_b_last_seg_pos_block == wire_b->first_segment_pos)
-            {
-                wire_b->first_segment_pos = NULL;
-                wire_b->last_segment_pos = NULL;
-            }
-            else
-            {
-                wire_b->last_segment_pos = wire_b->last_segment_pos->prev;
-                wire_b->last_segment_pos->next = NULL;
-            }
+        // if(wire_b_block_offset == 0xffffffff)
+        // {
+        //     /* there were less elements in wire_b_last_seg_pos_block, so get rid of it */
+        //     if(wire_b_last_seg_pos_block == wire_b->first_segment_pos)
+        //     {
+        //         wire_b->first_segment_pos = NULL;
+        //         wire_b->last_segment_pos = NULL;
+        //     }
+        //     else
+        //     {
+        //         wire_b->last_segment_pos = wire_b->last_segment_pos->prev;
+        //         wire_b->last_segment_pos->next = NULL;
+        //     }
 
-            pool_RemoveElement(&w_wire_seg_pos, wire_b_last_seg_pos_block->element_index);
-        }
+        //     pool_RemoveElement(&w_wire_seg_pos, wire_b_last_seg_pos_block->element_index);
+        // }
 
-        if(wire_b->first_segment_pos != NULL)
-        {
-            wire_a->last_segment_pos->next = wire_b->first_segment_pos;
-            wire_a->last_segment_pos = wire_b->last_segment_pos;
-        }
-        wire_a->segment_pos_count += wire_b->segment_pos_count;
+        // if(wire_b->first_segment_pos != NULL)
+        // {
+        //     wire_a->last_segment_pos->next = wire_b->first_segment_pos;
+        //     wire_a->last_segment_pos = wire_b->last_segment_pos;
+        // }
+        wire_a->segment_count += wire_b->segment_count;
 
 
         /* move junction stuff over */
@@ -762,7 +803,7 @@ struct wire_t *w_MergeWires(struct wire_t *wire_a, struct wire_t *wire_b)
             struct wire_seg_t *first_segment = junction->first_segment;
             uint32_t tip_index = first_segment->junctions[WIRE_SEG_END_INDEX].junction == junction;
             junction->base.wire = wire_a;
-            junction->pos = first_segment->pos->ends[tip_index];
+            // junction->pos = first_segment->pos->ends[tip_index];
 
             if(junction->pin.device != DEV_INVALID_DEVICE)
             {
@@ -831,46 +872,97 @@ struct wire_t *w_MergeWires(struct wire_t *wire_a, struct wire_t *wire_b)
     return wire_a;
 }
 
-void w_MoveJunctionToWire(struct wire_t *wire, struct wire_junc_t *junction)
+// void w_MoveJunctionToWire(struct wire_t *wire, struct wire_junc_t *junction)
+// {
+//     w_UnlinkWireJunction(junction);
+//     w_LinkWireJunction(wire, junction);
+
+//     struct wire_seg_t *segment = junction->first_segment;
+//     while(segment)
+//     {
+
+//     }
+// }
+
+void w_MoveSegmentsToWire(struct wire_t *wire, struct wire_seg_t *segment)
 {
-    w_UnlinkWireJunction(junction);
-    w_LinkWireJunction(wire, junction);
-
-    struct wire_seg_t *segment = junction->first_segment;
-    while(segment)
+    if(segment->base.wire == wire)
     {
+        return;
+    }
 
+    struct wire_seg_t *prev_segment;
+    struct wire_t *prev_wire = segment->base.wire;
+    uint32_t tip_index = segment->segments[WIRE_SEG_START_INDEX] == NULL;
+    while(segment != NULL)
+    {
+        w_UnlinkSegmentFromWire(segment);
+        w_LinkSegmentToWire(wire, segment);
+
+        if(segment->junctions[tip_index].junction != NULL)
+        {
+            struct wire_junc_t *junction = segment->junctions[tip_index].junction;
+            w_UnlinkJunctionFromWire(junction);
+            w_LinkJunctionToWire(wire, junction);
+
+            struct wire_seg_t *junction_segment = junction->first_segment;
+            while(junction_segment)
+            {
+                w_MoveSegmentsToWire(wire, junction_segment);
+                junction_segment = junction_segment->junctions[junction_segment->junctions[WIRE_SEG_END_INDEX].junction == junction].next;
+            }
+        }
+
+        prev_segment = segment;
+        segment = segment->segments[tip_index];
+        if(segment != NULL)
+        {
+            tip_index = segment->segments[WIRE_SEG_START_INDEX] == prev_segment;
+        }
     }
 }
 
-void w_MoveSegmentsToWire(struct wire_t *wire, struct wire_seg_t *segment, uint32_t tip_index)
-{
-    // while(segment != NULL)
-}
-
-struct wire_t *w_SplitWire(struct wire_t *wire, struct wire_seg_t *segment)
+struct wire_t *w_SplitWire(struct wire_seg_t *segment)
 {
     struct wire_t *new_wire = NULL;
+    struct wire_t *wire = segment->base.wire;
+
+    struct wire_seg_t *next_segment = segment->segments[WIRE_SEG_END_INDEX];
+    segment->segments[WIRE_SEG_END_INDEX] = NULL;
+    if(next_segment)
+    {
+        next_segment->segments[next_segment->segments[WIRE_SEG_END_INDEX] == segment] = NULL;
+    }
+
+    struct wire_seg_t *prev_segment = segment->segments[WIRE_SEG_START_INDEX];
+    segment->segments[WIRE_SEG_START_INDEX] = NULL;
+    if(prev_segment)
+    {
+        prev_segment->segments[prev_segment->segments[WIRE_SEG_END_INDEX] == segment] = NULL;
+    }
 
     if(!w_TryReachSegment(segment))
     {
-        new_wire = w_AllocWire();
-
-        if(segment->junctions[WIRE_SEG_START_INDEX].junction != NULL)
+        if(prev_segment != NULL && next_segment != NULL)
         {
-            struct wire_junc_t *junction = segment->junctions[WIRE_SEG_START_INDEX].junction;
-            w_UnlinkSegmentLinkIndex(segment, WIRE_SEG_START_INDEX);
-            w_MoveJunctionToWire(new_wire, junction);
+            /* create a new wire only if this segment is connected to other segments on both ends  */
+            new_wire = w_AllocWire();
+            w_MoveSegmentsToWire(new_wire, next_segment);
         }
-        else if(segment->segments[WIRE_SEG_START_INDEX] != NULL)
+        else
         {
-            
-        }
-        
-        // if(segment->segments[WIRE_SEG_START_INDEX] == NULL && )
-        // {
+            if(segment->junctions[WIRE_SEG_START_INDEX].junction != NULL)
+            {
+                struct wire_junc_t *junction = segment->junctions[WIRE_SEG_START_INDEX].junction;
+                w_RemoveJunction(junction);   
+            }
 
-        // }
+            if(segment->junctions[WIRE_SEG_END_INDEX].junction != NULL)
+            {
+                struct wire_junc_t *junction = segment->junctions[WIRE_SEG_END_INDEX].junction;
+                w_RemoveJunction(junction);   
+            }
+        }
     }
     else
     {
@@ -880,21 +972,21 @@ struct wire_t *w_SplitWire(struct wire_t *wire, struct wire_seg_t *segment)
         {
             w_UnlinkSegmentLinkIndex(segment, WIRE_SEG_START_INDEX);
         }
-        else if(segment->segments[WIRE_SEG_START_INDEX] != NULL)
-        {
-            struct wire_seg_t *prev_segment = segment->segments[WIRE_SEG_START_INDEX];
-            prev_segment->segments[prev_segment->segments[WIRE_SEG_START_INDEX] == segment] = NULL;
-        }
+        // else if(segment->segments[WIRE_SEG_START_INDEX] != NULL)
+        // {
+        //     struct wire_seg_t *prev_segment = segment->segments[WIRE_SEG_START_INDEX];
+        //     prev_segment->segments[prev_segment->segments[WIRE_SEG_END_INDEX] == segment] = NULL;
+        // }
 
         if(segment->junctions[WIRE_SEG_END_INDEX].junction != NULL)
         {
             w_UnlinkSegmentLinkIndex(segment, WIRE_SEG_END_INDEX);
         }
-        else if(segment->segments[WIRE_SEG_END_INDEX] != NULL)
-        {
-            struct wire_seg_t *prev_segment = segment->segments[WIRE_SEG_END_INDEX];
-            prev_segment->segments[prev_segment->segments[WIRE_SEG_START_INDEX] == segment] = NULL;
-        }
+        // else if(segment->segments[WIRE_SEG_END_INDEX] != NULL)
+        // {
+        //     struct wire_seg_t *next_segment = segment->segments[WIRE_SEG_END_INDEX];
+        //     next_segment->segments[next_segment->segments[WIRE_SEG_END_INDEX] == segment] = NULL;
+        // }
     }
 
     return new_wire;
@@ -1040,34 +1132,7 @@ void w_DisconnectPin(struct wire_junc_t *junction)
         struct dev_t *device = dev_GetDevice(junction->pin.device);
         struct dev_pin_t *device_pin = dev_GetDevicePin(device, junction->pin.pin);
         struct dev_pin_desc_t *pin_desc = dev_device_descs[device->type].pins + junction->pin.pin;
-        // struct pool_t *wire_pin_block_list = &w_wire_pin_blocks[pin_desc->type];
-        // struct wire_junc_pins_t *wire_pins = &wire->wire_pins[pin_desc->type];
 
-        // struct wire_junc_pin_block_t *pin_block = junction->pin_block;
-        // struct wire_junc_pin_block_t *last_block = wire_pins->last_block;
-        // uint32_t pin_index = pin - pin_block->pins;
-        // uint32_t last_pin_index = wire_pins->pin_count % WIRE_JUNC_PIN_BLOCK_PIN_COUNT;
-
-        // if(pin_block != last_block)
-        // {
-        //     if((wire_pins->pin_count % WIRE_JUNC_PIN_BLOCK_PIN_COUNT) == WIRE_JUNC_PIN_BLOCK_PIN_COUNT - 1)
-        //     {
-        //         /* there's free space in the previous block of the last block, so get rid of it */
-        //         wire_pins->last_block = last_block->prev;
-        //         wire_pins->last_block->next = NULL;
-        //         pool_RemoveElement(wire_pin_block_list, last_block->element_index);
-        //         last_block = wire_pins->last_block;
-        //     }
-        // }
-
-        // pin_block->pins[pin_index] = last_block->pins[last_pin_index];
-        // wire_pins->pin_count--;
-
-        // junction->pin = NULL;
-        // junction->pin_block = NULL;
-        
-        // pin->junction->pin = pin;
-        // pin->junction->pin_block = pin_block;
         device_pin->wire = WIRE_INVALID_WIRE;
         junction->pin.device = DEV_INVALID_DEVICE;
         junction->pin.pin = DEV_INVALID_PIN;
@@ -1077,56 +1142,56 @@ void w_DisconnectPin(struct wire_junc_t *junction)
     }
 }
 
-struct wire_seg_pos_t *w_AllocWireSegPos(struct wire_t *wire)
-{
-    if(wire->last_segment_pos == NULL)
-    {
-        wire->first_segment_pos = pool_AddElement(&w_wire_seg_pos, NULL);
-        wire->last_segment_pos = wire->first_segment_pos;
-        wire->segment_pos_count = 0;
-    }
+// struct wire_seg_pos_t *w_AllocWireSegPos(struct wire_t *wire)
+// {
+//     if(wire->last_segment_pos == NULL)
+//     {
+//         wire->first_segment_pos = pool_AddElement(&w_wire_seg_pos, NULL);
+//         wire->last_segment_pos = wire->first_segment_pos;
+//         wire->segment_pos_count = 0;
+//     }
     
-    struct wire_seg_pos_t *segment = wire->last_segment_pos->segments + wire->segment_pos_count % WIRE_SEGMENT_POS_BLOCK_SIZE;
-    wire->segment_pos_count++;
+//     struct wire_seg_pos_t *segment = wire->last_segment_pos->segments + wire->segment_pos_count % WIRE_SEGMENT_POS_BLOCK_SIZE;
+//     wire->segment_pos_count++;
 
-    if(wire->segment_pos_count % WIRE_SEGMENT_POS_BLOCK_SIZE == 0)
-    {
-        struct wire_seg_pos_block_t *new_block = pool_AddElement(&w_wire_seg_pos, NULL);
-        new_block->prev = wire->last_segment_pos;
-        wire->last_segment_pos->next = new_block;
-        wire->last_segment_pos = new_block;
-    }
+//     if(wire->segment_pos_count % WIRE_SEGMENT_POS_BLOCK_SIZE == 0)
+//     {
+//         struct wire_seg_pos_block_t *new_block = pool_AddElement(&w_wire_seg_pos, NULL);
+//         new_block->prev = wire->last_segment_pos;
+//         wire->last_segment_pos->next = new_block;
+//         wire->last_segment_pos = new_block;
+//     }
 
-    return segment;
-}
+//     return segment;
+// }
 
-void w_FreeWireSegPos(struct wire_t *wire, struct wire_seg_pos_t *seg_pos)
-{
+// void w_FreeWireSegPos(struct wire_t *wire, struct wire_seg_pos_t *seg_pos)
+// {
 
-}
+// }
 
-struct wire_junc_pos_t *w_AllocWireJuncPos(struct wire_t *wire)
-{
-    // if(wire->last_junction_pos == NULL)
-    // {
-    //     wire->first_junction_pos = pool_AddElement(&w_wire_seg_pos, NULL);
-    //     wire->last_junction_pos = wire->first_junction_pos;
-    //     wire->junction_pos_count = 0;
-    // }
+// struct wire_junc_pos_t *w_AllocWireJuncPos(struct wire_t *wire)
+// {
+//     // if(wire->last_junction_pos == NULL)
+//     // {
+//     //     wire->first_junction_pos = pool_AddElement(&w_wire_seg_pos, NULL);
+//     //     wire->last_junction_pos = wire->first_junction_pos;
+//     //     wire->junction_pos_count = 0;
+//     // }
     
-    // struct wire_junc_pos_t *junction = wire->last_junction_pos->junctions + wire->junction_pos_count % WIRE_SEGMENT_POS_BLOCK_POS_COUNT;
-    // wire->segment_pos_count++;
+//     // struct wire_junc_pos_t *junction = wire->last_junction_pos->junctions + wire->junction_pos_count % WIRE_SEGMENT_POS_BLOCK_POS_COUNT;
+//     // wire->segment_pos_count++;
 
-    // if(wire->junction_pos_count % WIRE_SEGMENT_POS_BLOCK_POS_COUNT == 0)
-    // {
-    //     struct wire_junc_pos_block_t *new_block = pool_AddElement(&w_wire_junc_pos, NULL);
-    //     new_block->prev = wire->last_junction_pos;
-    //     wire->last_junction_pos->next = new_block;
-    //     wire->last_junction_pos = new_block;
-    // }
+//     // if(wire->junction_pos_count % WIRE_SEGMENT_POS_BLOCK_POS_COUNT == 0)
+//     // {
+//     //     struct wire_junc_pos_block_t *new_block = pool_AddElement(&w_wire_junc_pos, NULL);
+//     //     new_block->prev = wire->last_junction_pos;
+//     //     wire->last_junction_pos->next = new_block;
+//     //     wire->last_junction_pos = new_block;
+//     // }
 
-    // return junction;
-}
+//     // return junction;
+// }
 
 // struct wire_seg_t *w_AllocWireSegment(struct wire_t *wire, uint32_t type)
 // {
@@ -1159,59 +1224,59 @@ struct wire_junc_pos_t *w_AllocWireJuncPos(struct wire_t *wire)
 //     // dst_segment->end[1] = src_segment->end[1];
 // }
 
-struct wire_t *w_ConnectPins(struct dev_t *device_a, uint16_t pin_a, struct dev_t *device_b, uint16_t pin_b, struct list_t *wire_segments)
-{
-    // struct dev_pin_t *pin0 = dev_GetDevicePin(device_a, pin_a);
-    // struct dev_pin_t *pin1 = dev_GetDevicePin(device_b, pin_b);
-    // struct wire_t *wire;
+// struct wire_t *w_ConnectPins(struct dev_t *device_a, uint16_t pin_a, struct dev_t *device_b, uint16_t pin_b, struct list_t *wire_segments)
+// {
+//     // struct dev_pin_t *pin0 = dev_GetDevicePin(device_a, pin_a);
+//     // struct dev_pin_t *pin1 = dev_GetDevicePin(device_b, pin_b);
+//     // struct wire_t *wire;
     
-    // if(pin0->wire == WIRE_INVALID_WIRE && pin1->wire == WIRE_INVALID_WIRE)
-    // {
-    //     wire = w_CreateWire();
-    //     w_ConnectWire(wire, device_a, pin_a);
-    //     w_ConnectWire(wire, device_b, pin_b);
-    // }
-    // else if(pin0->wire == WIRE_INVALID_WIRE)
-    // {
-    //     wire = w_GetWire(pin1->wire);
-    //     w_ConnectWire(wire, device_a, pin_a);
-    // }
-    // else if(pin1->wire == WIRE_INVALID_WIRE)
-    // {
-    //     wire = w_GetWire(pin0->wire);
-    //     w_ConnectWire(wire, device_b, pin_b);
-    // }
-    // else
-    // {
-    //     struct wire_t *wire_a = w_GetWire(pin0->wire);
-    //     struct wire_t *wire_b = w_GetWire(pin1->wire);
-    //     wire = w_MergeWires(wire_a, wire_b);
-    // }
+//     // if(pin0->wire == WIRE_INVALID_WIRE && pin1->wire == WIRE_INVALID_WIRE)
+//     // {
+//     //     wire = w_CreateWire();
+//     //     w_ConnectWire(wire, device_a, pin_a);
+//     //     w_ConnectWire(wire, device_b, pin_b);
+//     // }
+//     // else if(pin0->wire == WIRE_INVALID_WIRE)
+//     // {
+//     //     wire = w_GetWire(pin1->wire);
+//     //     w_ConnectWire(wire, device_a, pin_a);
+//     // }
+//     // else if(pin1->wire == WIRE_INVALID_WIRE)
+//     // {
+//     //     wire = w_GetWire(pin0->wire);
+//     //     w_ConnectWire(wire, device_b, pin_b);
+//     // }
+//     // else
+//     // {
+//     //     struct wire_t *wire_a = w_GetWire(pin0->wire);
+//     //     struct wire_t *wire_b = w_GetWire(pin1->wire);
+//     //     wire = w_MergeWires(wire_a, wire_b);
+//     // }
 
-    // for(uint32_t index = 0; index < wire_segments->cursor; index++)
-    // {
-    //     struct wire_seg_t *src_segment = list_GetElement(wire_segments, index);
-    //     struct wire_seg_t *dst_segment = wire->last_segment_pos->segments + wire->segment_pos_count % WIRE_SEGMENT_POS_BLOCK_SEGMENT_COUNT;
-    //     wire->segment_pos_count++;
+//     // for(uint32_t index = 0; index < wire_segments->cursor; index++)
+//     // {
+//     //     struct wire_seg_t *src_segment = list_GetElement(wire_segments, index);
+//     //     struct wire_seg_t *dst_segment = wire->last_segment_pos->segments + wire->segment_pos_count % WIRE_SEGMENT_POS_BLOCK_SEGMENT_COUNT;
+//     //     wire->segment_pos_count++;
 
-    //     if(wire->segment_pos_count % WIRE_SEGMENT_POS_BLOCK_SEGMENT_COUNT == 0)
-    //     {
-    //         struct wire_seg_pos_block_t *new_block = pool_AddElement(&w_wire_seg_pos, NULL);
-    //         new_block->prev = wire->last_segment_pos;
-    //         wire->last_segment_pos->next = new_block;
-    //         wire->last_segment_pos = new_block;
-    //     }
+//     //     if(wire->segment_pos_count % WIRE_SEGMENT_POS_BLOCK_SEGMENT_COUNT == 0)
+//     //     {
+//     //         struct wire_seg_pos_block_t *new_block = pool_AddElement(&w_wire_seg_pos, NULL);
+//     //         new_block->prev = wire->last_segment_pos;
+//     //         wire->last_segment_pos->next = new_block;
+//     //         wire->last_segment_pos = new_block;
+//     //     }
 
-    //     dst_segment->start[0] = src_segment->start[0];
-    //     dst_segment->start[1] = src_segment->start[1];
-    //     dst_segment->end[0] = src_segment->end[0];
-    //     dst_segment->end[1] = src_segment->end[1];
-    // }
+//     //     dst_segment->start[0] = src_segment->start[0];
+//     //     dst_segment->start[1] = src_segment->start[1];
+//     //     dst_segment->end[0] = src_segment->end[0];
+//     //     dst_segment->end[1] = src_segment->end[1];
+//     // }
 
-    // return wire;
-}
+//     // return wire;
+// }
 
-struct wire_t *w_CreateWireConnections(struct list_t *wire_segments)
-{
+// struct wire_t *w_CreateWireConnections(struct list_t *wire_segments)
+// {
 
-}
+// }

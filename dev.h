@@ -41,9 +41,7 @@ struct dev_desc_t
 {
     uint16_t                    width;
     uint16_t                    height;
-    // int32_t                     offset_x;
-    // int32_t                     offset_y;
-    int32_t                     offset[2];
+    int32_t                     tex_offset[2];
     int32_t                     origin[2];
     uint32_t                    pin_count;
     struct dev_pin_desc_t *     pins;
@@ -100,7 +98,7 @@ struct dev_clock_t
 {
     POOL_ELEMENT;
     struct dev_t *  device;
-    uint32_t        frequency;
+    uint64_t        frequency;
 };
 
 struct dev_input_t

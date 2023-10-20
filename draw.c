@@ -208,6 +208,7 @@ extern struct dev_desc_t    dev_device_descs[];
 
 extern struct pool_t        w_wires;
 extern struct pool_t        w_wire_juncs;
+extern struct pool_t        w_wire_segs;
 extern struct list_t        w_wire_seg_pos;
 extern struct list_t        w_wire_junc_pos;
 
@@ -464,7 +465,7 @@ void d_DrawDevices()
                 data->origin_y = desc->origin[1];
                 data->size = (height << 16) | width;
                 data->rot_flip_sel = (device->flip << 16) | device->rotation | ((device->selection_index != INVALID_LIST_INDEX) << 18);
-                data->coord_offset = (desc->offset[1] << 16) | desc->offset[0];
+                data->coord_offset = (desc->tex_offset[1] << 16) | desc->tex_offset[0];
                 buffer_offset++;
             }
         }
@@ -492,7 +493,7 @@ void d_DrawDevices()
         d_device_data->origin_y = desc->origin[1];
         d_device_data->size = (height << 16) | width;
         d_device_data->rot_flip_sel = 0;
-        d_device_data->coord_offset = (desc->offset[1] << 16) | desc->offset[0];
+        d_device_data->coord_offset = (desc->tex_offset[1] << 16) | desc->tex_offset[0];
 
         glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(struct d_device_data_t), d_device_data);
         glDrawElementsInstanced(GL_TRIANGLES, 6, GL_UNSIGNED_INT, (void *)0, 1);
@@ -511,7 +512,7 @@ void d_DrawDevices()
     glLineWidth(2.0f);
     glPointSize(4.0f);
 
-    uint32_t vertex_count = w_wire_seg_pos.cursor * 2;
+    uint32_t vertex_count = (w_wire_segs.cursor - (w_wire_segs.free_indices_top + 1)) * 2;
     update_count = vertex_count / D_WIRE_VERTEX_BUFFER_SIZE;
 
     if(vertex_count % D_WIRE_VERTEX_BUFFER_SIZE)
@@ -532,39 +533,41 @@ void d_DrawDevices()
 
             if(wire != NULL)
             {
-                if(wire->segment_pos_count * 2 + buffer_offset > D_WIRE_VERTEX_BUFFER_SIZE)
+                if(wire->segment_count * 2 + buffer_offset > D_WIRE_VERTEX_BUFFER_SIZE)
                 {
                     break;
                 }
 
-                struct wire_seg_pos_block_t *segment_block = wire->first_segment_pos;
+
+                // struct wire_seg_pos_block_t *segment_block = wire->first_segment_pos;
+                struct wire_seg_t *segment = wire->first_segment;
                 struct sim_wire_data_t *wire_data = list_GetValidElement(&sim_wire_data, wire->sim_data);
                 uint8_t wire_value = m_run_simulation ? wire_data->value : WIRE_VALUE_Z;
-                uint32_t total_segment_count = wire->segment_pos_count;
+                // uint32_t total_segment_count = wire->segment_pos_count;
 
-                while(segment_block != NULL)
+                while(segment != NULL)
                 {
-                    uint32_t segment_count = WIRE_SEGMENT_POS_BLOCK_SIZE;
-                    if(segment_count > total_segment_count)
-                    {
-                        segment_count = total_segment_count;
-                    }
-                    total_segment_count -= segment_count;
+                    // uint32_t segment_count = WIRE_SEGMENT_POS_BLOCK_SIZE;
+                    // if(segment_count > total_segment_count)
+                    // {
+                    //     segment_count = total_segment_count;
+                    // }
+                    // total_segment_count -= segment_count;
 
-                    for(uint32_t segment_index = 0; segment_index < segment_count; segment_index++)
-                    {
-                        struct wire_seg_pos_t *segment = segment_block->segments + segment_index;
-                        d_wire_vertices[buffer_offset].position[0] = segment->ends[WIRE_SEG_START_INDEX][0];
-                        d_wire_vertices[buffer_offset].position[1] = segment->ends[WIRE_SEG_START_INDEX][1];
-                        d_wire_vertices[buffer_offset].value_sel = wire_value | ((segment->segment->selection_index != 0xffffffff) << 16);
-                        buffer_offset++;
+                    // for(uint32_t segment_index = 0; segment_index < segment_count; segment_index++)
+                    // {
+                    // struct wire_seg_pos_t *segment = segment_block->segments + segment_index;
+                    d_wire_vertices[buffer_offset].position[0] = segment->ends[WIRE_SEG_START_INDEX][0];
+                    d_wire_vertices[buffer_offset].position[1] = segment->ends[WIRE_SEG_START_INDEX][1];
+                    d_wire_vertices[buffer_offset].value_sel = wire_value | ((segment->selection_index != 0xffffffff) << 16);
+                    buffer_offset++;
 
-                        d_wire_vertices[buffer_offset].position[0] = segment->ends[WIRE_SEG_END_INDEX][0];
-                        d_wire_vertices[buffer_offset].position[1] = segment->ends[WIRE_SEG_END_INDEX][1];
-                        d_wire_vertices[buffer_offset].value_sel = wire_value | ((segment->segment->selection_index != 0xffffffff) << 16);
-                        buffer_offset++;
-                    }
-                    segment_block = segment_block->next;
+                    d_wire_vertices[buffer_offset].position[0] = segment->ends[WIRE_SEG_END_INDEX][0];
+                    d_wire_vertices[buffer_offset].position[1] = segment->ends[WIRE_SEG_END_INDEX][1];
+                    d_wire_vertices[buffer_offset].value_sel = wire_value | ((segment->selection_index != 0xffffffff) << 16);
+                    buffer_offset++;
+                    // }
+                    segment = segment->wire_next;
                 }
             }
         }

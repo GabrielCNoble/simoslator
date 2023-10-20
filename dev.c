@@ -97,7 +97,7 @@ void dev_PowerStep(struct sim_dev_data_t *device)
 {
     struct dev_pin_t *pin = list_GetElement(&sim_dev_pins, device->first_pin);
     pin->value = WIRE_VALUE_1S;
-    struct sim_wire_data_t *wire = list_GetElement(&sim_wire_data, pin->wire);
+    struct sim_wire_data_t *wire = sim_GetWireSimData(pin->wire, DEV_PIN_TYPE_OUT);
     sim_QueueWire(wire);
 }
 
@@ -105,7 +105,7 @@ void dev_GroundStep(struct sim_dev_data_t *device)
 {
     struct dev_pin_t *pin = list_GetElement(&sim_dev_pins, device->first_pin);
     pin->value = WIRE_VALUE_0S;
-    struct sim_wire_data_t *wire = list_GetElement(&sim_wire_data, pin->wire);
+    struct sim_wire_data_t *wire = sim_GetWireSimData(pin->wire, DEV_PIN_TYPE_OUT);
     sim_QueueWire(wire);
 }
 
@@ -139,7 +139,7 @@ void dev_InputStep(struct sim_dev_data_t *device)
     // sim_QueueWire(wire);
 
     struct dev_pin_t *pin = list_GetElement(&sim_dev_pins, device->first_pin);
-    struct sim_wire_data_t *wire = list_GetElement(&sim_wire_data, pin->wire);
+    struct sim_wire_data_t *wire = sim_GetWireSimData(pin->wire, DEV_PIN_TYPE_OUT);
     sim_QueueWire(wire);
 }
 
@@ -148,7 +148,7 @@ void (*dev_DeviceFuncs[DEV_DEVICE_TYPE_LAST])(struct sim_dev_data_t *device) = {
     [DEV_DEVICE_TYPE_NMOS]  = dev_NMosStep,
     [DEV_DEVICE_TYPE_POW]   = dev_PowerStep,
     [DEV_DEVICE_TYPE_GND]   = dev_GroundStep,
-    [DEV_DEVICE_TYPE_CLOCK] = dev_ClockStep,
+    [DEV_DEVICE_TYPE_CLOCK] = dev_InputStep,
     [DEV_DEVICE_TYPE_INPUT] = dev_InputStep
 };
 
@@ -156,7 +156,7 @@ struct dev_desc_t dev_device_descs[DEV_DEVICE_TYPE_LAST] = {
     [DEV_DEVICE_TYPE_PMOS] = {
         .width = 40,
         .height = 80,
-        .offset = {50, 0},
+        .tex_offset = {50, 0},
         .origin = {2, 0},
         .pin_count = 3,
         .pins = (struct dev_pin_desc_t []) {
@@ -169,7 +169,7 @@ struct dev_desc_t dev_device_descs[DEV_DEVICE_TYPE_LAST] = {
     [DEV_DEVICE_TYPE_NMOS] = {
         .width = 40,
         .height = 80,
-        .offset = {0, 0},
+        .tex_offset = {0, 0},
         .origin = {2, 0},
         .pin_count = 3,
         .pins = (struct dev_pin_desc_t []) {
@@ -183,7 +183,7 @@ struct dev_desc_t dev_device_descs[DEV_DEVICE_TYPE_LAST] = {
         .pin_count = 1,
         .width = 20,
         .height = 29,
-        .offset = {41, 92}, 
+        .tex_offset = {41, 92}, 
         .origin = {0, 15},
         .pins = (struct dev_pin_desc_t []) {
             {.type = DEV_PIN_TYPE_OUT, .offset = {0, 0}},
@@ -194,7 +194,7 @@ struct dev_desc_t dev_device_descs[DEV_DEVICE_TYPE_LAST] = {
         .pin_count = 1,
         .width = 22,
         .height = 32,
-        .offset = {10, 88}, 
+        .tex_offset = {10, 88}, 
         .origin = {0, -16},
         .pins = (struct dev_pin_desc_t []) {
             {.type = DEV_PIN_TYPE_OUT, .offset = {0, 0}},
@@ -203,11 +203,12 @@ struct dev_desc_t dev_device_descs[DEV_DEVICE_TYPE_LAST] = {
 
     [DEV_DEVICE_TYPE_CLOCK] = {
         .pin_count = 1,
-        .width = 52,
-        .height = 34,
-        .offset = {0, 0}, 
+        .width = 70,
+        .height = 57,
+        .tex_offset = {104, 72}, 
+        .origin = {15, 0},
         .pins = (struct dev_pin_desc_t []) {
-            {.type = DEV_PIN_TYPE_OUT, .offset = {54, -2}},
+            {.type = DEV_PIN_TYPE_OUT, .offset = {20, 0}},
         },
     },
 
@@ -215,7 +216,7 @@ struct dev_desc_t dev_device_descs[DEV_DEVICE_TYPE_LAST] = {
         .pin_count = 1,
         .width = 38,
         .height = 22,
-        .offset = {104, 30}, 
+        .tex_offset = {104, 30}, 
         .origin = {18, 0},
         .pins = (struct dev_pin_desc_t []) {
             {.type = DEV_PIN_TYPE_OUT, .offset = {0, 0}},
@@ -252,18 +253,18 @@ void dev_Init()
     glGenerateMipmap(GL_TEXTURE_2D);
     free(pixels);
 
-    pixels = stbi_load("res/devices_small.png", &dev_devices_texture_small_width, &dev_devices_texture_small_height, &channels, STBI_rgb_alpha);
-    glGenTextures(1, &dev_devices_texture_small);
-    glBindTexture(GL_TEXTURE_2D, dev_devices_texture_small);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR_MIPMAP_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_BASE_LEVEL, 0);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_LEVEL, 4);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, dev_devices_texture_small_width, dev_devices_texture_small_height, 0, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
-    glGenerateMipmap(GL_TEXTURE_2D);
-    free(pixels);
+    // pixels = stbi_load("res/devices_small.png", &dev_devices_texture_small_width, &dev_devices_texture_small_height, &channels, STBI_rgb_alpha);
+    // glGenTextures(1, &dev_devices_texture_small);
+    // glBindTexture(GL_TEXTURE_2D, dev_devices_texture_small);
+    // glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+    // glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+    // glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_BASE_LEVEL, 0);
+    // glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_LEVEL, 4);
+    // glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
+    // glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
+    // glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, dev_devices_texture_small_width, dev_devices_texture_small_height, 0, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
+    // glGenerateMipmap(GL_TEXTURE_2D);
+    // free(pixels);
     // }
 }
 

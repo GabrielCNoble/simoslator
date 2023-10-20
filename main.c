@@ -43,13 +43,14 @@ uint32_t                        m_wire_func_stage;
 uint32_t                        m_selected_device_type;
 // struct dev_t *                  m_selected_device;
 int32_t                         m_selections_center[2] = {};
+struct m_picked_object_t        m_picked_objects[2] = {};
 struct list_t                   m_selections;
 struct list_t                   m_objects_in_box;
 struct list_t                   m_wire_seg_pos;
 struct list_t                   m_wire_segs;
 // struct wire_seg_pos_t *         m_prev_wire_segment;
 struct wire_seg_pos_t *         m_cur_wire_segment;
-struct list_t                   m_objects[M_OBJECT_TYPE_LAST];
+struct pool_t                   m_objects[M_OBJECT_TYPE_LAST];
 
 extern float                    in_mouse_x;
 extern float                    in_mouse_y;
@@ -73,8 +74,8 @@ extern float                    d_model_view_projection_matrix[];
 
 struct m_object_t *m_CreateObject(uint32_t type, void *base_object)
 {
-    uint64_t index = list_AddElement(&m_objects[type], NULL);
-    struct m_object_t *object = list_GetElement(&m_objects[type], index);
+    // uint64_t index = list_AddElement(&m_objects[type], NULL);
+    struct m_object_t *object = pool_AddElement(&m_objects[type], NULL);
     object->object = base_object;
     object->type = type;
     object->selection_index = INVALID_LIST_INDEX;
@@ -96,9 +97,13 @@ void m_DestroyObject(struct m_object_t *object)
         case M_OBJECT_TYPE_SEGMENT:
         {
             struct wire_seg_t *segment = object->object;
+            w_SplitWire(segment);
+            w_FreeWireSegment(segment);
         }
         break;
     }
+
+    pool_RemoveElement(&m_objects[object->type], object->element_index);
 }
 
 void m_UpdateObject(struct m_object_t *object)
@@ -169,20 +174,20 @@ void m_UpdateObject(struct m_object_t *object)
 
             for(uint32_t index = 0; index < 2; index++)
             {
-                if(segment->pos->ends[WIRE_SEG_END_INDEX][index] > segment->pos->ends[WIRE_SEG_START_INDEX][index])
+                if(segment->ends[WIRE_SEG_END_INDEX][index] > segment->ends[WIRE_SEG_START_INDEX][index])
                 {
-                    object->size[index] = segment->pos->ends[WIRE_SEG_END_INDEX][index] - segment->pos->ends[WIRE_SEG_START_INDEX][index]; 
+                    object->size[index] = segment->ends[WIRE_SEG_END_INDEX][index] - segment->ends[WIRE_SEG_START_INDEX][index]; 
                 }
                 else
                 {
-                    object->size[index] = segment->pos->ends[WIRE_SEG_START_INDEX][index] - segment->pos->ends[WIRE_SEG_END_INDEX][index]; 
+                    object->size[index] = segment->ends[WIRE_SEG_START_INDEX][index] - segment->ends[WIRE_SEG_END_INDEX][index]; 
                 }
 
                 object->size[index] = object->size[index] / 2 + M_WIRE_PIXEL_WIDTH;
             }
 
-            object->position[0] = (segment->pos->ends[WIRE_SEG_START_INDEX][0] + segment->pos->ends[WIRE_SEG_END_INDEX][0]) / 2;
-            object->position[1] = (segment->pos->ends[WIRE_SEG_START_INDEX][1] + segment->pos->ends[WIRE_SEG_END_INDEX][1]) / 2;
+            object->position[0] = (segment->ends[WIRE_SEG_START_INDEX][0] + segment->ends[WIRE_SEG_END_INDEX][0]) / 2;
+            object->position[1] = (segment->ends[WIRE_SEG_START_INDEX][1] + segment->ends[WIRE_SEG_END_INDEX][1]) / 2;
             segment->selection_index = object->selection_index;
         }
         break;
@@ -264,10 +269,10 @@ void m_TranslateSelections(int32_t dx, int32_t dy)
             case M_OBJECT_TYPE_SEGMENT:
             {
                 struct wire_seg_t *segment = object->object;
-                segment->pos->ends[WIRE_SEG_START_INDEX][0] += dx;
-                segment->pos->ends[WIRE_SEG_START_INDEX][1] += dy;
-                segment->pos->ends[WIRE_SEG_END_INDEX][0] += dx;
-                segment->pos->ends[WIRE_SEG_END_INDEX][1] += dy;
+                segment->ends[WIRE_SEG_START_INDEX][0] += dx;
+                segment->ends[WIRE_SEG_START_INDEX][1] += dy;
+                segment->ends[WIRE_SEG_END_INDEX][0] += dx;
+                segment->ends[WIRE_SEG_END_INDEX][1] += dy;
             }
             break;
         }
@@ -310,17 +315,21 @@ void m_RotateSelections(int32_t ccw_rotation)
 
 void m_GetTypedObjectsInsideBox(uint32_t type, int32_t *box_min, int32_t *box_max)
 {
-    struct list_t *object_list = &m_objects[type];
+    struct pool_t *object_list = &m_objects[type];
     m_objects_in_box.cursor = 0;
 
     for(uint32_t index = 0; index < object_list->cursor; index++)
     {
-        struct m_object_t *object = list_GetElement(object_list, index);
-        if(box_max[0] >= object->position[0] - object->size[0] && box_min[0] <= object->position[0] + object->size[0])
+        struct m_object_t *object = pool_GetValidElement(object_list, index);
+        
+        if(object != NULL)
         {
-            if(box_max[1] >= object->position[1] - object->size[1] && box_min[1] <= object->position[1] + object->size[1])
+            if(box_max[0] >= object->position[0] - object->size[0] && box_min[0] <= object->position[0] + object->size[0])
             {
-                list_AddElement(&m_objects_in_box, &object);
+                if(box_max[1] >= object->position[1] - object->size[1] && box_min[1] <= object->position[1] + object->size[1])
+                {
+                    list_AddElement(&m_objects_in_box, &object);
+                }
             }
         }
     }
@@ -590,10 +599,10 @@ struct wire_t *m_CreateWire(struct m_picked_object_t *first_contact, struct m_pi
     {
         union m_wire_seg_t *segment_pos = list_GetElement(segments, index);
         struct wire_seg_t *segment = w_AllocWireSegment(wire);
-        segment->pos->ends[WIRE_SEG_START_INDEX][0] = segment_pos->seg_pos.ends[WIRE_SEG_START_INDEX][0];
-        segment->pos->ends[WIRE_SEG_START_INDEX][1] = segment_pos->seg_pos.ends[WIRE_SEG_START_INDEX][1];
-        segment->pos->ends[WIRE_SEG_END_INDEX][0] = segment_pos->seg_pos.ends[WIRE_SEG_END_INDEX][0];
-        segment->pos->ends[WIRE_SEG_END_INDEX][1] = segment_pos->seg_pos.ends[WIRE_SEG_END_INDEX][1];
+        segment->ends[WIRE_SEG_START_INDEX][0] = segment_pos->seg_pos.ends[WIRE_SEG_START_INDEX][0];
+        segment->ends[WIRE_SEG_START_INDEX][1] = segment_pos->seg_pos.ends[WIRE_SEG_START_INDEX][1];
+        segment->ends[WIRE_SEG_END_INDEX][0] = segment_pos->seg_pos.ends[WIRE_SEG_END_INDEX][0];
+        segment->ends[WIRE_SEG_END_INDEX][1] = segment_pos->seg_pos.ends[WIRE_SEG_END_INDEX][1];
 
         segment->segments[WIRE_SEG_START_INDEX] = prev_segment;
         if(prev_segment != NULL)
@@ -693,8 +702,8 @@ void m_SerializeCircuit(void **file_buffer, size_t *file_buffer_size)
 
                 for(uint32_t tip_index = WIRE_SEG_START_INDEX; tip_index <= WIRE_SEG_END_INDEX; tip_index++)
                 {
-                    segment_record->ends[tip_index][0] = segment->pos->ends[tip_index][0];
-                    segment_record->ends[tip_index][1] = segment->pos->ends[tip_index][1];    
+                    segment_record->ends[tip_index][0] = segment->ends[tip_index][0];
+                    segment_record->ends[tip_index][1] = segment->ends[tip_index][1];    
                 }
 
                 segment = segment->wire_next;
@@ -767,11 +776,11 @@ void m_SerializeCircuit(void **file_buffer, size_t *file_buffer_size)
     header->junctions -= (uintptr_t)buffer;
     header->seg_juncs -= (uintptr_t)buffer;
 
-    printf("buffer size: %d, written size: %d\n", buffer_size, out - (uintptr_t)buffer);
-    printf("device count: %d - %d\n", device_count, header->device_count);
-    printf("wire count: %d - %d\n", wire_count, header->wire_count);
-    printf("segment count: %d - %d\n", segment_count, header->segment_count);
-    printf("junction count: %d - %d\n", junction_count, header->junction_count);
+    // printf("buffer size: %d, written size: %d\n", buffer_size, out - (uintptr_t)buffer);
+    // printf("device count: %d - %d\n", device_count, header->device_count);
+    // printf("wire count: %d - %d\n", wire_count, header->wire_count);
+    // printf("segment count: %d - %d\n", segment_count, header->segment_count);
+    // printf("junction count: %d - %d\n", junction_count, header->junction_count);
 }
 
 void m_DeserializeCircuit(void *file_buffer, size_t file_buffer_size)
@@ -816,8 +825,8 @@ void m_DeserializeCircuit(void *file_buffer, size_t file_buffer_size)
                 segment_record->deserialized_index = segment->base.element_index;
                 for(uint32_t tip_index = WIRE_SEG_START_INDEX; tip_index <= WIRE_SEG_END_INDEX; tip_index++)
                 {
-                    segment->pos->ends[tip_index][0] = segment_record->ends[tip_index][0];
-                    segment->pos->ends[tip_index][1] = segment_record->ends[tip_index][1];
+                    segment->ends[tip_index][0] = segment_record->ends[tip_index][0];
+                    segment->ends[tip_index][1] = segment_record->ends[tip_index][1];
                 }
                 struct m_object_t *object = m_CreateObject(M_OBJECT_TYPE_SEGMENT, segment);
             }
@@ -896,8 +905,252 @@ void m_ClearCircuit()
 {
     dev_ClearDevices();
     w_ClearWires();
-    m_objects[M_OBJECT_TYPE_DEVICE].cursor = 0;
-    m_objects[M_OBJECT_TYPE_SEGMENT].cursor = 0;
+    pool_Reset(&m_objects[M_OBJECT_TYPE_DEVICE]);
+    pool_Reset(&m_objects[M_OBJECT_TYPE_SEGMENT]);
+}
+
+uint32_t m_cur_state = M_STATE_EDIT;
+
+void (*m_StateFuncs[M_STATE_LAST])() = {
+    [M_STATE_EDIT] = m_EditState,
+    [M_STATE_EXPLORER] = m_ExplorerState
+};
+
+struct 
+{
+    uint32_t    mode;
+    char        path[512];
+
+} m_explorer_state = {.mode = M_EXPLORER_MODE_LOAD, .path = ""};
+
+void m_EditState()
+{
+    if(igIsKeyPressed_Bool(ImGuiKey_Delete, 0))
+    {
+        m_DeleteSelections();
+    }
+
+    if(igIsKeyPressed_Bool(ImGuiKey_G, 0))
+    {
+        m_SetEditFunc(M_EDIT_FUNC_SELECT);
+    }
+    else if(igIsKeyPressed_Bool(ImGuiKey_W, 0))
+    {
+        m_SetEditFunc(M_EDIT_FUNC_WIRE);
+    }
+    else if(igIsKeyPressed_Bool(ImGuiKey_T, 0))
+    {
+        if(m_selections.cursor > 0)
+        {
+            struct m_object_t *object = *(struct m_object_t **)list_GetElement(&m_selections, 0);
+            if(object->type == M_OBJECT_TYPE_SEGMENT)
+            {
+                printf("%d\n", w_TryReachSegment(object->object));
+            }
+        }
+    }
+
+    switch(m_cur_edit_func)
+    { 
+        case M_EDIT_FUNC_PLACE:
+            m_place_device_x = m_snapped_mouse_x;
+            m_place_device_y = m_snapped_mouse_y;
+            if(igIsMouseClicked_Bool(ImGuiMouseButton_Left, 0) && ui_IsMouseAvailable() && !m_run_simulation)
+            {
+                if(m_selected_device_type != DEV_DEVICE_TYPE_LAST)
+                {
+                    struct dev_t *device = dev_CreateDevice(m_selected_device_type);
+                    device->position[0] = m_place_device_x;
+                    device->position[1] = m_place_device_y;
+                    m_CreateObject(M_OBJECT_TYPE_DEVICE, device);
+                }
+            }
+        break;
+
+        case M_EDIT_FUNC_SELECT:
+
+            if(ui_IsMouseAvailable())
+            {
+                if(igIsMouseClicked_Bool(ImGuiMouseButton_Left, 0))
+                {
+                    if(!m_run_simulation)
+                    {
+                        uint32_t multiple = igIsKeyDown_Nil(ImGuiKey_LeftShift);
+                        m_GetTypedObjectsInsideBox(M_OBJECT_TYPE_DEVICE, (int32_t []){m_mouse_x, m_mouse_y}, (int32_t []){m_mouse_x, m_mouse_y});
+                        if(m_objects_in_box.cursor != 0)
+                        {
+                            struct m_object_t *object = *(struct m_object_t **)list_GetElement(&m_objects_in_box, 0);
+                            m_SelectObject(object, multiple);
+                        }
+                        else
+                        {
+                            m_GetTypedObjectsInsideBox(M_OBJECT_TYPE_SEGMENT, (int32_t []){m_mouse_x, m_mouse_y}, (int32_t []){m_mouse_x, m_mouse_y});
+                            if(m_objects_in_box.cursor != 0)
+                            {
+                                struct m_object_t *object = *(struct m_object_t **)list_GetElement(&m_objects_in_box, 0);
+                                m_SelectObject(object, multiple);
+                            }
+                        }
+                    }
+                    else
+                    {
+                        struct dev_input_t *input = m_GetInputUnderMouse();
+                        dev_ToggleInput(input);
+                    }
+                }
+                if(!m_run_simulation && igIsMouseDown_Nil(ImGuiMouseButton_Right))
+                {
+                    int32_t dx = m_snapped_mouse_x - m_place_device_x;
+                    int32_t dy = m_snapped_mouse_y - m_place_device_y;
+                    
+                    if(dx != 0)
+                    {
+                        m_place_device_x = m_snapped_mouse_x;
+                    }
+
+                    if(dy != 0)
+                    {
+                        m_place_device_y = m_snapped_mouse_y;
+                    }
+
+                    if(igIsMouseClicked_Bool(ImGuiMouseButton_Right, 0))
+                    {
+                        dx = 0;
+                        dy = 0;
+                    }
+
+                    m_TranslateSelections(dx, dy);
+                }
+            }
+
+            if(igIsKeyPressed_Bool(ImGuiKey_Escape, 0))
+            {
+                m_ClearSelections();
+            }
+        break;
+
+        case M_EDIT_FUNC_WIRE:
+
+            if(m_cur_wire_segment != NULL)
+            {
+                int32_t dx = m_cur_wire_segment->ends[WIRE_SEG_START_INDEX][0] - m_snapped_mouse_x;
+                int32_t dy = m_cur_wire_segment->ends[WIRE_SEG_START_INDEX][1] - m_snapped_mouse_y;
+                if(abs(dx) > abs(dy))
+                {
+                    m_cur_wire_segment->ends[WIRE_SEG_END_INDEX][0] = m_snapped_mouse_x;
+                    m_cur_wire_segment->ends[WIRE_SEG_END_INDEX][1] = m_cur_wire_segment->ends[WIRE_SEG_START_INDEX][1];
+                }
+                else
+                {
+                    m_cur_wire_segment->ends[WIRE_SEG_END_INDEX][0] = m_cur_wire_segment->ends[WIRE_SEG_START_INDEX][0];
+                    m_cur_wire_segment->ends[WIRE_SEG_END_INDEX][1] = m_snapped_mouse_y;
+                }
+            }
+
+            if(igIsMouseClicked_Bool(ImGuiMouseButton_Left, 0) && ui_IsMouseAvailable())
+            {
+                if(m_cur_wire_segment == NULL || m_cur_wire_segment->ends[WIRE_SEG_START_INDEX][0] != m_cur_wire_segment->ends[WIRE_SEG_END_INDEX][0] ||
+                                                    m_cur_wire_segment->ends[WIRE_SEG_START_INDEX][1] != m_cur_wire_segment->ends[WIRE_SEG_END_INDEX][1])
+                {
+                    struct wire_seg_pos_t *prev_segment = m_cur_wire_segment;
+                    uint64_t segment_index = list_AddElement(&m_wire_seg_pos, NULL);
+                    m_cur_wire_segment = list_GetElement(&m_wire_seg_pos, segment_index);
+
+                    if(prev_segment != NULL)
+                    {
+                        m_cur_wire_segment->ends[WIRE_SEG_START_INDEX][0] = prev_segment->ends[WIRE_SEG_END_INDEX][0];
+                        m_cur_wire_segment->ends[WIRE_SEG_START_INDEX][1] = prev_segment->ends[WIRE_SEG_END_INDEX][1];
+                    }
+                    else
+                    {
+                        m_cur_wire_segment->ends[WIRE_SEG_START_INDEX][0] = m_snapped_mouse_x;
+                        m_cur_wire_segment->ends[WIRE_SEG_START_INDEX][1] = m_snapped_mouse_y;
+                    }
+
+                    m_cur_wire_segment->ends[WIRE_SEG_END_INDEX][0] = m_snapped_mouse_x;
+                    m_cur_wire_segment->ends[WIRE_SEG_END_INDEX][1] = m_snapped_mouse_y;
+                }
+
+                m_picked_objects[m_wire_func_stage] = m_GetPinUnderMouse();
+
+                if(m_picked_objects[m_wire_func_stage].object == NULL)
+                {
+                    m_picked_objects[m_wire_func_stage] = m_GetSegmentUnderMouse();
+                }
+
+                if(m_picked_objects[m_wire_func_stage].object != NULL)
+                {
+                    // struct dev_t *device = picked_objects[m_wire_func_stage].object->object;
+                    // printf("clicked on pin %d of device %d\n", picked_objects[m_wire_func_stage].index, device->element_index);
+                    printf("clicked on object %p of type %d\n", m_picked_objects[m_wire_func_stage].object, m_picked_objects[m_wire_func_stage].object->type);
+                    switch(m_picked_objects[m_wire_func_stage].object->type)
+                    {
+                        case M_OBJECT_TYPE_DEVICE:
+                        {
+                            struct dev_t *device = m_picked_objects[m_wire_func_stage].object->object;
+                            dev_GetDeviceLocalPinPosition(device, m_picked_objects[m_wire_func_stage].index, m_cur_wire_segment->ends[WIRE_SEG_START_INDEX]);
+                            m_cur_wire_segment->ends[WIRE_SEG_START_INDEX][0] += device->position[0];
+                            m_cur_wire_segment->ends[WIRE_SEG_START_INDEX][1] += device->position[1];
+                            m_cur_wire_segment->ends[WIRE_SEG_END_INDEX][0] = m_cur_wire_segment->ends[WIRE_SEG_START_INDEX][0];
+                            m_cur_wire_segment->ends[WIRE_SEG_END_INDEX][1] = m_cur_wire_segment->ends[WIRE_SEG_START_INDEX][1];
+                        }
+                        break;
+
+                        case M_OBJECT_TYPE_SEGMENT:
+                        {
+                            struct wire_seg_t *segment = m_picked_objects[m_wire_func_stage].object->object;
+                        }
+                        break;
+                    }
+
+                    m_wire_func_stage++;
+                }
+
+                if(m_wire_func_stage == 2)
+                {
+                    /* get rid of the last segment created */
+                    m_wire_seg_pos.cursor--;
+                    if(m_picked_objects[0].object != m_picked_objects[1].object || m_picked_objects[0].index != m_picked_objects[1].index)
+                    {
+                        struct wire_t *wire = m_CreateWire(&m_picked_objects[0], &m_picked_objects[1], &m_wire_seg_pos);
+                        printf("wire %p (%d) between pins %d and %d of devices %p and %p\n", wire, wire->element_index, m_picked_objects[0].index, 
+                                                                                                                        m_picked_objects[1].index, 
+                                                                                                                        m_picked_objects[0].object, 
+                                                                                                                        m_picked_objects[1].object);
+                    }
+
+                    m_ClearWireSegments();
+                }
+
+            }
+
+            if(igIsKeyPressed_Bool(ImGuiKey_Escape, 0))
+            {
+                m_ClearWireSegments();
+            }
+        break;
+    }
+}
+
+void m_ExplorerState()
+{
+    igSetNextWindowPos((ImVec2){0, 18}, 0, (ImVec2){});
+    igSetNextWindowSize((ImVec2){m_window_width, m_window_height - 18}, 0);
+
+    if(igBegin("##explorer", NULL, ImGuiWindowFlags_NoDecoration))
+    {
+        if(igIsKeyDown_Nil(ImGuiKey_Escape))
+        {
+            m_cur_state = M_STATE_EDIT;
+        }
+
+        if(igButton("Load", (ImVec2){0, 0}))
+        {
+            m_LoadCircuit("./test2.mos");
+            m_cur_state = M_STATE_EDIT;
+        }
+    }
+    igEnd();
 }
 
 int main(int argc, char *argv[])
@@ -1028,9 +1281,8 @@ int main(int argc, char *argv[])
     m_selections = list_Create(sizeof(struct m_object_t *), 512);
     m_objects_in_box = list_Create(sizeof(struct m_object_t *), 512);
     m_wire_seg_pos = list_Create(sizeof(union m_wire_seg_t), 512);
-    m_objects[M_OBJECT_TYPE_DEVICE] = list_Create(sizeof(struct m_object_t), 16384);
-    m_objects[M_OBJECT_TYPE_SEGMENT] = list_Create(sizeof(struct m_object_t), 16384);
-    // m_wire_segs = list_Create(sizeof(struct wire_seg_t), 512);
+    m_objects[M_OBJECT_TYPE_DEVICE] = pool_CreateTyped(struct m_object_t, 16384);
+    m_objects[M_OBJECT_TYPE_SEGMENT] = pool_CreateTyped(struct m_object_t, 16384);
 
     d_Init();
     ui_Init();
@@ -1043,7 +1295,7 @@ int main(int argc, char *argv[])
 
     m_selected_device_type = DEV_DEVICE_TYPE_LAST;
     m_cur_edit_func = M_EDIT_FUNC_SELECT;
-    struct m_picked_object_t picked_objects[2] = {};
+    
     // struct m_selected_pin_t pins[2] = {};
     m_run = 1;
     while(!in_ReadInput() && m_run)
@@ -1070,7 +1322,8 @@ int main(int argc, char *argv[])
 
                 if(igMenuItem_Bool("Load", NULL, 0, 1))
                 {
-                    m_LoadCircuit("./test2.mos");
+                    
+                    m_cur_state = M_STATE_EXPLORER;
                 }
 
                 if(igMenuItem_Bool("Quit", NULL, 0, 1))
@@ -1104,30 +1357,6 @@ int main(int argc, char *argv[])
             m_snapped_mouse_y = M_SNAP_VALUE * ((m_mouse_y / M_SNAP_VALUE) - ((abs(m_mouse_y) % M_SNAP_VALUE) > M_SNAP_VALUE / 2));    
         }
 
-        if(igIsKeyPressed_Bool(ImGuiKey_Delete, 0))
-        {
-            m_DeleteSelections();
-        }
-
-        if(igIsKeyPressed_Bool(ImGuiKey_G, 0))
-        {
-            m_SetEditFunc(M_EDIT_FUNC_SELECT);
-        }
-        else if(igIsKeyPressed_Bool(ImGuiKey_W, 0))
-        {
-            m_SetEditFunc(M_EDIT_FUNC_WIRE);
-        }
-        else if(igIsKeyPressed_Bool(ImGuiKey_T, 0))
-        {
-            if(m_selections.cursor > 0)
-            {
-                struct m_object_t *object = *(struct m_object_t **)list_GetElement(&m_selections, 0);
-                if(object->type == M_OBJECT_TYPE_SEGMENT)
-                {
-                    printf("%d\n", w_TryReachSegment(object->object));
-                }
-            }
-        }
 
         igSetNextWindowPos((ImVec2){0, 18}, 0, (ImVec2){});
         igSetNextWindowSize((ImVec2){m_window_width, 32}, 0);
@@ -1323,20 +1552,15 @@ int main(int argc, char *argv[])
                 ImVec2 second_cursor_pos;
                 ImVec2 button_size;
                 struct dev_desc_t *desc = dev_device_descs + device_type;
-                ImVec2 uv0 = (ImVec2){((float)desc->offset[0]) / (float)dev_devices_texture_width,
-                                      ((float)desc->offset[1]) / (float)dev_devices_texture_height};
+                ImVec2 uv0 = (ImVec2){((float)desc->tex_offset[0]) / (float)dev_devices_texture_width,
+                                      ((float)desc->tex_offset[1]) / (float)dev_devices_texture_height};
                 
-                ImVec2 uv1 = (ImVec2){((float)(desc->offset[0] + desc->width)) / (float)dev_devices_texture_width,
-                                      ((float)(desc->offset[1] + desc->height)) / (float)dev_devices_texture_height};
+                ImVec2 uv1 = (ImVec2){((float)(desc->tex_offset[0] + desc->width)) / (float)dev_devices_texture_width,
+                                      ((float)(desc->tex_offset[1] + desc->height)) / (float)dev_devices_texture_height};
                 igSameLine(0, -1);
                 igPushID_Int(device_type);
                 igGetCursorScreenPos(&first_cursor_pos);
                 igPushStyleColor_Vec4(ImGuiCol_Button, (m_selected_device_type == device_type) ? button_active_color : button_color);
-                // if(igImageButton("##button", (void *)(uintptr_t)dev_devices_texture_small, (ImVec2){24, 24}, uv0, uv1, (ImVec4){1, 1, 1, 1}, (ImVec4){1, 1, 1, 1}))
-                // {
-                //     m_selected_device_type = device_type;
-                //     m_SetEditFunc(M_EDIT_FUNC_PLACE);
-                // }
                 if(igImageButton("##button", (void *)(uintptr_t)dev_devices_texture, (ImVec2){24, 24}, (ImVec2){}, (ImVec2){}, (ImVec4){1, 1, 1, 1}, (ImVec4){1, 1, 1, 0}))
                 {
                     m_selected_device_type = device_type;
@@ -1364,204 +1588,13 @@ int main(int argc, char *argv[])
                 ImGuiWindow *window = igGetCurrentWindow();
                 ImVec2 image_min = first_cursor_pos;
                 ImVec2 image_max = (ImVec2){first_cursor_pos.x + image_size.x, first_cursor_pos.y + image_size.y};
-                ImDrawList_AddImage(window->DrawList, (void *)(uintptr_t)dev_devices_texture_small, image_min, image_max, uv0, uv1, igGetColorU32_Vec4((ImVec4){1, 1, 1, 1}));
-                // igSetCursorPos(first_cursor_pos);
-                // igSameLine(0, -1);
-                // igImage((void *)(uintptr_t)dev_devices_texture_small, image_size, uv0, uv1, (ImVec4){1, 1, 1, 1}, (ImVec4){0, 0, 0, 0});
-                // second_cursor_pos.x += 4;
-                // igSetCursorPos(second_cursor_pos);
-                
-                // if(clicked)
-                // {
-                //     m_selected_device_type = device_type;
-                //     m_SetEditFunc(M_EDIT_FUNC_PLACE);
-                // }
-                // igSameLine(0, -1);
+                ImDrawList_AddImage(window->DrawList, (void *)(uintptr_t)dev_devices_texture, image_min, image_max, uv0, uv1, igGetColorU32_Vec4((ImVec4){1, 1, 1, 1}));
                 
                 igPopStyleColor(1);
                 igPopID();
             }
 
-            switch(m_cur_edit_func)
-            { 
-                case M_EDIT_FUNC_PLACE:
-                    m_place_device_x = m_snapped_mouse_x;
-                    m_place_device_y = m_snapped_mouse_y;
-                    if(igIsMouseClicked_Bool(ImGuiMouseButton_Left, 0) && ui_IsMouseAvailable() && !m_run_simulation)
-                    {
-                        if(m_selected_device_type != DEV_DEVICE_TYPE_LAST)
-                        {
-                            struct dev_t *device = dev_CreateDevice(m_selected_device_type);
-                            device->position[0] = m_place_device_x;
-                            device->position[1] = m_place_device_y;
-                            m_CreateObject(M_OBJECT_TYPE_DEVICE, device);
-                        }
-                    }
-                break;
-  
-                case M_EDIT_FUNC_SELECT:
-
-                    if(ui_IsMouseAvailable())
-                    {
-                        if(igIsMouseClicked_Bool(ImGuiMouseButton_Left, 0))
-                        {
-                            if(!m_run_simulation)
-                            {
-                                uint32_t multiple = igIsKeyDown_Nil(ImGuiKey_LeftShift);
-                                m_GetTypedObjectsInsideBox(M_OBJECT_TYPE_DEVICE, (int32_t []){m_mouse_x, m_mouse_y}, (int32_t []){m_mouse_x, m_mouse_y});
-                                if(m_objects_in_box.cursor != 0)
-                                {
-                                    struct m_object_t *object = *(struct m_object_t **)list_GetElement(&m_objects_in_box, 0);
-                                    m_SelectObject(object, multiple);
-                                }
-                                else
-                                {
-                                    m_GetTypedObjectsInsideBox(M_OBJECT_TYPE_SEGMENT, (int32_t []){m_mouse_x, m_mouse_y}, (int32_t []){m_mouse_x, m_mouse_y});
-                                    if(m_objects_in_box.cursor != 0)
-                                    {
-                                        struct m_object_t *object = *(struct m_object_t **)list_GetElement(&m_objects_in_box, 0);
-                                        m_SelectObject(object, multiple);
-                                    }
-                                }
-                            }
-                            else
-                            {
-                                struct dev_input_t *input = m_GetInputUnderMouse();
-                                dev_ToggleInput(input);
-                            }
-                        }
-                        if(!m_run_simulation && igIsMouseDown_Nil(ImGuiMouseButton_Right))
-                        {
-                            int32_t dx = m_snapped_mouse_x - m_place_device_x;
-                            int32_t dy = m_snapped_mouse_y - m_place_device_y;
-                            
-                            if(dx != 0)
-                            {
-                                m_place_device_x = m_snapped_mouse_x;
-                            }
-
-                            if(dy != 0)
-                            {
-                                m_place_device_y = m_snapped_mouse_y;
-                            }
-
-                            if(igIsMouseClicked_Bool(ImGuiMouseButton_Right, 0))
-                            {
-                                dx = 0;
-                                dy = 0;
-                            }
-
-                            m_TranslateSelections(dx, dy);
-                        }
-                    }
-
-                    if(igIsKeyPressed_Bool(ImGuiKey_Escape, 0))
-                    {
-                        m_ClearSelections();
-                    }
-                break;
-
-                case M_EDIT_FUNC_WIRE:
-
-                    if(m_cur_wire_segment != NULL)
-                    {
-                        int32_t dx = m_cur_wire_segment->ends[WIRE_SEG_START_INDEX][0] - m_snapped_mouse_x;
-                        int32_t dy = m_cur_wire_segment->ends[WIRE_SEG_START_INDEX][1] - m_snapped_mouse_y;
-                        if(abs(dx) > abs(dy))
-                        {
-                            m_cur_wire_segment->ends[WIRE_SEG_END_INDEX][0] = m_snapped_mouse_x;
-                            m_cur_wire_segment->ends[WIRE_SEG_END_INDEX][1] = m_cur_wire_segment->ends[WIRE_SEG_START_INDEX][1];
-                        }
-                        else
-                        {
-                            m_cur_wire_segment->ends[WIRE_SEG_END_INDEX][0] = m_cur_wire_segment->ends[WIRE_SEG_START_INDEX][0];
-                            m_cur_wire_segment->ends[WIRE_SEG_END_INDEX][1] = m_snapped_mouse_y;
-                        }
-                    }
-
-                    if(igIsMouseClicked_Bool(ImGuiMouseButton_Left, 0) && ui_IsMouseAvailable())
-                    {
-                        if(m_cur_wire_segment == NULL || m_cur_wire_segment->ends[WIRE_SEG_START_INDEX][0] != m_cur_wire_segment->ends[WIRE_SEG_END_INDEX][0] ||
-                                                         m_cur_wire_segment->ends[WIRE_SEG_START_INDEX][1] != m_cur_wire_segment->ends[WIRE_SEG_END_INDEX][1])
-                        {
-                            struct wire_seg_pos_t *prev_segment = m_cur_wire_segment;
-                            uint64_t segment_index = list_AddElement(&m_wire_seg_pos, NULL);
-                            m_cur_wire_segment = list_GetElement(&m_wire_seg_pos, segment_index);
-
-                            if(prev_segment != NULL)
-                            {
-                                m_cur_wire_segment->ends[WIRE_SEG_START_INDEX][0] = prev_segment->ends[WIRE_SEG_END_INDEX][0];
-                                m_cur_wire_segment->ends[WIRE_SEG_START_INDEX][1] = prev_segment->ends[WIRE_SEG_END_INDEX][1];
-                            }
-                            else
-                            {
-                                m_cur_wire_segment->ends[WIRE_SEG_START_INDEX][0] = m_snapped_mouse_x;
-                                m_cur_wire_segment->ends[WIRE_SEG_START_INDEX][1] = m_snapped_mouse_y;
-                            }
-
-                            m_cur_wire_segment->ends[WIRE_SEG_END_INDEX][0] = m_snapped_mouse_x;
-                            m_cur_wire_segment->ends[WIRE_SEG_END_INDEX][1] = m_snapped_mouse_y;
-                        }
-
-                        picked_objects[m_wire_func_stage] = m_GetPinUnderMouse();
-
-                        if(picked_objects[m_wire_func_stage].object == NULL)
-                        {
-                            picked_objects[m_wire_func_stage] = m_GetSegmentUnderMouse();
-                        }
-
-                        if(picked_objects[m_wire_func_stage].object != NULL)
-                        {
-                            // struct dev_t *device = picked_objects[m_wire_func_stage].object->object;
-                            // printf("clicked on pin %d of device %d\n", picked_objects[m_wire_func_stage].index, device->element_index);
-                            printf("clicked on object %p of type %d\n", picked_objects[m_wire_func_stage].object, picked_objects[m_wire_func_stage].object->type);
-                            switch(picked_objects[m_wire_func_stage].object->type)
-                            {
-                                case M_OBJECT_TYPE_DEVICE:
-                                {
-                                    struct dev_t *device = picked_objects[m_wire_func_stage].object->object;
-                                    dev_GetDeviceLocalPinPosition(device, picked_objects[m_wire_func_stage].index, m_cur_wire_segment->ends[WIRE_SEG_START_INDEX]);
-                                    m_cur_wire_segment->ends[WIRE_SEG_START_INDEX][0] += device->position[0];
-                                    m_cur_wire_segment->ends[WIRE_SEG_START_INDEX][1] += device->position[1];
-                                    m_cur_wire_segment->ends[WIRE_SEG_END_INDEX][0] = m_cur_wire_segment->ends[WIRE_SEG_START_INDEX][0];
-                                    m_cur_wire_segment->ends[WIRE_SEG_END_INDEX][1] = m_cur_wire_segment->ends[WIRE_SEG_START_INDEX][1];
-                                }
-                                break;
-
-                                case M_OBJECT_TYPE_SEGMENT:
-                                {
-                                    struct wire_seg_t *segment = picked_objects[m_wire_func_stage].object->object;
-                                }
-                                break;
-                            }
-
-                            m_wire_func_stage++;
-                        }
-
-                        if(m_wire_func_stage == 2)
-                        {
-                            /* get rid of the last segment created */
-                            m_wire_seg_pos.cursor--;
-                            if(picked_objects[0].object != picked_objects[1].object || picked_objects[0].index != picked_objects[1].index)
-                            {
-                                struct wire_t *wire = m_CreateWire(&picked_objects[0], &picked_objects[1], &m_wire_seg_pos);
-                                printf("wire %p (%d) between pins %d and %d of devices %p and %p\n", wire, wire->element_index, picked_objects[0].index, 
-                                                                                                                                picked_objects[1].index, 
-                                                                                                                                picked_objects[0].object, 
-                                                                                                                                picked_objects[1].object);
-                            }
-
-                            m_ClearWireSegments();
-                        }
-
-                    }
-
-                    if(igIsKeyPressed_Bool(ImGuiKey_Escape, 0))
-                    {
-                        m_ClearWireSegments();
-                    }
-                break;
-            }
+            m_StateFuncs[m_cur_state]();
         }
         igEnd();
         igPopStyleVar(3);

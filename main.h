@@ -25,6 +25,7 @@ struct m_object_link_t
 
 struct m_object_t
 {
+    POOL_ELEMENT;
     void *                      object;
     // uint32_t                    index;
     uint32_t                    type;
@@ -51,6 +52,21 @@ union m_wire_seg_t
 #define M_REGION_SIZE               (M_SNAP_VALUE*20)
 #define M_DEVICE_PIN_PIXEL_WIDTH    8
 #define M_WIRE_PIXEL_WIDTH          4
+
+
+enum M_MODES
+{
+    M_STATE_EDIT = 0,
+    M_STATE_EXPLORER,
+    M_STATE_LAST,
+};
+
+enum M_EXPLORER_MODES
+{
+    M_EXPLORER_MODE_LOAD,
+    M_EXPLORER_MODE_SAVE,
+    M_EXPLORER_MODE_LAST
+};
 
 enum M_EDIT_FUNCS
 {
@@ -151,5 +167,9 @@ void m_DeserializeCircuit(void *file_buffer, size_t file_buffer_size);
 void m_SaveCircuit(const char *file_name);
 
 void m_ClearCircuit();
+
+void m_EditState();
+
+void m_ExplorerState();
 
 #endif

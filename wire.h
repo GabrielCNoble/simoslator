@@ -79,14 +79,14 @@ struct wire_seg_pos_t
     int32_t                     ends[2][2];
 };
 
-struct wire_junc_pos_t
-{
-    struct wire_junc_t *        junction;
-    int32_t                     pos[2];
-};
+// struct wire_junc_pos_t
+// {
+//     struct wire_junc_t *        junction;
+//     int32_t                     pos[2];
+// };
 
 #define WIRE_SEGMENT_POS_BLOCK_SIZE 16
-#define WIRE_JUNCTION_POS_BLOCK_SIZE 8
+// #define WIRE_JUNCTION_POS_BLOCK_SIZE 8
 
 struct wire_seg_pos_block_t 
 {
@@ -96,13 +96,13 @@ struct wire_seg_pos_block_t
     struct wire_seg_pos_t           segments[WIRE_SEGMENT_POS_BLOCK_SIZE];
 };
 
-struct wire_junc_pos_block_t
-{
-    POOL_ELEMENT;
-    struct wire_junc_pos_block_t *  next;
-    struct wire_junc_pos_block_t *  prev;
-    struct wire_junc_pos_t          junctions[WIRE_JUNCTION_POS_BLOCK_SIZE];
-};
+// struct wire_junc_pos_block_t
+// {
+//     POOL_ELEMENT;
+//     struct wire_junc_pos_block_t *  next;
+//     struct wire_junc_pos_block_t *  prev;
+//     struct wire_junc_pos_t          junctions[WIRE_JUNCTION_POS_BLOCK_SIZE];
+// };
 
 enum WIRE_SEGMENT_TYPES
 {
@@ -143,8 +143,9 @@ struct wire_junc_t
 struct wire_seg_t
 {
     struct wire_elem_t              base;
-    struct wire_seg_pos_t *         pos;
-    struct wire_seg_pos_block_t *   pos_block;
+    // struct wire_seg_pos_t *         pos;
+    // struct wire_seg_pos_block_t *   pos_block;
+    int32_t                         ends[2][2];
     struct wire_seg_junc_t          junctions[2];
 
     /* segments may be linked to one another in whatever orientation */
@@ -178,9 +179,10 @@ struct wire_t
 
     struct wire_seg_pos_block_t *   first_segment_pos;
     struct wire_seg_pos_block_t *   last_segment_pos;
-    uint32_t                        segment_pos_count;
+    // uint32_t                        segment_pos_count;
 
     uint32_t                        junction_count;
+    uint32_t                        segment_count;
 
     // struct wire_junc_pos_block_t *  first_junction_pos;
     // struct wire_junc_pos_block_t *  last_junction_pos;
@@ -225,11 +227,11 @@ void w_RemoveJunction(struct wire_junc_t *junction);
 
 struct wire_t *w_MergeWires(struct wire_t *wire_a, struct wire_t *wire_b);
 
-void w_MoveJunctionToWire(struct wire_t *wire, struct wire_junc_t *junction);
+// void w_MoveJunctionToWire(struct wire_t *wire, struct wire_junc_t *junction);
 
-void w_MoveSegmentsToWire(struct wire_t *wire, struct wire_seg_t *segment, uint32_t tip_index);
+// void w_MoveSegmentsToWire(struct wire_t *wire, struct wire_seg_t *segment, uint32_t tip_index);
 
-struct wire_t *w_SplitWire(struct wire_t *wire, struct wire_seg_t *segment);
+struct wire_t *w_SplitWire(struct wire_seg_t *segment);
 
 uint32_t w_TryReachSegment(struct wire_seg_t *target_segment);
 
