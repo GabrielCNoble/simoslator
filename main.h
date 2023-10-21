@@ -5,6 +5,7 @@
 #include "dev.h"
 #include "wire.h"
 #include "obj.h"
+#include "file.h"
 
 // enum M_OBJECT_TYPES
 // {
@@ -37,6 +38,55 @@
 //     uint64_t                    selection_index;
 // };
 
+enum M_EXPLORER_MODES
+{
+    M_EXPLORER_MODE_LOAD,
+    M_EXPLORER_MODE_SAVE,
+    M_EXPLORER_MODE_LAST,
+};
+
+struct m_filtered_dir_ent_t
+{
+    struct file_dir_ent_t * entry;
+    uint32_t                selected;
+    uint32_t                match_start;
+    uint32_t                match_size;
+};
+
+enum M_EXPLORER_SORT_DIRECTIONS
+{
+    M_EXPLORER_SORT_DIRECTION_NONE,
+    M_EXPLORER_SORT_DIRECTION_ASC,
+    M_EXPLORER_SORT_DIRECTION_DESC
+};
+
+/* forward declaration */
+struct m_explorer_state_t;
+
+typedef uint32_t (m_explorer_callback_t)(struct m_explorer_state_t *explorer_state, void *args);
+
+struct m_explorer_save_load_args_t
+{
+    char *  file_name;
+    char *  file_path;
+    char    full_path[FILE_MAX_PATH_LEN];
+};
+
+struct m_explorer_state_t
+{
+    struct file_dir_t           current_dir;
+    char                        current_path[FILE_MAX_PATH_LEN];
+    char                        search_bar[FILE_MAX_PATH_LEN];
+    char                        file_name[FILE_MAX_PATH_LEN];
+    struct list_t               filtered_entries;
+    uint32_t                    mode;
+    void *                      data;
+    m_explorer_callback_t *     SaveCallback;
+    m_explorer_callback_t *     LoadCallback;
+    uint32_t                    sort_dir;
+};
+
+
 struct m_picked_object_t
 {
     struct obj_t *          object;
@@ -60,13 +110,6 @@ enum M_MODES
     M_STATE_EDIT = 0,
     M_STATE_EXPLORER,
     M_STATE_LAST,
-};
-
-enum M_EXPLORER_MODES
-{
-    M_EXPLORER_MODE_LOAD,
-    M_EXPLORER_MODE_SAVE,
-    M_EXPLORER_MODE_LAST
 };
 
 enum M_EDIT_FUNCS
@@ -170,6 +213,18 @@ void m_SaveCircuit(const char *file_name);
 void m_ClearCircuit();
 
 void m_EditState();
+
+void m_OpenExplorer(struct m_explorer_state_t *explorer, const char *path, uint32_t mode, m_explorer_callback_t *SaveCallback, m_explorer_callback_t *LoadCallback, void *data);
+
+void m_CloseExplorer(struct m_explorer_state_t *explorer);
+
+void m_Back(struct m_explorer_state_t *explorer);
+
+void m_ChangeDir(struct m_explorer_state_t *explorer, const char *path);
+
+void m_FilterEntries(struct m_explorer_state_t *explorer);
+
+void m_SortEntries(struct m_explorer_state_t *explorer);
 
 void m_ExplorerState();
 

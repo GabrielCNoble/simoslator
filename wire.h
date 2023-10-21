@@ -34,9 +34,6 @@ struct wire_t;
 struct wire_seg_t;
 struct wire_junc_t;
 
-// #define WIRE_INVALID_DEVICE 0xffffffffffff
-// #define WIRE_INVALID_PIN    0xffff
-
 struct wire_pin_t
 {
     uint64_t        device:    48;
@@ -59,13 +56,6 @@ struct wire_junc_pin_block_t
     struct wire_junc_pin_t           pins[WIRE_JUNC_PIN_BLOCK_PIN_COUNT];
 };
 
-// #define WIRE_DEV_BLOCK_DEV_COUNT 8
-// struct wire_dev_block_t
-// {
-//     // uint64_t devices[WIRE_DEV_BLOCK_DEV_COUNT];
-//     struct wire_pin_t devices[WIRE_DEV_BLOCK_DEV_COUNT];
-// };
-
 struct wire_junc_pins_t
 {
     struct wire_junc_pin_block_t *   first_block;
@@ -79,14 +69,7 @@ struct wire_seg_pos_t
     int32_t                     ends[2][2];
 };
 
-// struct wire_junc_pos_t
-// {
-//     struct wire_junc_t *        junction;
-//     int32_t                     pos[2];
-// };
-
 #define WIRE_SEGMENT_POS_BLOCK_SIZE 16
-// #define WIRE_JUNCTION_POS_BLOCK_SIZE 8
 
 struct wire_seg_pos_block_t 
 {
@@ -95,14 +78,6 @@ struct wire_seg_pos_block_t
     struct wire_seg_pos_block_t *   next;
     struct wire_seg_pos_t           segments[WIRE_SEGMENT_POS_BLOCK_SIZE];
 };
-
-// struct wire_junc_pos_block_t
-// {
-//     POOL_ELEMENT;
-//     struct wire_junc_pos_block_t *  next;
-//     struct wire_junc_pos_block_t *  prev;
-//     struct wire_junc_pos_t          junctions[WIRE_JUNCTION_POS_BLOCK_SIZE];
-// };
 
 enum WIRE_SEGMENT_TYPES
 {
@@ -144,9 +119,9 @@ struct wire_seg_t
 {
     struct wire_elem_t              base;
     
-    /* this is here to simplify handling segments created during junction
-    addition/removal */
+    /* this is here to simplify handling segments created during junction addition/removal */
     void *                          object;
+
     int32_t                         ends[2][2];
     struct wire_seg_junc_t          junctions[2];
 
@@ -163,17 +138,6 @@ struct wire_t
 {
     POOL_ELEMENT;
 
-    // union
-    // {
-    //     struct
-    //     {
-    //         struct wire_junc_pins_t wire_inputs;
-    //         struct wire_junc_pins_t wire_outputs;
-    //     };
-
-    //     struct wire_junc_pins_t     wire_pins[2];
-    // };
-
     uint32_t                        input_count;
     uint32_t                        output_count;
 
@@ -181,14 +145,9 @@ struct wire_t
 
     struct wire_seg_pos_block_t *   first_segment_pos;
     struct wire_seg_pos_block_t *   last_segment_pos;
-    // uint32_t                        segment_pos_count;
 
     uint32_t                        junction_count;
     uint32_t                        segment_count;
-
-    // struct wire_junc_pos_block_t *  first_junction_pos;
-    // struct wire_junc_pos_block_t *  last_junction_pos;
-    // uint32_t                        junction_pos_count;
     
     struct wire_seg_t *             first_segment;
     struct wire_seg_t *             last_segment;
@@ -241,13 +200,7 @@ void w_RemoveJunction(struct wire_junc_t *junction);
 
 struct wire_t *w_MergeWires(struct wire_t *wire_a, struct wire_t *wire_b);
 
-// void w_MoveJunctionToWire(struct wire_t *wire, struct wire_junc_t *junction);
-
-// void w_MoveSegmentsToWire(struct wire_t *wire, struct wire_seg_t *segment, uint32_t tip_index);
-
 void w_MoveSegmentsToWire(struct wire_t *wire, struct wire_seg_t *segment);
-
-struct wire_t *w_SplitWire(struct wire_seg_t *segment);
 
 uint32_t w_TryReachOppositeSegmentTip(struct wire_seg_t *target_segment);
 
@@ -257,13 +210,9 @@ void w_DisconnectSegment(struct wire_seg_t *segment);
 
 void w_ConnectPinToSegment(struct wire_seg_t *segment, uint32_t tip_index, struct dev_t *device, uint16_t pin);
 
-void w_ConenctPinToJunction(struct wire_junc_t *junction, struct dev_t *device, uint16_t pin);
+void w_ConnectPinToJunction(struct wire_junc_t *junction, struct dev_t *device, uint16_t pin);
 
 void w_DisconnectPin(struct wire_junc_t *junction);
-
-struct wire_t *w_ConnectPins(struct dev_t *device_a, uint16_t pin_a, struct dev_t *device_b, uint16_t pin_b, struct list_t *wire_segments);
-
-struct wire_t *w_CreateWireConnections(struct list_t *wire_segments);
 
 
 #endif

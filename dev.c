@@ -12,36 +12,22 @@ struct pool_t                       dev_inputs;
 struct pool_t                       dev_clocks;
 struct pool_t                       dev_pin_blocks;
 struct dev_pin_t *                  dev_prev_pin_values;
+
+/* from wire.c */
 extern struct pool_t                w_wires;
+
+/* from sim.c */
 extern struct list_t                sim_wire_data;
 extern struct list_t                sim_wire_pins;
 extern struct list_t                sim_dev_data;
 extern struct list_t                sim_dev_pins;
 
-const char *dev_device_texture_names[] = {
-    // [DEV_PRIMITIVE_PNMOS]  = "res/pnmos.png",
-    // [DEV_PRIMITIVE_PMOS]   = "res/pmos.png",
-    // [DEV_PRIMITIVE_NMOS]   = "res/nmos.png",
-    // [DEV_PRIMITIVE_GND]    = "res/gnd.png",
-    // [DEV_PRIMITIVE_POW]    = "res/pow.png"
-};
-
-
-
-// GLuint dev_device_textures[DEV_DEVICE_TYPE_LAST];
 GLuint      dev_devices_texture;
 uint32_t    dev_devices_texture_width;
 uint32_t    dev_devices_texture_height;
 GLuint      dev_devices_texture_small;
 uint32_t    dev_devices_texture_small_width;
 uint32_t    dev_devices_texture_small_height;
-
-// uint32_t dev_device_texture_offsets[DEV_DEVICE_TYPE_LAST][2] = {
-//     [DEV_DEVICE_TYPE_PMOS] = {38, 2},
-//     [DEV_DEVICE_TYPE_NMOS] = {6, 2},
-//     [DEV_DEVICE_TYPE_GND] = {0, 58},
-//     [DEV_DEVICE_TYPE_POW] = {20, 52}
-// };
 
 void dev_PMosStep(struct sim_dev_data_t *device)
 {
@@ -111,33 +97,11 @@ void dev_GroundStep(struct sim_dev_data_t *device)
 
 void dev_ClockStep(struct sim_dev_data_t *device)
 {
-    // struct dev_pin_block_t *pin = list_GetElement(&dev_pin_blocks, device->first_pin_block);
 
-    // struct sim_dev_data_t *dev_sim_data = list_GetElement(&sim_dev_data, device->sim_data);
-    // struct dev_pin_t *pin = list_GetElement(&sim_dev_pins, dev_sim_data->first_pin);
-
-    // if(pin->value == WIRE_VALUE_0S)
-    // {
-    //     pin->value = WIRE_VALUE_1S;
-    // }
-    // else
-    // {
-    //     pin->value = WIRE_VALUE_0S;
-    // }
-
-    // struct sim_wire_data_t *wire_sim_data = list_GetElement(&sim_wire_data, pin->wire);
-
-    // // struct wire_t *wire = pool_GetElement(&w_wires, pin->pins[0].wire);
-    // sim_QueueWire(wire_sim_data);
 }
 
 void dev_InputStep(struct sim_dev_data_t *device)
 {
-    // struct dev_pin_block_t *pin = list_GetElement(&dev_pin_blocks, device->first_pin_block);
-    // struct dev_pin_t *pin = dev_GetDevicePin(device, 0);
-    // struct wire_t *wire = pool_GetElement(&w_wires, pin->wire);
-    // sim_QueueWire(wire);
-
     struct dev_pin_t *pin = list_GetElement(&sim_dev_pins, device->first_pin);
     struct sim_wire_data_t *wire = sim_GetWireSimData(pin->wire, DEV_PIN_TYPE_OUT);
     sim_QueueWire(wire);
@@ -270,22 +234,9 @@ void dev_Init()
 
 void dev_Shutdown()
 {
-    // pool_Destroy(&dev_primitives);
+    pool_Destroy(&dev_devices);
+    pool_Destroy(&dev_pin_blocks);
 }
-
-// void dev_DeviceStep(struct dev_t *device)
-// {
-//     if(dev_DeviceFuncs[device->type] != NULL)
-//     {
-//         // uint32_t pin_count = dev_device_descs[device->type].pin_count;
-//         // struct dev_pin_desc_t *pin_desc = dev_device_descs[device->type].pins;
-//         // for(uint32_t pin_index = 0; pin_index < pin_count; pin_index++)
-//         // {
-
-//         // }
-//         dev_DeviceFuncs[device->type](device);
-//     }
-// }
 
 struct dev_t *dev_CreateDevice(uint32_t type)
 {
@@ -303,16 +254,6 @@ struct dev_t *dev_CreateDevice(uint32_t type)
     {
         block_count++;
     }
-
-    // device->first_pin_block = list_AddElement(&dev_pin_blocks, NULL);
-    // device->pin_block_count = block_count;
-
-    // for(uint32_t block_index = 1; block_index < block_count; block_index++)
-    // {
-    //     list_AddElement(&dev_pin_blocks, NULL);
-    // }
-
-    // struct dev_pin_block_t *last_block = NULL;
 
     for(uint32_t block_index = 0; block_index < block_count; block_index++)
     {

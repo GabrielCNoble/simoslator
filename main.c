@@ -6,6 +6,7 @@
 #include "stb_image.h"
 #include <stdint.h>
 #include <string.h>
+#include <unistd.h>
 #include "main.h"
 #include "draw.h"
 #include "ui.h"
@@ -15,187 +16,84 @@
 
  
 
-SDL_Window *                    m_window;
-SDL_GLContext *                 m_context;
-uint32_t                        m_window_width = 800;
-uint32_t                        m_window_height = 600;
-float                           m_zoom = 0.6f;
-float                           m_offset_x = 0.0f;
-float                           m_offset_y = 0.0f;
-GLuint                          m_cursor_texture;
-GLuint                          m_play_texture;
-GLuint                          m_pause_texture;
-GLuint                          m_wire_texture;
-GLuint                          m_move_texture;
-GLuint                          m_rotate_texture;
-GLuint                          m_fliph_texture;
-GLuint                          m_flipv_texture;
-int32_t                         m_mouse_x;
-int32_t                         m_mouse_y;
-int32_t                         m_place_device_x;
-int32_t                         m_place_device_y;
-int32_t                         m_snapped_mouse_x;
-int32_t                         m_snapped_mouse_y;
-uint32_t                        m_run_simulation;
-uint32_t                        m_run;
-uint32_t                        m_cur_edit_func;
-uint32_t                        m_wire_func_stage;
-uint32_t                        m_selected_device_type;
+SDL_Window *                        m_window;
+SDL_GLContext *                     m_context;
+uint32_t                            m_window_width = 800;
+uint32_t                            m_window_height = 600;
+float                               m_zoom = 0.6f;
+float                               m_offset_x = 0.0f;
+float                               m_offset_y = 0.0f;
+GLuint                              m_cursor_texture;
+GLuint                              m_play_texture;
+GLuint                              m_pause_texture;
+GLuint                              m_wire_texture;
+GLuint                              m_move_texture;
+GLuint                              m_rotate_texture;
+GLuint                              m_fliph_texture;
+GLuint                              m_flipv_texture;
+int32_t                             m_mouse_x;
+int32_t                             m_mouse_y;
+int32_t                             m_place_device_x;
+int32_t                             m_place_device_y;
+int32_t                             m_snapped_mouse_x;
+int32_t                             m_snapped_mouse_y;
+uint32_t                            m_run_simulation;
+uint32_t                            m_run;
+uint32_t                            m_cur_edit_func;
+uint32_t                            m_wire_func_stage;
+uint32_t                            m_selected_device_type;
 // struct dev_t *                  m_selected_device;
-int32_t                         m_selections_center[2] = {};
-struct m_picked_object_t        m_picked_objects[2] = {};
-struct list_t                   m_selections;
-struct list_t                   m_wire_seg_pos;
-struct list_t                   m_wire_segs;
+int32_t                             m_selections_center[2] = {};
+struct m_picked_object_t            m_picked_objects[2] = {};
+struct list_t                       m_selections;
+struct list_t                       m_wire_seg_pos;
+struct list_t                       m_wire_segs;
 // struct wire_seg_pos_t *         m_prev_wire_segment;
-struct wire_seg_pos_t *         m_cur_wire_segment;
-extern struct list_t            obj_objects_in_box;
-extern struct pool_t            obj_objects[];
+struct wire_seg_pos_t *             m_cur_wire_segment;
+struct m_explorer_save_load_args_t  m_save_load_args;
+struct m_explorer_state_t           m_explorer_state;
+char                                m_work_dir[FILE_MAX_PATH_LEN];
+char                                m_file_path[FILE_MAX_PATH_LEN];
+char                                m_file_name[FILE_MAX_PATH_LEN];
+char                                m_file_full_path[FILE_MAX_PATH_LEN];
+uint32_t                            m_cur_state = M_STATE_EDIT;
 
-extern float                    in_mouse_x;
-extern float                    in_mouse_y;
-extern struct pool_t            dev_devices;
-extern struct list_t            dev_pin_blocks;
-extern GLuint                   dev_devices_texture;
-extern uint32_t                 dev_devices_texture_width;
-extern uint32_t                 dev_devices_texture_height;
-extern GLuint                   dev_devices_texture_small;
-extern uint32_t                 dev_devices_texture_small_width;
-extern uint32_t                 dev_devices_texture_small_height;
-extern struct dev_desc_t        dev_device_descs[];
+void (*m_StateFuncs[M_STATE_LAST])() = {
+    [M_STATE_EDIT] = m_EditState,
+    [M_STATE_EXPLORER] = m_ExplorerState
+};
 
-extern struct list_t            w_deleted_segments;
-extern struct list_t            w_created_segments;
-extern struct list_t            w_wire_seg_pos;
-extern struct pool_t            w_wire_segs;
-extern struct pool_t            w_wire_juncs;
-extern struct pool_t            w_wires;
-extern uint64_t                 w_seg_junc_count;
+#define M_OVERWRITE_MODAL_WINDOW_NAME "overwrite_modal"
+uint32_t                            m_overwrite_modal_open = 0;
 
-extern float                    d_model_view_projection_matrix[];
+/* from obj.c */
+extern struct list_t                obj_objects_in_box;
+extern struct pool_t                obj_objects[];
 
-// struct m_object_t *m_CreateObject(uint32_t type, void *base_object)
-// {
-//     // uint64_t index = list_AddElement(&m_objects[type], NULL);
-//     struct m_object_t *object = pool_AddElement(&m_objects[type], NULL);
-//     object->object = base_object;
-//     object->type = type;
-//     object->selection_index = INVALID_LIST_INDEX;
-//     m_UpdateObject(object);
-//     return object;
-// }
+/* from in.c */
+extern float                        in_mouse_x;
+extern float                        in_mouse_y;
 
-// void m_DestroyObject(struct m_object_t *object)
-// {
-//     switch(object->type)
-//     {
-//         case M_OBJECT_TYPE_DEVICE:
-//         {
-//             struct dev_t *device = object->object;
-//             dev_DestroyDevice(device);
-//         }
-//         break;
+/* from dev.c */
+extern struct pool_t                dev_devices;
+extern struct list_t                dev_pin_blocks;
+extern GLuint                       dev_devices_texture;
+extern uint32_t                     dev_devices_texture_width;
+extern uint32_t                     dev_devices_texture_height;
+extern GLuint                       dev_devices_texture_small;
+extern uint32_t                     dev_devices_texture_small_width;
+extern uint32_t                     dev_devices_texture_small_height;
+extern struct dev_desc_t            dev_device_descs[];
 
-//         case M_OBJECT_TYPE_SEGMENT:
-//         {
-//             struct wire_seg_t *segment = object->object;
-//             // w_SplitWire(segment);
-//             w_DisconnectSegment(segment);
-//             w_FreeWireSegment(segment);
-//         }
-//         break;
-//     }
+/* from wire.c */
+extern struct list_t                w_wire_seg_pos;
+extern struct pool_t                w_wire_segs;
+extern struct pool_t                w_wire_juncs;
+extern struct pool_t                w_wires;
+extern uint64_t                     w_seg_junc_count;
 
-//     pool_RemoveElement(&m_objects[object->type], object->element_index);
-// }
-
-// void m_UpdateObject(struct m_object_t *object)
-// {
-//     switch(object->type)
-//     {
-//         case M_OBJECT_TYPE_DEVICE:
-//         {
-//             struct dev_t *device = object->object;
-//             struct dev_desc_t *dev_desc = dev_device_descs + device->type;
-//             int32_t box_min[2];
-//             int32_t box_max[2];
-//             dev_GetDeviceLocalBoxPosition(device, box_min, box_max);
-
-//             for(uint32_t pin_index = 0; pin_index < dev_desc->pin_count; pin_index++)
-//             {
-//                 int32_t pin_min[2];
-//                 int32_t pin_max[2];
-
-//                 dev_GetDeviceLocalPinPosition(device, pin_index, pin_min);
-
-//                 pin_max[0] = pin_min[0] + M_DEVICE_PIN_PIXEL_WIDTH;
-//                 pin_max[1] = pin_min[1] + M_DEVICE_PIN_PIXEL_WIDTH;
-
-//                 pin_min[0] -= M_DEVICE_PIN_PIXEL_WIDTH;
-//                 pin_min[1] -= M_DEVICE_PIN_PIXEL_WIDTH;
-
-//                 if(pin_min[0] < box_min[0])
-//                 {
-//                     box_min[0] = pin_min[0];
-//                 }
-
-//                 if(pin_min[1] < box_min[1])
-//                 {
-//                     box_min[1] = pin_min[1];
-//                 }
-
-//                 if(pin_max[0] > box_max[0])
-//                 {
-//                     box_max[0] = pin_max[0];
-//                 }
-
-//                 if(pin_max[1] > box_max[1])
-//                 {
-//                     box_max[1] = pin_max[1];
-//                 }
-//             }
-
-//             object->size[0] = (box_max[0] - box_min[0]) / 2;
-//             object->size[1] = (box_max[1] - box_min[1]) / 2;
-
-//             box_min[0] += device->position[0];
-//             box_min[1] += device->position[1];
-
-//             box_max[0] += device->position[0];
-//             box_max[1] += device->position[1];
-
-//             object->position[0] = (box_max[0] + box_min[0]) / 2;
-//             object->position[1] = (box_max[1] + box_min[1]) / 2;
-
-//             device->selection_index = object->selection_index;
-//         }
-//         break;
-
-//         case M_OBJECT_TYPE_SEGMENT:
-//         {
-//             struct wire_seg_t *segment = object->object;
-//             for(uint32_t index = 0; index < 2; index++)
-//             {
-//                 if(segment->ends[WIRE_SEG_END_INDEX][index] > segment->ends[WIRE_SEG_START_INDEX][index])
-//                 {
-//                     object->size[index] = segment->ends[WIRE_SEG_END_INDEX][index] - segment->ends[WIRE_SEG_START_INDEX][index]; 
-//                 }
-//                 else
-//                 {
-//                     object->size[index] = segment->ends[WIRE_SEG_START_INDEX][index] - segment->ends[WIRE_SEG_END_INDEX][index]; 
-//                 }
-
-//                 object->size[index] = object->size[index] / 2 + M_WIRE_PIXEL_WIDTH;
-//             }
-
-//             object->position[0] = (segment->ends[WIRE_SEG_START_INDEX][0] + segment->ends[WIRE_SEG_END_INDEX][0]) / 2;
-//             object->position[1] = (segment->ends[WIRE_SEG_START_INDEX][1] + segment->ends[WIRE_SEG_END_INDEX][1]) / 2;
-//             segment->selection_index = object->selection_index;
-//             segment->object = object;
-//         }
-//         break;
-//     }
-// }
+/* from draw.c */
+extern float                        d_model_view_projection_matrix[];
 
 void m_SelectObject(struct obj_t *object, uint32_t multiple)
 {
@@ -316,28 +214,6 @@ void m_RotateSelections(int32_t ccw_rotation)
     }
 }
 
-// void m_GetTypedObjectsInsideBox(uint32_t type, int32_t *box_min, int32_t *box_max)
-// {
-//     struct pool_t *object_list = &obj_objects[type];
-//     m_objects_in_box.cursor = 0;
-
-//     for(uint32_t index = 0; index < object_list->cursor; index++)
-//     {
-//         struct obj_t *object = pool_GetValidElement(object_list, index);
-
-//         if(object != NULL)
-//         {
-//             if(box_max[0] >= object->position[0] - object->size[0] && box_min[0] <= object->position[0] + object->size[0])
-//             {
-//                 if(box_max[1] >= object->position[1] - object->size[1] && box_min[1] <= object->position[1] + object->size[1])
-//                 {
-//                     list_AddElement(&m_objects_in_box, &object);
-//                 }
-//             }
-//         }
-//     }
-// }
-
 void m_GetTypedObjectsUnderMouse(uint32_t type)
 {
     obj_GetTypedObjectsInsideBox(type, (int32_t []){m_mouse_x, m_mouse_y}, (int32_t []){m_mouse_x, m_mouse_y});
@@ -430,35 +306,6 @@ struct dev_input_t *m_GetInputUnderMouse()
 
     return input;
 }
-
-
-// void m_SelectDevice(struct dev_t *device, uint32_t multiple)
-// {
-//     if(device->selection_index != INVALID_LIST_INDEX)
-//     {
-//         uint64_t index = device->selection_index;
-//         device->selection_index = INVALID_LIST_INDEX;   
-
-//         if(multiple)
-//         {
-//             list_RemoveElement(&m_selections, index);
-//             if(device->selection_index < m_selections.cursor)
-//             {
-//                 struct dev_t *moved_device = *(struct dev_t **)list_GetElement(&m_selections, index);
-//                 moved_device->selection_index = index;
-//             }
-
-//             return;
-//         }
-//     }
-
-//     if(!multiple)
-//     {
-//         m_ClearSelections();
-//     }
-
-//     device->selection_index = list_AddElement(&m_selections, &device);
-// }
 
 void m_ClearWireSegments()
 {
@@ -557,270 +404,253 @@ struct wire_t *m_CreateWire(struct m_picked_object_t *first_contact, struct m_pi
         w_MoveSegmentsToWire(wire, first_segment->segment);
     }
 
-    // for(uint32_t index = 0; index < w_created_segments.cursor; index++)
-    // {
-    //     struct w_wire_seg_t *segment = *(struct w_wire_seg_t **)list_GetElement(&w_created_segments, index);
-    //     obj_CreateObject(OBJECT_TYPE_SEGMENT, segment);
-    // }
-
-    // for(uint32_t index = 0; index < w_deleted_segments.cursor; index++)
-    // {
-    //     struct obj_t *object = *(struct obj_t **)list_GetElement(&w_deleted_segments, index);
-    //     object->type = OBJECT_TYPE_LAST;
-    //     object->base_object = NULL;
-    //     obj_DestroyObject(object);
-    // }
-
-    // w_created_segments.cursor = 0;
-    // w_deleted_segments.cursor = 0;
-
     return wire;
 }
 
 void m_SerializeCircuit(void **file_buffer, size_t *file_buffer_size)
 {
-    // size_t buffer_size = sizeof(struct m_file_header_t);
-    // size_t device_count = dev_devices.cursor - (dev_devices.free_indices_top + 1);
-    // size_t wire_count = w_wires.cursor - (w_wires.free_indices_top + 1);
-    // size_t segment_count = w_wire_segs.cursor - (w_wire_segs.free_indices_top + 1);
-    // size_t junction_count = w_wire_juncs.cursor - (w_wire_juncs.free_indices_top + 1);
-    // buffer_size += sizeof(struct m_device_record_t) * device_count;
-    // buffer_size += sizeof(struct m_wire_record_t) * wire_count;
-    // buffer_size += sizeof(struct m_segment_record_t) * segment_count;
-    // buffer_size += sizeof(struct m_junction_record_t) * junction_count;
-    // buffer_size += sizeof(struct m_seg_junc_record_t) * w_seg_junc_count;
+    size_t buffer_size = sizeof(struct m_file_header_t);
+    size_t device_count = dev_devices.cursor - (dev_devices.free_indices_top + 1);
+    size_t wire_count = w_wires.cursor - (w_wires.free_indices_top + 1);
+    size_t segment_count = w_wire_segs.cursor - (w_wire_segs.free_indices_top + 1);
+    size_t junction_count = w_wire_juncs.cursor - (w_wire_juncs.free_indices_top + 1);
+    buffer_size += sizeof(struct m_device_record_t) * device_count;
+    buffer_size += sizeof(struct m_wire_record_t) * wire_count;
+    buffer_size += sizeof(struct m_segment_record_t) * segment_count;
+    buffer_size += sizeof(struct m_junction_record_t) * junction_count;
+    buffer_size += sizeof(struct m_seg_junc_record_t) * w_seg_junc_count;
 
-    // *file_buffer_size = buffer_size;
-    // uint8_t *buffer = calloc(1, buffer_size);
-    // *file_buffer = buffer;
-    // uintptr_t out = (uintptr_t)buffer;
+    *file_buffer_size = buffer_size;
+    uint8_t *buffer = calloc(1, buffer_size);
+    *file_buffer = buffer;
+    uintptr_t out = (uintptr_t)buffer;
 
-    // struct m_file_header_t *header = (struct m_file_header_t *)out;
-    // out += sizeof(struct m_file_header_t);
-    // strcpy(header->magic, M_FILE_HEADER_MAGIC);
+    struct m_file_header_t *header = (struct m_file_header_t *)out;
+    out += sizeof(struct m_file_header_t);
+    strcpy(header->magic, M_FILE_HEADER_MAGIC);
 
-    // header->devices = out;
-    // out += sizeof(struct m_device_record_t) * device_count;
-    // header->wires = out;
-    // out += sizeof(struct m_wire_record_t) * wire_count;
-    // header->segments = out;
-    // out += sizeof(struct m_segment_record_t) * segment_count;
-    // header->junctions = out;
-    // out += sizeof(struct m_junction_record_t) * junction_count;
+    header->devices = out;
+    out += sizeof(struct m_device_record_t) * device_count;
+    header->wires = out;
+    out += sizeof(struct m_wire_record_t) * wire_count;
+    header->segments = out;
+    out += sizeof(struct m_segment_record_t) * segment_count;
+    header->junctions = out;
+    out += sizeof(struct m_junction_record_t) * junction_count;
+    header->seg_juncs = out;
+    out += sizeof(struct m_seg_junc_record_t) * w_seg_junc_count;
     // header->seg_juncs = out;
-    // out += sizeof(struct m_seg_junc_record_t) * w_seg_junc_count;
-    // // header->seg_juncs = out;
     
 
-    // struct m_device_record_t *device_records = (struct m_device_record_t *)header->devices;
-    // for(uint32_t device_index = 0; device_index < dev_devices.cursor; device_index++)
-    // {
-    //     struct dev_t *device = dev_GetDevice(device_index);
-    //     if(device != NULL)
-    //     {
-    //         device->serialized_index = header->device_count;
-    //         struct m_device_record_t *record = device_records + header->device_count;
-    //         header->device_count++;
+    struct m_device_record_t *device_records = (struct m_device_record_t *)header->devices;
+    for(uint32_t device_index = 0; device_index < dev_devices.cursor; device_index++)
+    {
+        struct dev_t *device = dev_GetDevice(device_index);
+        if(device != NULL)
+        {
+            device->serialized_index = header->device_count;
+            struct m_device_record_t *record = device_records + header->device_count;
+            header->device_count++;
 
-    //         record->position[0] = device->position[0];
-    //         record->position[1] = device->position[1];
-    //         record->flip = device->flip;
-    //         record->angle = device->rotation;
-    //         record->type = device->type;
-    //         record->extra = 0;
-    //     }
-    // }
+            record->position[0] = device->position[0];
+            record->position[1] = device->position[1];
+            record->flip = device->flip;
+            record->angle = device->rotation;
+            record->type = device->type;
+            record->extra = 0;
+        }
+    }
 
-    // struct m_wire_record_t *wire_records = (struct m_wire_record_t *)header->wires;
-    // struct m_segment_record_t *segment_records = (struct m_segment_record_t *)header->segments;
-    // struct m_junction_record_t *junction_records = (struct m_junction_record_t *)header->junctions;
-    // struct m_seg_junc_record_t *seg_junc_records = (struct m_seg_junc_record_t *)header->seg_juncs;
+    struct m_wire_record_t *wire_records = (struct m_wire_record_t *)header->wires;
+    struct m_segment_record_t *segment_records = (struct m_segment_record_t *)header->segments;
+    struct m_junction_record_t *junction_records = (struct m_junction_record_t *)header->junctions;
+    struct m_seg_junc_record_t *seg_junc_records = (struct m_seg_junc_record_t *)header->seg_juncs;
 
-    // for(uint32_t wire_index = 0; wire_index < w_wires.cursor; wire_index++)
-    // {
-    //     struct wire_t *wire = w_GetWire(wire_index);
-    //     if(wire != NULL)
-    //     {
-    //         struct m_wire_record_t *wire_record = wire_records + header->wire_count;
-    //         header->wire_count++;
+    for(uint32_t wire_index = 0; wire_index < w_wires.cursor; wire_index++)
+    {
+        struct wire_t *wire = w_GetWire(wire_index);
+        if(wire != NULL)
+        {
+            struct m_wire_record_t *wire_record = wire_records + header->wire_count;
+            header->wire_count++;
 
-    //         wire_record->segments = header->segment_count;
-    //         wire_record->junctions = header->junction_count;
-    //         // wire_record->segment_count = header->segment_count;
-    //         // wire_record->junction_count = header->junction_count;
+            wire_record->segments = header->segment_count;
+            wire_record->junctions = header->junction_count;
+            // wire_record->segment_count = header->segment_count;
+            // wire_record->junction_count = header->junction_count;
 
-    //         struct wire_seg_t *segment = wire->first_segment;
-    //         while(segment != NULL)
-    //         {   
-    //             segment->serialized_index = header->segment_count;
-    //             struct m_segment_record_t *segment_record = segment_records + header->segment_count;
-    //             header->segment_count++;
+            struct wire_seg_t *segment = wire->first_segment;
+            while(segment != NULL)
+            {   
+                segment->serialized_index = header->segment_count;
+                struct m_segment_record_t *segment_record = segment_records + header->segment_count;
+                header->segment_count++;
 
-    //             for(uint32_t tip_index = WIRE_SEG_START_INDEX; tip_index <= WIRE_SEG_END_INDEX; tip_index++)
-    //             {
-    //                 segment_record->ends[tip_index][0] = segment->ends[tip_index][0];
-    //                 segment_record->ends[tip_index][1] = segment->ends[tip_index][1];    
-    //             }
+                for(uint32_t tip_index = WIRE_SEG_START_INDEX; tip_index <= WIRE_SEG_END_INDEX; tip_index++)
+                {
+                    segment_record->ends[tip_index][0] = segment->ends[tip_index][0];
+                    segment_record->ends[tip_index][1] = segment->ends[tip_index][1];    
+                }
 
-    //             segment = segment->wire_next;
-    //         }
+                segment = segment->wire_next;
+            }
 
-    //         segment = wire->first_segment;
-    //         while(segment != NULL)
-    //         {   
-    //             struct m_segment_record_t *segment_record = segment_records + segment->serialized_index;
+            segment = wire->first_segment;
+            while(segment != NULL)
+            {   
+                struct m_segment_record_t *segment_record = segment_records + segment->serialized_index;
 
-    //             for(uint32_t tip_index = WIRE_SEG_START_INDEX; tip_index <= WIRE_SEG_END_INDEX; tip_index++)
-    //             {
-    //                 if(segment->segments[tip_index] != NULL)
-    //                 {
-    //                     struct wire_seg_t *linked_segment = segment->segments[tip_index];
-    //                     segment_record->segments[tip_index] = linked_segment->serialized_index;
-    //                 }
-    //                 else
-    //                 {
-    //                     segment_record->segments[tip_index] = WIRE_INVALID_WIRE;
-    //                 }
-    //             }
+                for(uint32_t tip_index = WIRE_SEG_START_INDEX; tip_index <= WIRE_SEG_END_INDEX; tip_index++)
+                {
+                    if(segment->segments[tip_index] != NULL)
+                    {
+                        struct wire_seg_t *linked_segment = segment->segments[tip_index];
+                        segment_record->segments[tip_index] = linked_segment->serialized_index;
+                    }
+                    else
+                    {
+                        segment_record->segments[tip_index] = WIRE_INVALID_WIRE;
+                    }
+                }
 
-    //             segment = segment->wire_next;
-    //         }
+                segment = segment->wire_next;
+            }
 
-    //         struct wire_junc_t *junction = wire->first_junction;
-    //         while(junction != NULL)
-    //         {
-    //             struct m_junction_record_t *junction_record = junction_records + header->junction_count;
-    //             header->junction_count++;
+            struct wire_junc_t *junction = wire->first_junction;
+            while(junction != NULL)
+            {
+                struct m_junction_record_t *junction_record = junction_records + header->junction_count;
+                header->junction_count++;
 
-    //             if(junction->pin.device != DEV_INVALID_DEVICE)
-    //             {
-    //                 struct dev_t *device = dev_GetDevice(junction->pin.device);
-    //                 junction_record->device = device->serialized_index;
-    //                 junction_record->pin = junction->pin.pin;
-    //             }
-    //             else
-    //             {
-    //                 junction_record->device = DEV_INVALID_DEVICE;
-    //                 junction_record->pin = DEV_INVALID_PIN;
-    //             }
+                if(junction->pin.device != DEV_INVALID_DEVICE)
+                {
+                    struct dev_t *device = dev_GetDevice(junction->pin.device);
+                    junction_record->device = device->serialized_index;
+                    junction_record->pin = junction->pin.pin;
+                }
+                else
+                {
+                    junction_record->device = DEV_INVALID_DEVICE;
+                    junction_record->pin = DEV_INVALID_PIN;
+                }
 
-    //             junction_record->first_segment = header->seg_junc_count;
+                junction_record->first_segment = header->seg_junc_count;
 
-    //             struct wire_seg_t *segment = junction->first_segment;
-    //             while(segment)
-    //             {
-    //                 struct  m_seg_junc_record_t *seg_junc_record = seg_junc_records + header->seg_junc_count;
-    //                 header->seg_junc_count++;
-    //                 junction_record->segment_count++;
+                struct wire_seg_t *segment = junction->first_segment;
+                while(segment)
+                {
+                    struct  m_seg_junc_record_t *seg_junc_record = seg_junc_records + header->seg_junc_count;
+                    header->seg_junc_count++;
+                    junction_record->segment_count++;
 
-    //                 seg_junc_record->tip_index = segment->junctions[WIRE_SEG_END_INDEX].junction == junction;
-    //                 seg_junc_record->segment = segment->serialized_index;
-    //                 segment = segment->junctions[seg_junc_record->tip_index].next;
-    //             }
+                    seg_junc_record->tip_index = segment->junctions[WIRE_SEG_END_INDEX].junction == junction;
+                    seg_junc_record->segment = segment->serialized_index;
+                    segment = segment->junctions[seg_junc_record->tip_index].next;
+                }
 
-    //             junction = junction->wire_next;
-    //         }
+                junction = junction->wire_next;
+            }
 
-    //         wire_record->segment_count = header->segment_count - wire_record->segments;
-    //         wire_record->junction_count = header->junction_count - wire_record->junctions;
-    //     }
-    // }
+            wire_record->segment_count = header->segment_count - wire_record->segments;
+            wire_record->junction_count = header->junction_count - wire_record->junctions;
+        }
+    }
 
-    // header->devices -= (uintptr_t)buffer;
-    // header->wires -= (uintptr_t)buffer;
-    // header->segments -= (uintptr_t)buffer;
-    // header->junctions -= (uintptr_t)buffer;
-    // header->seg_juncs -= (uintptr_t)buffer;
+    header->devices -= (uintptr_t)buffer;
+    header->wires -= (uintptr_t)buffer;
+    header->segments -= (uintptr_t)buffer;
+    header->junctions -= (uintptr_t)buffer;
+    header->seg_juncs -= (uintptr_t)buffer;
 }
 
 void m_DeserializeCircuit(void *file_buffer, size_t file_buffer_size)
 {
-    // struct m_file_header_t *file_header = file_buffer;
-    // if(!strcmp(file_header->magic, M_FILE_HEADER_MAGIC))
-    // {
-    //     file_header->devices += (uintptr_t)file_buffer;
-    //     file_header->wires += (uintptr_t)file_buffer;
-    //     file_header->segments += (uintptr_t)file_buffer;
-    //     file_header->junctions += (uintptr_t)file_buffer;
-    //     file_header->seg_juncs += (uintptr_t)file_buffer;
+    struct m_file_header_t *file_header = file_buffer;
+    if(!strcmp(file_header->magic, M_FILE_HEADER_MAGIC))
+    {
+        file_header->devices += (uintptr_t)file_buffer;
+        file_header->wires += (uintptr_t)file_buffer;
+        file_header->segments += (uintptr_t)file_buffer;
+        file_header->junctions += (uintptr_t)file_buffer;
+        file_header->seg_juncs += (uintptr_t)file_buffer;
         
-    //     struct m_device_record_t *device_records = (struct m_device_record_t *)file_header->devices;
-    //     struct m_wire_record_t *wire_records = (struct m_wire_record_t *)file_header->wires;
-    //     struct m_segment_record_t *segment_records = (struct m_segment_record_t *)file_header->segments;
-    //     struct m_junction_record_t *junction_records = (struct m_junction_record_t *)file_header->junctions;
-    //     struct m_seg_junc_record_t *seg_junc_records = (struct m_seg_junc_record_t *)file_header->seg_juncs;
+        struct m_device_record_t *device_records = (struct m_device_record_t *)file_header->devices;
+        struct m_wire_record_t *wire_records = (struct m_wire_record_t *)file_header->wires;
+        struct m_segment_record_t *segment_records = (struct m_segment_record_t *)file_header->segments;
+        struct m_junction_record_t *junction_records = (struct m_junction_record_t *)file_header->junctions;
+        struct m_seg_junc_record_t *seg_junc_records = (struct m_seg_junc_record_t *)file_header->seg_juncs;
 
-    //     for(uint32_t index = 0; index < file_header->device_count; index++)
-    //     {
-    //         struct m_device_record_t *record = device_records + index;
-    //         struct dev_t *device = dev_CreateDevice(record->type);
-    //         device->position[0] = record->position[0];
-    //         device->position[1] = record->position[1];
-    //         device->flip = record->flip;
-    //         device->rotation = record->angle;
-    //         struct m_object_t *object = m_CreateObject(M_OBJECT_TYPE_DEVICE, device);
-    //         record->deserialized_index = device->element_index;
-    //     }
+        for(uint32_t index = 0; index < file_header->device_count; index++)
+        {
+            struct m_device_record_t *record = device_records + index;
+            struct dev_t *device = dev_CreateDevice(record->type);
+            device->position[0] = record->position[0];
+            device->position[1] = record->position[1];
+            device->flip = record->flip;
+            device->rotation = record->angle;
+            struct obj_t *object = obj_CreateObject(OBJECT_TYPE_DEVICE, device);
+            record->deserialized_index = device->element_index;
+        }
 
-    //     for(uint32_t index = 0; index < file_header->wire_count; index++)
-    //     {
-    //         struct m_wire_record_t *wire_record = wire_records + index;
-    //         struct wire_t *wire = w_AllocWire();
-    //         wire_record->deserialized_index = wire->element_index;
+        for(uint32_t index = 0; index < file_header->wire_count; index++)
+        {
+            struct m_wire_record_t *wire_record = wire_records + index;
+            struct wire_t *wire = w_AllocWire();
+            wire_record->deserialized_index = wire->element_index;
             
-    //         for(uint32_t segment_index = 0; segment_index < wire_record->segment_count; segment_index++)
-    //         {
-    //             struct m_segment_record_t *segment_record = segment_records + wire_record->segments + segment_index;
-    //             struct wire_seg_t *segment = w_AllocWireSegment(wire);
-    //             segment_record->deserialized_index = segment->base.element_index;
-    //             for(uint32_t tip_index = WIRE_SEG_START_INDEX; tip_index <= WIRE_SEG_END_INDEX; tip_index++)
-    //             {
-    //                 segment->ends[tip_index][0] = segment_record->ends[tip_index][0];
-    //                 segment->ends[tip_index][1] = segment_record->ends[tip_index][1];
-    //             }
-    //             struct m_object_t *object = m_CreateObject(M_OBJECT_TYPE_SEGMENT, segment);
-    //         }
+            for(uint32_t segment_index = 0; segment_index < wire_record->segment_count; segment_index++)
+            {
+                struct m_segment_record_t *segment_record = segment_records + wire_record->segments + segment_index;
+                struct wire_seg_t *segment = w_AllocWireSegment(wire);
+                segment_record->deserialized_index = segment->base.element_index;
+                for(uint32_t tip_index = WIRE_SEG_START_INDEX; tip_index <= WIRE_SEG_END_INDEX; tip_index++)
+                {
+                    segment->ends[tip_index][0] = segment_record->ends[tip_index][0];
+                    segment->ends[tip_index][1] = segment_record->ends[tip_index][1];
+                }
+                struct obj_t *object = obj_CreateObject(OBJECT_TYPE_SEGMENT, segment);
+            }
 
-    //         for(uint32_t segment_index = 0; segment_index < wire_record->segment_count; segment_index++)
-    //         {
-    //             struct m_segment_record_t *segment_record = segment_records + wire_record->segments + segment_index;
-    //             struct wire_seg_t *segment = pool_GetElement(&w_wire_segs, segment_record->deserialized_index);
+            for(uint32_t segment_index = 0; segment_index < wire_record->segment_count; segment_index++)
+            {
+                struct m_segment_record_t *segment_record = segment_records + wire_record->segments + segment_index;
+                struct wire_seg_t *segment = pool_GetElement(&w_wire_segs, segment_record->deserialized_index);
 
-    //             for(uint32_t tip_index = WIRE_SEG_START_INDEX; tip_index <= WIRE_SEG_END_INDEX; tip_index++)
-    //             {
-    //                 if(segment_record->segments[tip_index] != WIRE_INVALID_WIRE)
-    //                 {
-    //                     struct m_segment_record_t *linked_segment_record = segment_records + segment_record->segments[tip_index];
-    //                     struct wire_seg_t *linked_segment = pool_GetElement(&w_wire_segs, linked_segment_record->deserialized_index);
-    //                     segment->segments[tip_index] = linked_segment;
-    //                 }
-    //             }
-    //         }
+                for(uint32_t tip_index = WIRE_SEG_START_INDEX; tip_index <= WIRE_SEG_END_INDEX; tip_index++)
+                {
+                    if(segment_record->segments[tip_index] != WIRE_INVALID_WIRE)
+                    {
+                        struct m_segment_record_t *linked_segment_record = segment_records + segment_record->segments[tip_index];
+                        struct wire_seg_t *linked_segment = pool_GetElement(&w_wire_segs, linked_segment_record->deserialized_index);
+                        segment->segments[tip_index] = linked_segment;
+                    }
+                }
+            }
 
-    //         for(uint32_t junction_index = 0; junction_index < wire_record->junction_count; junction_index++)
-    //         {
-    //             struct m_junction_record_t *junction_record = junction_records + wire_record->junctions + junction_index;
-    //             struct m_seg_junc_record_t *seg_junc_record = seg_junc_records + junction_record->first_segment;
-    //             struct wire_junc_t *junction = w_AllocWireJunction(wire);
+            for(uint32_t junction_index = 0; junction_index < wire_record->junction_count; junction_index++)
+            {
+                struct m_junction_record_t *junction_record = junction_records + wire_record->junctions + junction_index;
+                struct m_seg_junc_record_t *seg_junc_record = seg_junc_records + junction_record->first_segment;
+                struct wire_junc_t *junction = w_AllocWireJunction(wire);
 
-    //             for(uint32_t segment_index = 0; segment_index < junction_record->segment_count; segment_index++)
-    //             {
-    //                 struct m_seg_junc_record_t *seg_junc = seg_junc_record + segment_index;
-    //                 struct wire_seg_t *segment = pool_GetElement(&w_wire_segs, seg_junc->segment);
-    //                 w_LinkSegmentToJunction(segment, junction, seg_junc->tip_index);
-    //             }
+                for(uint32_t segment_index = 0; segment_index < junction_record->segment_count; segment_index++)
+                {
+                    struct m_seg_junc_record_t *seg_junc = seg_junc_record + segment_index;
+                    struct wire_seg_t *segment = pool_GetElement(&w_wire_segs, seg_junc->segment);
+                    w_LinkSegmentToJunction(segment, junction, seg_junc->tip_index);
+                }
 
-    //             if(junction_record->device != DEV_INVALID_DEVICE)
-    //             {
-    //                 struct m_device_record_t *device_record = device_records + junction_record->device;
-    //                 struct dev_t *device = dev_GetDevice(device_record->deserialized_index);
-    //                 w_ConnectPin(junction, device, junction_record->pin);
-    //             }
-    //         }
-    //     }
+                if(junction_record->device != DEV_INVALID_DEVICE)
+                {
+                    struct m_device_record_t *device_record = device_records + junction_record->device;
+                    struct dev_t *device = dev_GetDevice(device_record->deserialized_index);
+                    w_ConnectPinToJunction(junction, device, junction_record->pin);
+                }
+            }
+        }
 
         
-    // }
+    }
 }
 
 void m_SaveCircuit(const char *file_name)
@@ -859,22 +689,49 @@ void m_ClearCircuit()
     pool_Reset(&obj_objects[OBJECT_TYPE_SEGMENT]);
 }
 
-uint32_t m_cur_state = M_STATE_EDIT;
-
-void (*m_StateFuncs[M_STATE_LAST])() = {
-    [M_STATE_EDIT] = m_EditState,
-    [M_STATE_EXPLORER] = m_ExplorerState
-};
-
-struct 
+void m_UpdateFileNameAndPath()
 {
-    uint32_t    mode;
-    char        path[512];
+    strncpy(m_file_name, m_save_load_args.file_name, sizeof(m_file_name) - 1);
+    strncpy(m_file_path, m_save_load_args.file_path, sizeof(m_file_path) - 1);
+    strncpy(m_file_full_path, m_save_load_args.full_path, sizeof(m_file_full_path) - 1);
+}
 
-} m_explorer_state = {.mode = M_EXPLORER_MODE_LOAD, .path = ""};
+uint32_t m_SaveCircuitExplorerCallback(struct m_explorer_state_t *explorer, void *args)
+{
+    struct m_explorer_save_load_args_t *save_args = (struct m_explorer_save_load_args_t *)args;
+
+    if(!strstr(save_args->full_path, ".mos"))
+    {
+        strcat(save_args->full_path, ".mos");
+    }
+
+    if(file_Exists(save_args->full_path))
+    {
+        m_overwrite_modal_open = 1;
+        return 0;
+    }
+
+    m_UpdateFileNameAndPath();
+    m_SaveCircuit(save_args->full_path);
+
+    return 1;
+}
+
+uint32_t m_LoadCircuitExplorerCallback(struct m_explorer_state_t *explorer, void *args)
+{
+    struct m_explorer_save_load_args_t *load_args = (struct m_explorer_save_load_args_t *)args;
+    m_UpdateFileNameAndPath();
+    m_LoadCircuit(load_args->full_path);
+    return 1;
+}
 
 void m_EditState()
 {
+    if(igIsPopupOpen_Str(M_OVERWRITE_MODAL_WINDOW_NAME, 0))
+    {
+        return;
+    }
+    
     if(igIsKeyPressed_Bool(ImGuiKey_Delete, 0))
     {
         m_DeleteSelections();
@@ -888,17 +745,6 @@ void m_EditState()
     {
         m_SetEditFunc(M_EDIT_FUNC_WIRE);
     }
-    // else if(igIsKeyPressed_Bool(ImGuiKey_T, 0))
-    // {
-    //     if(m_selections.cursor > 0)
-    //     {
-    //         struct m_object_t *object = *(struct m_object_t **)list_GetElement(&m_selections, 0);
-    //         if(object->type == M_OBJECT_TYPE_SEGMENT)
-    //         {
-    //             printf("%d\n", w_TryReachSegment(object->object));
-    //         }
-    //     }
-    // }
 
     switch(m_cur_edit_func)
     { 
@@ -1082,22 +928,316 @@ void m_EditState()
     }
 }
 
+void m_OpenExplorer(struct m_explorer_state_t *explorer, const char *path, uint32_t mode, m_explorer_callback_t *SaveCallback, m_explorer_callback_t *LoadCallback, void *data)
+{
+    m_ChangeDir(explorer, path);
+    explorer->SaveCallback = SaveCallback;
+    explorer->LoadCallback = LoadCallback;
+    explorer->data = data;
+    explorer->mode = mode;
+    m_FilterEntries(explorer);
+    m_SortEntries(explorer);
+    m_cur_state = M_STATE_EXPLORER;
+}
+
+void m_CloseExplorer(struct m_explorer_state_t *explorer)
+{
+    // explorer->open = 0;
+}
+
+void m_Back(struct m_explorer_state_t *explorer)
+{
+
+}
+
+void m_ChangeDir(struct m_explorer_state_t *explorer, const char *path)
+{
+    if(file_OpenDir(path, &explorer->current_dir))
+    {
+        strcpy(explorer->current_path, explorer->current_dir.path);
+        m_explorer_state.search_bar[0] = '\0';
+        m_FilterEntries(explorer);
+        m_SortEntries(explorer);
+    }
+}
+
+void m_FilterEntries(struct m_explorer_state_t *explorer)
+{
+    explorer->filtered_entries.cursor = 0;
+    if(explorer->search_bar[0] != '\0')
+    {
+        uint32_t match_size = strlen(explorer->search_bar);
+        for(uint32_t entry_index = 0; entry_index < explorer->current_dir.entries.cursor; entry_index++)
+        {
+            struct file_dir_ent_t *entry = list_GetElement(&explorer->current_dir.entries, entry_index);
+            char *match_start = strstr(entry->name, explorer->search_bar);
+            if(match_start != NULL)
+            {
+                uint64_t index = list_AddElement(&explorer->filtered_entries, NULL);
+                struct m_filtered_dir_ent_t *filtered_entry = list_GetElement(&explorer->filtered_entries, index);
+                filtered_entry->entry = entry;
+                filtered_entry->match_start = match_start - entry->name;
+                filtered_entry->match_size = match_size;
+                filtered_entry->selected = 0;
+            }
+        }
+    }
+    else
+    {
+        for(uint32_t entry_index = 0; entry_index < explorer->current_dir.entries.cursor; entry_index++)
+        {
+            struct file_dir_ent_t *entry = list_GetElement(&explorer->current_dir.entries, entry_index);
+            uint64_t index = list_AddElement(&explorer->filtered_entries, NULL);
+            struct m_filtered_dir_ent_t *filtered_entry = list_GetElement(&explorer->filtered_entries, index);
+            filtered_entry->entry = entry;
+            filtered_entry->selected = 0;
+        }
+    }
+}
+
+int32_t m_CompareEntriesAsc(const void *a, const void *b)
+{
+    struct m_filtered_dir_ent_t *dir_a = (struct m_filtered_dir_ent_t *)a;
+    struct m_filtered_dir_ent_t *dir_b = (struct m_filtered_dir_ent_t *)b;
+    return strcmp(dir_a->entry->name, dir_b->entry->name);
+}
+
+int32_t m_CompareEntriesDesc(const void *a, const void *b)
+{
+    struct m_filtered_dir_ent_t *dir_a = (struct m_filtered_dir_ent_t *)a;
+    struct m_filtered_dir_ent_t *dir_b = (struct m_filtered_dir_ent_t *)b;
+    return strcmp(dir_b->entry->name, dir_a->entry->name);
+}
+
+void m_SortEntries(struct m_explorer_state_t *explorer)
+{
+    switch(explorer->sort_dir)
+    {
+        case M_EXPLORER_SORT_DIRECTION_ASC:
+            list_Qsort(&explorer->filtered_entries, m_CompareEntriesAsc);
+        break;
+
+        case M_EXPLORER_SORT_DIRECTION_DESC:
+            list_Qsort(&explorer->filtered_entries, m_CompareEntriesDesc);
+        break;
+    }
+}
+
+void m_ExplorerSave()
+{
+    if(m_explorer_state.file_name[0] != '\0')
+    {
+        m_save_load_args.file_name = m_explorer_state.file_name;
+        m_save_load_args.file_path = m_explorer_state.current_path;
+        strncpy(m_save_load_args.full_path, m_save_load_args.file_path, sizeof(m_save_load_args.full_path) - 1);
+        strncat(m_save_load_args.full_path, "/", sizeof(m_save_load_args.full_path) - 1);
+        strncat(m_save_load_args.full_path, m_save_load_args.file_name, sizeof(m_save_load_args.full_path) - 1);
+        if(m_explorer_state.SaveCallback(&m_explorer_state, &m_save_load_args))
+        {
+            m_cur_state = M_STATE_EDIT;
+        }
+    }
+}
+
+void m_ExplorerLoad()
+{
+    if(m_explorer_state.file_name[0] != '\0')
+    {
+        m_save_load_args.file_name = m_explorer_state.file_name;
+        m_save_load_args.file_path = m_explorer_state.current_path;
+        strncpy(m_save_load_args.full_path, m_save_load_args.file_path, sizeof(m_save_load_args.full_path) - 1);
+        strncat(m_save_load_args.full_path, "/", sizeof(m_save_load_args.full_path) - 1);
+        strncat(m_save_load_args.full_path, m_save_load_args.file_name, sizeof(m_save_load_args.full_path) - 1);
+        if(m_explorer_state.LoadCallback(&m_explorer_state, &m_save_load_args))
+        {
+            m_cur_state = M_STATE_EDIT;
+        }
+    }
+}
+
 void m_ExplorerState()
 {
+    static char matched_entry[FILE_MAX_PATH_LEN];
     igSetNextWindowPos((ImVec2){0, 18}, 0, (ImVec2){});
     igSetNextWindowSize((ImVec2){m_window_width, m_window_height - 18}, 0);
 
     if(igBegin("##explorer", NULL, ImGuiWindowFlags_NoDecoration))
     {
-        if(igIsKeyDown_Nil(ImGuiKey_Escape))
+        
+        if(igIsKeyDown_Nil(ImGuiKey_Escape) && igIsWindowHovered(0))
+        {
+            m_explorer_state.search_bar[0] = '\0';
+            m_explorer_state.file_name[0] = '\0';
+            m_FilterEntries(&m_explorer_state);
+            m_SortEntries(&m_explorer_state);
+        }
+
+        ImVec2 window_size;
+        igGetWindowSize(&window_size);
+        igSetNextItemWidth(window_size.x - 60);
+        if(igInputText("##current_dir", m_explorer_state.current_path, sizeof(m_explorer_state.current_path), ImGuiInputTextFlags_EnterReturnsTrue, NULL, NULL))
+        {
+            m_ChangeDir(&m_explorer_state, m_explorer_state.current_path);
+        }
+        igSameLine(0.0f, 4.0f);
+        if(igButton("Cancel", (ImVec2){48, 0}))
         {
             m_cur_state = M_STATE_EDIT;
         }
-
-        if(igButton("Load", (ImVec2){0, 0}))
+        
+        igSetNextItemWidth(window_size.x - 320);
+        if(igInputText("##file_name", m_explorer_state.file_name, sizeof(m_explorer_state.file_name), ImGuiInputTextFlags_EnterReturnsTrue, NULL, NULL))
         {
-            m_LoadCircuit("./test2.mos");
-            m_cur_state = M_STATE_EDIT;
+            // ed_ChangeDir(explorer, explorer->current_path);
+        }
+        igSameLine(0.0f, 4.0f);
+        ImVec2 cursor_pos;
+        igGetCursorPos(&cursor_pos);
+        igSetNextItemWidth(window_size.x - cursor_pos.x - 56);
+        if(igInputText("##search_bar", m_explorer_state.search_bar, sizeof(m_explorer_state.search_bar), 0, NULL, NULL))
+        {
+            m_FilterEntries(&m_explorer_state);
+            m_SortEntries(&m_explorer_state);
+        }
+        igSameLine(0.0f, 4.0f);
+
+        switch(m_explorer_state.mode)
+        {
+            case M_EXPLORER_MODE_LOAD:
+                if(igButton("Open", (ImVec2){48, 0}))
+                {
+                    m_ExplorerLoad();
+                }
+            break;
+
+            case M_EXPLORER_MODE_SAVE:
+                if(igButton("Save", (ImVec2){48, 0}))
+                {
+                    m_ExplorerSave();
+                }
+            break;
+        }
+        
+
+        igGetCursorPos(&cursor_pos);
+
+        if(igBeginTable("##entries_table", 2, ImGuiTableFlags_BordersOuter | ImGuiTableFlags_Sortable | ImGuiTableFlags_ScrollY | ImGuiTableFlags_RowBg, (ImVec2){0, m_window_height - cursor_pos.y - 24}, 0.0f))
+        {
+            igTableSetupColumn("Name", ImGuiTableColumnFlags_DefaultSort | ImGuiTableColumnFlags_PreferSortAscending, 0.0f, 0);
+            igTableSetupColumn("Type", 0, 0.0f, 0);
+            igTableSetupScrollFreeze(2, 1);
+            igTableHeadersRow();
+            ImGuiTableSortSpecs *sort_specs = igTableGetSortSpecs();
+
+            if(sort_specs->SpecsDirty)
+            {
+                switch(sort_specs->Specs[0].SortDirection)
+                {
+                    case ImGuiSortDirection_Ascending:
+                        m_explorer_state.sort_dir = M_EXPLORER_SORT_DIRECTION_ASC;
+                    break;
+
+                    case ImGuiSortDirection_Descending:
+                        m_explorer_state.sort_dir = M_EXPLORER_SORT_DIRECTION_DESC;
+                    break;
+                }
+
+                m_SortEntries(&m_explorer_state);
+
+                sort_specs->SpecsDirty = 0;
+            }
+            
+            for(uint32_t index = 0; index < m_explorer_state.filtered_entries.cursor; index++)
+            {
+                struct m_filtered_dir_ent_t *entry = list_GetElement(&m_explorer_state.filtered_entries, index);
+                igTableNextRow(0, 0.0f);
+
+                igTableNextColumn();
+                if(m_explorer_state.search_bar[0] != '\0')
+                {
+                    strncpy(matched_entry, entry->entry->name, entry->match_start);
+                    matched_entry[entry->match_start] = '\0';
+                    igTextColored((ImVec4){1, 1, 1, 1}, matched_entry);
+                    igSameLine(0, 0);
+                    strncpy(matched_entry, entry->entry->name + entry->match_start, entry->match_size);
+                    matched_entry[entry->match_size] = '\0';
+                    igTextColored((ImVec4){1, 1 , 0, 1}, matched_entry);
+                    igSameLine(0, 0);
+                    strncpy(matched_entry, entry->entry->name + entry->match_start + entry->match_size, FILE_MAX_PATH_LEN);
+                    igTextColored((ImVec4){1, 1, 1, 1}, matched_entry);
+                    igSameLine(0, 0);
+                }
+                else
+                {
+                    igText(entry->entry->name);
+                }
+                
+                igTableNextColumn();
+                igPushID_Int(index);
+
+                const char *label;
+                
+                switch(entry->entry->type)
+                {
+                    case FILE_DIR_ENT_TYPE_FILE:
+                        label = "File";
+                    break;
+
+                    case FILE_DIR_ENT_TYPE_DIR:
+                        label = "Dir";
+                    break;
+                }
+
+                if(igSelectable_Bool(label, entry->selected, ImGuiSelectableFlags_SpanAllColumns | ImGuiSelectableFlags_AllowDoubleClick, (ImVec2){0, 0}))
+                {
+                    if(igIsMouseDoubleClicked(ImGuiMouseButton_Left))
+                    {
+                        if(entry->entry->type == FILE_DIR_ENT_TYPE_DIR)
+                        {
+                            strcpy(matched_entry, m_explorer_state.current_dir.path);
+                            strcat(matched_entry, "/");
+                            strcat(matched_entry, entry->entry->name);
+                            m_ChangeDir(&m_explorer_state, matched_entry);
+                        }
+                        else if(m_explorer_state.file_name[0] != '\0')
+                        {
+                            switch(m_explorer_state.mode)
+                            {
+                                case M_EXPLORER_MODE_LOAD:
+                                    m_ExplorerLoad();
+                                break;
+
+                                case M_EXPLORER_MODE_SAVE:
+                                    m_ExplorerSave();
+                                break;
+                            }
+                        }
+                    }
+                    else
+                    {
+                        if(!entry->selected)
+                        {
+                            for(uint32_t index = 0; index < m_explorer_state.filtered_entries.cursor; index++)
+                            {
+                                struct m_filtered_dir_ent_t *selected_entry = list_GetElement(&m_explorer_state.filtered_entries, index);
+                                selected_entry->selected = 0;
+                            }
+                        }
+                        else
+                        {
+                            
+                        }
+
+                        strcpy(m_explorer_state.file_name, entry->entry->name);
+                        entry->selected = 1;
+                    }
+                }
+                
+                igPopID();
+            }
+            // printf("%d\n", igTableGetColumnFlags(0));
+
+            igEndTable();
         }
     }
     igEnd();
@@ -1110,6 +1250,9 @@ int main(int argc, char *argv[])
         printf("oh, shit...\n");
         return -1;
     }
+
+    getcwd(m_work_dir, sizeof(m_work_dir));
+    strcpy(m_file_path, m_work_dir);
 
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 4);
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 0);
@@ -1234,6 +1377,10 @@ int main(int argc, char *argv[])
     obj_objects[OBJECT_TYPE_DEVICE] = pool_CreateTyped(struct obj_t, 16384);
     obj_objects[OBJECT_TYPE_SEGMENT] = pool_CreateTyped(struct obj_t, 16384);
 
+    m_explorer_state.filtered_entries = list_Create(sizeof(struct m_filtered_dir_ent_t), 128);
+    m_explorer_state.search_bar[0] = '\0';
+    m_explorer_state.current_dir.path[0] = '\0';
+
     d_Init();
     ui_Init();
     dev_Init();
@@ -1267,13 +1414,14 @@ int main(int argc, char *argv[])
 
                 if(igMenuItem_Bool("Save", NULL, 0, 1))
                 {
-                    m_SaveCircuit("./test2.mos");
+                    strncpy(m_explorer_state.file_name, m_file_name, sizeof(m_explorer_state.file_name) - 1);
+                    m_OpenExplorer(&m_explorer_state, m_file_path, M_EXPLORER_MODE_SAVE, m_SaveCircuitExplorerCallback, m_LoadCircuitExplorerCallback, NULL);
                 }
 
                 if(igMenuItem_Bool("Load", NULL, 0, 1))
                 {
-                    
-                    m_cur_state = M_STATE_EXPLORER;
+                    m_explorer_state.file_name[0] = '\0';
+                    m_OpenExplorer(&m_explorer_state, m_file_path, M_EXPLORER_MODE_LOAD, m_SaveCircuitExplorerCallback, m_LoadCircuitExplorerCallback, NULL);
                 }
 
                 if(igMenuItem_Bool("Quit", NULL, 0, 1))
@@ -1284,6 +1432,56 @@ int main(int argc, char *argv[])
                 igEndMenu();
             }
             igEndMainMenuBar();
+        }
+
+        if(igIsKeyDown_Nil(ImGuiKey_LeftCtrl))
+        {
+            if(igIsKeyPressed_Bool(ImGuiKey_S, 0))
+            {
+                if(file_Exists(m_file_full_path))
+                {
+                    m_overwrite_modal_open = 1;
+                }
+                else
+                {
+                    m_OpenExplorer(&m_explorer_state, m_file_path, M_EXPLORER_MODE_SAVE, m_SaveCircuitExplorerCallback, m_LoadCircuitExplorerCallback, NULL);
+                }
+            }
+        }
+
+        if(m_overwrite_modal_open)
+        {
+            if(!igIsPopupOpen_Str(M_OVERWRITE_MODAL_WINDOW_NAME, 0));
+            {
+                igOpenPopup_Str(M_OVERWRITE_MODAL_WINDOW_NAME, 0);
+            }
+
+            igSetNextWindowSize((ImVec2){200, 100}, 0);
+            igSetNextWindowPos((ImVec2){m_window_width / 2, m_window_height / 2}, 0, (ImVec2){0.5, 0.5});
+            if(igBeginPopupModal(M_OVERWRITE_MODAL_WINDOW_NAME, NULL, ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize))
+            {
+                igTextWrapped("File already exists. Do you want to overwrite it?");
+                if(igButton("Yes", (ImVec2){80, 0}))
+                {
+                    m_UpdateFileNameAndPath();
+                    m_SaveCircuit(m_file_full_path);
+                    m_cur_state = M_STATE_EDIT;
+                    m_overwrite_modal_open = 0;
+                }
+                igSameLine(0, -1);
+                if(igButton("No", (ImVec2){80, 0}))
+                {
+                    m_cur_state = M_STATE_EDIT;
+                    m_overwrite_modal_open = 0;
+                }
+
+                if(m_overwrite_modal_open == 0)
+                {
+                    igCloseCurrentPopup();   
+                }
+
+                igEndPopup();
+            }
         }
 
         m_mouse_x = in_mouse_x / d_model_view_projection_matrix[0] + d_model_view_projection_matrix[12];

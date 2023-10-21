@@ -32,7 +32,7 @@ void obj_DestroyObject(struct obj_t *object)
         case OBJECT_TYPE_SEGMENT:
         {
             struct wire_seg_t *segment = object->base_object;
-            if(segment->base.element_index != POOL_INVALID_INDEX)
+            if(segment->base.element_index != INVALID_POOL_INDEX)
             {
                 w_DisconnectSegment(segment);
                 w_FreeWireSegment(segment);
