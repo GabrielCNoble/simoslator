@@ -143,8 +143,10 @@ struct wire_junc_t
 struct wire_seg_t
 {
     struct wire_elem_t              base;
-    // struct wire_seg_pos_t *         pos;
-    // struct wire_seg_pos_block_t *   pos_block;
+    
+    /* this is here to simplify handling segments created during junction
+    addition/removal */
+    void *                          object;
     int32_t                         ends[2][2];
     struct wire_seg_junc_t          junctions[2];
 
@@ -211,9 +213,17 @@ struct wire_seg_t *w_AllocWireSegment(struct wire_t *wire);
 
 void w_FreeWireSegment(struct wire_seg_t *segment);
 
+void w_LinkSegmentToWire(struct wire_t *wire, struct wire_seg_t *segment);
+
+void w_UnlinkSegmentFromWire(struct wire_seg_t *segment);
+
 struct wire_junc_t *w_AllocWireJunction(struct wire_t *wire); 
 
 void w_FreeWireJunction(struct wire_junc_t *junction);
+
+void w_LinkJunctionToWire(struct wire_t *wire, struct wire_junc_t *junction);
+
+void w_UnlinkJunctionFromWire(struct wire_junc_t *junction);
 
 void w_LinkSegmentToJunction(struct wire_seg_t *segment, struct wire_junc_t *junction, uint32_t link_index);
 
@@ -223,6 +233,10 @@ void w_UnlinkSegmentLinkIndex(struct wire_seg_t *segment, uint32_t link_index);
 
 struct wire_junc_t *w_AddJunction(struct wire_seg_t *segment, int32_t *position);
 
+struct wire_junc_t *w_AddJunctionAtMiddle(struct wire_seg_t *segment, int32_t *position);
+
+struct wire_junc_t *w_AddJunctionAtTip(struct wire_seg_t *segment, uint32_t tip_index);
+
 void w_RemoveJunction(struct wire_junc_t *junction);
 
 struct wire_t *w_MergeWires(struct wire_t *wire_a, struct wire_t *wire_b);
@@ -231,11 +245,19 @@ struct wire_t *w_MergeWires(struct wire_t *wire_a, struct wire_t *wire_b);
 
 // void w_MoveSegmentsToWire(struct wire_t *wire, struct wire_seg_t *segment, uint32_t tip_index);
 
+void w_MoveSegmentsToWire(struct wire_t *wire, struct wire_seg_t *segment);
+
 struct wire_t *w_SplitWire(struct wire_seg_t *segment);
 
-uint32_t w_TryReachSegment(struct wire_seg_t *target_segment);
+uint32_t w_TryReachOppositeSegmentTip(struct wire_seg_t *target_segment);
 
-void w_ConnectPin(struct wire_junc_t *junction, struct dev_t *device, uint16_t pin);
+uint32_t w_ConnectSegments(struct wire_seg_t *to_connect, struct wire_seg_t *connect_to, uint32_t tip_index);
+
+void w_DisconnectSegment(struct wire_seg_t *segment);
+
+void w_ConnectPinToSegment(struct wire_seg_t *segment, uint32_t tip_index, struct dev_t *device, uint16_t pin);
+
+void w_ConenctPinToJunction(struct wire_junc_t *junction, struct dev_t *device, uint16_t pin);
 
 void w_DisconnectPin(struct wire_junc_t *junction);
 

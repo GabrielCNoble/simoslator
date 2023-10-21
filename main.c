@@ -45,12 +45,12 @@ uint32_t                        m_selected_device_type;
 int32_t                         m_selections_center[2] = {};
 struct m_picked_object_t        m_picked_objects[2] = {};
 struct list_t                   m_selections;
-struct list_t                   m_objects_in_box;
 struct list_t                   m_wire_seg_pos;
 struct list_t                   m_wire_segs;
 // struct wire_seg_pos_t *         m_prev_wire_segment;
 struct wire_seg_pos_t *         m_cur_wire_segment;
-struct pool_t                   m_objects[M_OBJECT_TYPE_LAST];
+extern struct list_t            obj_objects_in_box;
+extern struct pool_t            obj_objects[];
 
 extern float                    in_mouse_x;
 extern float                    in_mouse_y;
@@ -64,6 +64,8 @@ extern uint32_t                 dev_devices_texture_small_width;
 extern uint32_t                 dev_devices_texture_small_height;
 extern struct dev_desc_t        dev_device_descs[];
 
+extern struct list_t            w_deleted_segments;
+extern struct list_t            w_created_segments;
 extern struct list_t            w_wire_seg_pos;
 extern struct pool_t            w_wire_segs;
 extern struct pool_t            w_wire_juncs;
@@ -72,129 +74,130 @@ extern uint64_t                 w_seg_junc_count;
 
 extern float                    d_model_view_projection_matrix[];
 
-struct m_object_t *m_CreateObject(uint32_t type, void *base_object)
-{
-    // uint64_t index = list_AddElement(&m_objects[type], NULL);
-    struct m_object_t *object = pool_AddElement(&m_objects[type], NULL);
-    object->object = base_object;
-    object->type = type;
-    object->selection_index = INVALID_LIST_INDEX;
-    m_UpdateObject(object);
-    return object;
-}
+// struct m_object_t *m_CreateObject(uint32_t type, void *base_object)
+// {
+//     // uint64_t index = list_AddElement(&m_objects[type], NULL);
+//     struct m_object_t *object = pool_AddElement(&m_objects[type], NULL);
+//     object->object = base_object;
+//     object->type = type;
+//     object->selection_index = INVALID_LIST_INDEX;
+//     m_UpdateObject(object);
+//     return object;
+// }
 
-void m_DestroyObject(struct m_object_t *object)
-{
-    switch(object->type)
-    {
-        case M_OBJECT_TYPE_DEVICE:
-        {
-            struct dev_t *device = object->object;
-            dev_DestroyDevice(device);
-        }
-        break;
+// void m_DestroyObject(struct m_object_t *object)
+// {
+//     switch(object->type)
+//     {
+//         case M_OBJECT_TYPE_DEVICE:
+//         {
+//             struct dev_t *device = object->object;
+//             dev_DestroyDevice(device);
+//         }
+//         break;
 
-        case M_OBJECT_TYPE_SEGMENT:
-        {
-            struct wire_seg_t *segment = object->object;
-            w_SplitWire(segment);
-            w_FreeWireSegment(segment);
-        }
-        break;
-    }
+//         case M_OBJECT_TYPE_SEGMENT:
+//         {
+//             struct wire_seg_t *segment = object->object;
+//             // w_SplitWire(segment);
+//             w_DisconnectSegment(segment);
+//             w_FreeWireSegment(segment);
+//         }
+//         break;
+//     }
 
-    pool_RemoveElement(&m_objects[object->type], object->element_index);
-}
+//     pool_RemoveElement(&m_objects[object->type], object->element_index);
+// }
 
-void m_UpdateObject(struct m_object_t *object)
-{
-    switch(object->type)
-    {
-        case M_OBJECT_TYPE_DEVICE:
-        {
-            struct dev_t *device = object->object;
-            struct dev_desc_t *dev_desc = dev_device_descs + device->type;
-            int32_t box_min[2];
-            int32_t box_max[2];
-            dev_GetDeviceLocalBoxPosition(device, box_min, box_max);
+// void m_UpdateObject(struct m_object_t *object)
+// {
+//     switch(object->type)
+//     {
+//         case M_OBJECT_TYPE_DEVICE:
+//         {
+//             struct dev_t *device = object->object;
+//             struct dev_desc_t *dev_desc = dev_device_descs + device->type;
+//             int32_t box_min[2];
+//             int32_t box_max[2];
+//             dev_GetDeviceLocalBoxPosition(device, box_min, box_max);
 
-            for(uint32_t pin_index = 0; pin_index < dev_desc->pin_count; pin_index++)
-            {
-                int32_t pin_min[2];
-                int32_t pin_max[2];
+//             for(uint32_t pin_index = 0; pin_index < dev_desc->pin_count; pin_index++)
+//             {
+//                 int32_t pin_min[2];
+//                 int32_t pin_max[2];
 
-                dev_GetDeviceLocalPinPosition(device, pin_index, pin_min);
+//                 dev_GetDeviceLocalPinPosition(device, pin_index, pin_min);
 
-                pin_max[0] = pin_min[0] + M_DEVICE_PIN_PIXEL_WIDTH;
-                pin_max[1] = pin_min[1] + M_DEVICE_PIN_PIXEL_WIDTH;
+//                 pin_max[0] = pin_min[0] + M_DEVICE_PIN_PIXEL_WIDTH;
+//                 pin_max[1] = pin_min[1] + M_DEVICE_PIN_PIXEL_WIDTH;
 
-                pin_min[0] -= M_DEVICE_PIN_PIXEL_WIDTH;
-                pin_min[1] -= M_DEVICE_PIN_PIXEL_WIDTH;
+//                 pin_min[0] -= M_DEVICE_PIN_PIXEL_WIDTH;
+//                 pin_min[1] -= M_DEVICE_PIN_PIXEL_WIDTH;
 
-                if(pin_min[0] < box_min[0])
-                {
-                    box_min[0] = pin_min[0];
-                }
+//                 if(pin_min[0] < box_min[0])
+//                 {
+//                     box_min[0] = pin_min[0];
+//                 }
 
-                if(pin_min[1] < box_min[1])
-                {
-                    box_min[1] = pin_min[1];
-                }
+//                 if(pin_min[1] < box_min[1])
+//                 {
+//                     box_min[1] = pin_min[1];
+//                 }
 
-                if(pin_max[0] > box_max[0])
-                {
-                    box_max[0] = pin_max[0];
-                }
+//                 if(pin_max[0] > box_max[0])
+//                 {
+//                     box_max[0] = pin_max[0];
+//                 }
 
-                if(pin_max[1] > box_max[1])
-                {
-                    box_max[1] = pin_max[1];
-                }
-            }
+//                 if(pin_max[1] > box_max[1])
+//                 {
+//                     box_max[1] = pin_max[1];
+//                 }
+//             }
 
-            object->size[0] = (box_max[0] - box_min[0]) / 2;
-            object->size[1] = (box_max[1] - box_min[1]) / 2;
+//             object->size[0] = (box_max[0] - box_min[0]) / 2;
+//             object->size[1] = (box_max[1] - box_min[1]) / 2;
 
-            box_min[0] += device->position[0];
-            box_min[1] += device->position[1];
+//             box_min[0] += device->position[0];
+//             box_min[1] += device->position[1];
 
-            box_max[0] += device->position[0];
-            box_max[1] += device->position[1];
+//             box_max[0] += device->position[0];
+//             box_max[1] += device->position[1];
 
-            object->position[0] = (box_max[0] + box_min[0]) / 2;
-            object->position[1] = (box_max[1] + box_min[1]) / 2;
+//             object->position[0] = (box_max[0] + box_min[0]) / 2;
+//             object->position[1] = (box_max[1] + box_min[1]) / 2;
 
-            device->selection_index = object->selection_index;
-        }
-        break;
+//             device->selection_index = object->selection_index;
+//         }
+//         break;
 
-        case M_OBJECT_TYPE_SEGMENT:
-        {
-            struct wire_seg_t *segment = object->object;
+//         case M_OBJECT_TYPE_SEGMENT:
+//         {
+//             struct wire_seg_t *segment = object->object;
+//             for(uint32_t index = 0; index < 2; index++)
+//             {
+//                 if(segment->ends[WIRE_SEG_END_INDEX][index] > segment->ends[WIRE_SEG_START_INDEX][index])
+//                 {
+//                     object->size[index] = segment->ends[WIRE_SEG_END_INDEX][index] - segment->ends[WIRE_SEG_START_INDEX][index]; 
+//                 }
+//                 else
+//                 {
+//                     object->size[index] = segment->ends[WIRE_SEG_START_INDEX][index] - segment->ends[WIRE_SEG_END_INDEX][index]; 
+//                 }
 
-            for(uint32_t index = 0; index < 2; index++)
-            {
-                if(segment->ends[WIRE_SEG_END_INDEX][index] > segment->ends[WIRE_SEG_START_INDEX][index])
-                {
-                    object->size[index] = segment->ends[WIRE_SEG_END_INDEX][index] - segment->ends[WIRE_SEG_START_INDEX][index]; 
-                }
-                else
-                {
-                    object->size[index] = segment->ends[WIRE_SEG_START_INDEX][index] - segment->ends[WIRE_SEG_END_INDEX][index]; 
-                }
+//                 object->size[index] = object->size[index] / 2 + M_WIRE_PIXEL_WIDTH;
+//             }
 
-                object->size[index] = object->size[index] / 2 + M_WIRE_PIXEL_WIDTH;
-            }
+//             object->position[0] = (segment->ends[WIRE_SEG_START_INDEX][0] + segment->ends[WIRE_SEG_END_INDEX][0]) / 2;
+//             object->position[1] = (segment->ends[WIRE_SEG_START_INDEX][1] + segment->ends[WIRE_SEG_END_INDEX][1]) / 2;
+//             segment->selection_index = object->selection_index;
+//             segment->object = object;
+//         }
+//         break;
+//     }
+// }
 
-            object->position[0] = (segment->ends[WIRE_SEG_START_INDEX][0] + segment->ends[WIRE_SEG_END_INDEX][0]) / 2;
-            object->position[1] = (segment->ends[WIRE_SEG_START_INDEX][1] + segment->ends[WIRE_SEG_END_INDEX][1]) / 2;
-            segment->selection_index = object->selection_index;
-        }
-        break;
-    }
-}
-
-void m_SelectObject(struct m_object_t *object, uint32_t multiple)
+void m_SelectObject(struct obj_t *object, uint32_t multiple)
 {
     if(object->selection_index != INVALID_LIST_INDEX)
     {
@@ -206,9 +209,9 @@ void m_SelectObject(struct m_object_t *object, uint32_t multiple)
             list_RemoveElement(&m_selections, index);
             if(object->selection_index < m_selections.cursor)
             {
-                struct m_object_t *moved_object = *(struct m_object_t **)list_GetElement(&m_selections, index);
+                struct obj_t *moved_object = *(struct obj_t **)list_GetElement(&m_selections, index);
                 moved_object->selection_index = index;
-                m_UpdateObject(moved_object);
+                obj_UpdateObject(moved_object);
             }
             return;
         }
@@ -220,7 +223,7 @@ void m_SelectObject(struct m_object_t *object, uint32_t multiple)
     }
 
     object->selection_index = list_AddElement(&m_selections, &object);
-    m_UpdateObject(object);
+    obj_UpdateObject(object);
     
     // m_selections_center[0] += object->position[0];
     // m_selections_center[1] += object->position[1];
@@ -230,9 +233,9 @@ void m_ClearSelections()
 {
     for(uint32_t index = 0; index < m_selections.cursor; index++)
     {
-        struct m_object_t *object = *(struct m_object_t **)list_GetElement(&m_selections, index);
+        struct obj_t *object = *(struct obj_t **)list_GetElement(&m_selections, index);
         object->selection_index = INVALID_LIST_INDEX;
-        m_UpdateObject(object);
+        obj_UpdateObject(object);
     }
 
     m_selections.cursor = 0;
@@ -244,8 +247,8 @@ void m_DeleteSelections()
 {
     for(uint32_t index = 0; index < m_selections.cursor; index++)
     {
-        struct m_object_t *object = *(struct m_object_t **)list_GetElement(&m_selections, index);
-        m_DestroyObject(object);
+        struct obj_t *object = *(struct obj_t **)list_GetElement(&m_selections, index);
+        obj_DestroyObject(object);
     }
 
     m_selections.cursor = 0;
@@ -255,20 +258,20 @@ void m_TranslateSelections(int32_t dx, int32_t dy)
 {
     for(uint32_t index = 0; index < m_selections.cursor; index++)
     {
-        struct m_object_t *object = *(struct m_object_t **)list_GetElement(&m_selections, index);
+        struct obj_t *object = *(struct obj_t **)list_GetElement(&m_selections, index);
         switch(object->type)
         {
-            case M_OBJECT_TYPE_DEVICE:
+            case OBJECT_TYPE_DEVICE:
             {
-                struct dev_t *device = object->object;
+                struct dev_t *device = object->base_object; 
                 device->position[0] += dx;
                 device->position[1] += dy;
             }
             break;
 
-            case M_OBJECT_TYPE_SEGMENT:
+            case OBJECT_TYPE_SEGMENT:
             {
-                struct wire_seg_t *segment = object->object;
+                struct wire_seg_t *segment = object->base_object;
                 segment->ends[WIRE_SEG_START_INDEX][0] += dx;
                 segment->ends[WIRE_SEG_START_INDEX][1] += dy;
                 segment->ends[WIRE_SEG_END_INDEX][0] += dx;
@@ -277,7 +280,7 @@ void m_TranslateSelections(int32_t dx, int32_t dy)
             break;
         }
 
-        m_UpdateObject(object);
+        obj_UpdateObject(object);
     }
 }
 
@@ -285,12 +288,12 @@ void m_RotateSelections(int32_t ccw_rotation)
 {
     for(uint32_t index = 0; index < m_selections.cursor; index++)
     {
-        struct m_object_t *object = *(struct m_object_t **)list_GetElement(&m_selections, index);
+        struct obj_t *object = *(struct obj_t **)list_GetElement(&m_selections, index);
         switch(object->type)
         {
-            case M_OBJECT_TYPE_DEVICE:
+            case OBJECT_TYPE_DEVICE:
             {
-                struct dev_t *device = object->object;
+                struct dev_t *device = object->base_object;
                 if(ccw_rotation)
                 {
                     device->rotation = (device->rotation + 1) % 4;
@@ -306,38 +309,38 @@ void m_RotateSelections(int32_t ccw_rotation)
             }
             break;
 
-            case M_OBJECT_TYPE_SEGMENT:
+            case OBJECT_TYPE_SEGMENT:
 
             break;
         }
     }
 }
 
-void m_GetTypedObjectsInsideBox(uint32_t type, int32_t *box_min, int32_t *box_max)
-{
-    struct pool_t *object_list = &m_objects[type];
-    m_objects_in_box.cursor = 0;
+// void m_GetTypedObjectsInsideBox(uint32_t type, int32_t *box_min, int32_t *box_max)
+// {
+//     struct pool_t *object_list = &obj_objects[type];
+//     m_objects_in_box.cursor = 0;
 
-    for(uint32_t index = 0; index < object_list->cursor; index++)
-    {
-        struct m_object_t *object = pool_GetValidElement(object_list, index);
-        
-        if(object != NULL)
-        {
-            if(box_max[0] >= object->position[0] - object->size[0] && box_min[0] <= object->position[0] + object->size[0])
-            {
-                if(box_max[1] >= object->position[1] - object->size[1] && box_min[1] <= object->position[1] + object->size[1])
-                {
-                    list_AddElement(&m_objects_in_box, &object);
-                }
-            }
-        }
-    }
-}
+//     for(uint32_t index = 0; index < object_list->cursor; index++)
+//     {
+//         struct obj_t *object = pool_GetValidElement(object_list, index);
+
+//         if(object != NULL)
+//         {
+//             if(box_max[0] >= object->position[0] - object->size[0] && box_min[0] <= object->position[0] + object->size[0])
+//             {
+//                 if(box_max[1] >= object->position[1] - object->size[1] && box_min[1] <= object->position[1] + object->size[1])
+//                 {
+//                     list_AddElement(&m_objects_in_box, &object);
+//                 }
+//             }
+//         }
+//     }
+// }
 
 void m_GetTypedObjectsUnderMouse(uint32_t type)
 {
-    m_GetTypedObjectsInsideBox(type, (int32_t []){m_mouse_x, m_mouse_y}, (int32_t []){m_mouse_x, m_mouse_y});
+    obj_GetTypedObjectsInsideBox(type, (int32_t []){m_mouse_x, m_mouse_y}, (int32_t []){m_mouse_x, m_mouse_y});
 }
 
 struct m_object_t *m_GetObjectUnderMouse()
@@ -349,12 +352,12 @@ struct m_picked_object_t m_GetPinUnderMouse()
 {
     struct m_picked_object_t selected_pin = {};
 
-    m_GetTypedObjectsUnderMouse(M_OBJECT_TYPE_DEVICE);
+    m_GetTypedObjectsUnderMouse(OBJECT_TYPE_DEVICE);
 
-    for(uint32_t device_index = 0; device_index < m_objects_in_box.cursor; device_index++)
+    for(uint32_t device_index = 0; device_index < obj_objects_in_box.cursor; device_index++)
     {
-        struct m_object_t *object = *(struct m_object_t **)list_GetElement(&m_objects_in_box, device_index);
-        struct dev_t *device = object->object;
+        struct obj_t *object = *(struct obj_t **)list_GetElement(&obj_objects_in_box, device_index);
+        struct dev_t *device = object->base_object;
         if(device != NULL)
         {
             struct dev_desc_t *desc = dev_device_descs + device->type;
@@ -368,11 +371,11 @@ struct m_picked_object_t m_GetPinUnderMouse()
                 pin_position[0] += device->position[0];
                 pin_position[1] += device->position[1];
 
-                if(m_mouse_x >= pin_position[0] - M_DEVICE_PIN_PIXEL_WIDTH && 
-                    m_mouse_x <= pin_position[0] + M_DEVICE_PIN_PIXEL_WIDTH)
+                if(m_mouse_x >= pin_position[0] - OBJ_DEVICE_PIN_PIXEL_WIDTH && 
+                    m_mouse_x <= pin_position[0] + OBJ_DEVICE_PIN_PIXEL_WIDTH)
                 {
-                    if(m_mouse_y >= pin_position[1] - M_DEVICE_PIN_PIXEL_WIDTH && 
-                        m_mouse_y <= pin_position[1] + M_DEVICE_PIN_PIXEL_WIDTH)
+                    if(m_mouse_y >= pin_position[1] - OBJ_DEVICE_PIN_PIXEL_WIDTH && 
+                        m_mouse_y <= pin_position[1] + OBJ_DEVICE_PIN_PIXEL_WIDTH)
                     {
                         selected_pin.object = object;
                         selected_pin.index = pin_index;
@@ -392,11 +395,11 @@ struct m_picked_object_t m_GetSegmentUnderMouse()
 {
     struct m_picked_object_t selected_segment = {};
 
-    m_GetTypedObjectsUnderMouse(M_OBJECT_TYPE_SEGMENT);
+    m_GetTypedObjectsUnderMouse(OBJECT_TYPE_SEGMENT);
 
-    if(m_objects_in_box.cursor != 0)
+    if(obj_objects_in_box.cursor != 0)
     {
-        struct m_object_t *object = *(struct m_object_t **)list_GetElement(&m_objects_in_box, 0);
+        struct obj_t *object = *(struct obj_t **)list_GetElement(&obj_objects_in_box, 0);
         selected_segment.object = object;
     }
 
@@ -405,12 +408,12 @@ struct m_picked_object_t m_GetSegmentUnderMouse()
 
 struct dev_t *m_GetDeviceUnderMouse()
 {
-    m_GetTypedObjectsUnderMouse(M_OBJECT_TYPE_DEVICE);
+    m_GetTypedObjectsUnderMouse(OBJECT_TYPE_DEVICE);
 
-    if(m_objects_in_box.cursor != 0)
+    if(obj_objects_in_box.cursor != 0)
     {
-        struct m_object_t *object = *(struct m_object_t **)list_GetElement(&m_objects_in_box, 0);
-        return object->object;
+        struct obj_t *object = *(struct obj_t **)list_GetElement(&obj_objects_in_box, 0);
+        return object->base_object;
     }
 
     return NULL;
@@ -504,101 +507,12 @@ struct wire_t *m_CreateWire(struct m_picked_object_t *first_contact, struct m_pi
     union m_wire_seg_t *first_segment = list_GetElement(segments, 0);
     union m_wire_seg_t *last_segment = list_GetElement(segments, segments->cursor - 1);
 
-    if(first_contact->object->type == second_contact->object->type)
-    {
-        if(first_contact->object->type == M_OBJECT_TYPE_DEVICE)
-        {
-            /* no wire connected to neither of the devices */
-            wire = w_AllocWire();
-            start_junction = w_AllocWireJunction(wire);
-            end_junction = w_AllocWireJunction(wire);
-            w_ConnectPin(start_junction, first_contact->object->object, first_contact->index);            
-            w_ConnectPin(end_junction, second_contact->object->object, second_contact->index);  
-        }
-        else
-        {
-            struct wire_elem_t *wire_a = first_contact->object->object;
-            struct wire_elem_t *wire_b = second_contact->object->object;
-
-            if(wire_a->wire != wire_b->wire)
-            {
-                wire = w_MergeWires(wire_a->wire, wire_b->wire);
-            }
-            else
-            {
-                wire = wire_a->wire;
-            }
-
-            if(first_contact->object->type == M_OBJECT_TYPE_SEGMENT)
-            {
-                start_junction = w_AddJunction(first_contact->object->object, first_segment->seg_pos.ends[WIRE_SEG_START_INDEX]);
-                m_CreateObject(M_OBJECT_TYPE_SEGMENT, start_junction->last_segment);
-            }
-            else
-            {
-                start_junction = first_contact->object->object;
-            }
-
-            if(second_contact->object->type == M_OBJECT_TYPE_SEGMENT)
-            {
-                end_junction = w_AddJunction(second_contact->object->object, last_segment->seg_pos.ends[WIRE_SEG_END_INDEX]);
-                m_CreateObject(M_OBJECT_TYPE_SEGMENT, end_junction->last_segment);
-            }
-            else
-            {
-                end_junction = second_contact->object->object;
-            }
-        }
-    }
-    else
-    {
-        struct wire_elem_t *wire_elem;
-        struct dev_t *device;
-
-        if(first_contact->object->type == M_OBJECT_TYPE_DEVICE)
-        {
-            device = first_contact->object->object;
-            wire_elem = second_contact->object->object;
-            start_junction = w_AllocWireJunction(wire_elem->wire);
-            w_ConnectPin(start_junction, device, first_contact->index);
-
-            if(second_contact->object->type == M_OBJECT_TYPE_SEGMENT)
-            {
-                end_junction = w_AddJunction(second_contact->object->object, last_segment->seg_pos.ends[WIRE_SEG_END_INDEX]);
-                m_CreateObject(M_OBJECT_TYPE_SEGMENT, end_junction->last_segment);
-            }
-            else
-            {
-                end_junction = second_contact->object->object;
-            }
-        }
-        else
-        {
-            device = second_contact->object->object;
-            wire_elem = first_contact->object->object;
-            end_junction = w_AllocWireJunction(wire_elem->wire);
-            w_ConnectPin(end_junction, device, second_contact->index);
-
-            if(first_contact->object->type == M_OBJECT_TYPE_SEGMENT)
-            {
-                start_junction = w_AddJunction(first_contact->object->object, first_segment->seg_pos.ends[WIRE_SEG_START_INDEX]);
-                m_CreateObject(M_OBJECT_TYPE_SEGMENT, start_junction->last_segment);
-            }
-            else
-            {
-                start_junction = first_contact->object->object;
-            }
-        }
-
-        wire = wire_elem->wire;
-    }
-
     struct wire_seg_t *prev_segment = NULL;
  
     for(uint32_t index = 0; index < segments->cursor; index++)
     {
         union m_wire_seg_t *segment_pos = list_GetElement(segments, index);
-        struct wire_seg_t *segment = w_AllocWireSegment(wire);
+        struct wire_seg_t *segment = w_AllocWireSegment(NULL);
         segment->ends[WIRE_SEG_START_INDEX][0] = segment_pos->seg_pos.ends[WIRE_SEG_START_INDEX][0];
         segment->ends[WIRE_SEG_START_INDEX][1] = segment_pos->seg_pos.ends[WIRE_SEG_START_INDEX][1];
         segment->ends[WIRE_SEG_END_INDEX][0] = segment_pos->seg_pos.ends[WIRE_SEG_END_INDEX][0];
@@ -612,265 +526,301 @@ struct wire_t *m_CreateWire(struct m_picked_object_t *first_contact, struct m_pi
         prev_segment = segment;
         segment_pos->segment = segment;
 
-        m_CreateObject(M_OBJECT_TYPE_SEGMENT, segment);
+        obj_CreateObject(OBJECT_TYPE_SEGMENT, segment);
     }
 
-    w_LinkSegmentToJunction(first_segment->segment, start_junction, WIRE_SEG_START_INDEX);
-    w_LinkSegmentToJunction(last_segment->segment, end_junction, WIRE_SEG_END_INDEX);
+    if(first_contact->object->type == OBJECT_TYPE_DEVICE)
+    {
+        w_ConnectPinToSegment(first_segment->segment, WIRE_SEG_START_INDEX, first_contact->object->base_object, first_contact->index);
+    }
+    else if(first_contact->object->type == OBJECT_TYPE_SEGMENT)
+    {
+        w_ConnectSegments(first_segment->segment, first_contact->object->base_object, WIRE_SEG_START_INDEX);
+        obj_UpdateObject(first_contact->object);
+    }
+
+    if(second_contact->object->type == OBJECT_TYPE_DEVICE)
+    {
+        w_ConnectPinToSegment(last_segment->segment, WIRE_SEG_END_INDEX, second_contact->object->base_object, second_contact->index);
+    }
+    else if(second_contact->object->type == OBJECT_TYPE_SEGMENT)
+    {
+        w_ConnectSegments(last_segment->segment, second_contact->object->base_object, WIRE_SEG_END_INDEX);
+        obj_UpdateObject(second_contact->object);
+    }
+
+    wire = first_segment->segment->base.wire;
+
+    if(wire == NULL)
+    {
+        wire = w_AllocWire();
+        w_MoveSegmentsToWire(wire, first_segment->segment);
+    }
+
+    // for(uint32_t index = 0; index < w_created_segments.cursor; index++)
+    // {
+    //     struct w_wire_seg_t *segment = *(struct w_wire_seg_t **)list_GetElement(&w_created_segments, index);
+    //     obj_CreateObject(OBJECT_TYPE_SEGMENT, segment);
+    // }
+
+    // for(uint32_t index = 0; index < w_deleted_segments.cursor; index++)
+    // {
+    //     struct obj_t *object = *(struct obj_t **)list_GetElement(&w_deleted_segments, index);
+    //     object->type = OBJECT_TYPE_LAST;
+    //     object->base_object = NULL;
+    //     obj_DestroyObject(object);
+    // }
+
+    // w_created_segments.cursor = 0;
+    // w_deleted_segments.cursor = 0;
 
     return wire;
 }
 
 void m_SerializeCircuit(void **file_buffer, size_t *file_buffer_size)
 {
-    size_t buffer_size = sizeof(struct m_file_header_t);
-    size_t device_count = dev_devices.cursor - (dev_devices.free_indices_top + 1);
-    size_t wire_count = w_wires.cursor - (w_wires.free_indices_top + 1);
-    size_t segment_count = w_wire_segs.cursor - (w_wire_segs.free_indices_top + 1);
-    size_t junction_count = w_wire_juncs.cursor - (w_wire_juncs.free_indices_top + 1);
-    buffer_size += sizeof(struct m_device_record_t) * device_count;
-    buffer_size += sizeof(struct m_wire_record_t) * wire_count;
-    buffer_size += sizeof(struct m_segment_record_t) * segment_count;
-    buffer_size += sizeof(struct m_junction_record_t) * junction_count;
-    buffer_size += sizeof(struct m_seg_junc_record_t) * w_seg_junc_count;
+    // size_t buffer_size = sizeof(struct m_file_header_t);
+    // size_t device_count = dev_devices.cursor - (dev_devices.free_indices_top + 1);
+    // size_t wire_count = w_wires.cursor - (w_wires.free_indices_top + 1);
+    // size_t segment_count = w_wire_segs.cursor - (w_wire_segs.free_indices_top + 1);
+    // size_t junction_count = w_wire_juncs.cursor - (w_wire_juncs.free_indices_top + 1);
+    // buffer_size += sizeof(struct m_device_record_t) * device_count;
+    // buffer_size += sizeof(struct m_wire_record_t) * wire_count;
+    // buffer_size += sizeof(struct m_segment_record_t) * segment_count;
+    // buffer_size += sizeof(struct m_junction_record_t) * junction_count;
+    // buffer_size += sizeof(struct m_seg_junc_record_t) * w_seg_junc_count;
 
-    *file_buffer_size = buffer_size;
-    uint8_t *buffer = calloc(1, buffer_size);
-    *file_buffer = buffer;
-    uintptr_t out = (uintptr_t)buffer;
+    // *file_buffer_size = buffer_size;
+    // uint8_t *buffer = calloc(1, buffer_size);
+    // *file_buffer = buffer;
+    // uintptr_t out = (uintptr_t)buffer;
 
-    struct m_file_header_t *header = (struct m_file_header_t *)out;
-    out += sizeof(struct m_file_header_t);
-    strcpy(header->magic, M_FILE_HEADER_MAGIC);
+    // struct m_file_header_t *header = (struct m_file_header_t *)out;
+    // out += sizeof(struct m_file_header_t);
+    // strcpy(header->magic, M_FILE_HEADER_MAGIC);
 
-    header->devices = out;
-    out += sizeof(struct m_device_record_t) * device_count;
-    header->wires = out;
-    out += sizeof(struct m_wire_record_t) * wire_count;
-    header->segments = out;
-    out += sizeof(struct m_segment_record_t) * segment_count;
-    header->junctions = out;
-    out += sizeof(struct m_junction_record_t) * junction_count;
-    header->seg_juncs = out;
-    out += sizeof(struct m_seg_junc_record_t) * w_seg_junc_count;
+    // header->devices = out;
+    // out += sizeof(struct m_device_record_t) * device_count;
+    // header->wires = out;
+    // out += sizeof(struct m_wire_record_t) * wire_count;
+    // header->segments = out;
+    // out += sizeof(struct m_segment_record_t) * segment_count;
+    // header->junctions = out;
+    // out += sizeof(struct m_junction_record_t) * junction_count;
     // header->seg_juncs = out;
+    // out += sizeof(struct m_seg_junc_record_t) * w_seg_junc_count;
+    // // header->seg_juncs = out;
     
 
-    struct m_device_record_t *device_records = (struct m_device_record_t *)header->devices;
-    for(uint32_t device_index = 0; device_index < dev_devices.cursor; device_index++)
-    {
-        struct dev_t *device = dev_GetDevice(device_index);
-        if(device != NULL)
-        {
-            device->serialized_index = header->device_count;
-            struct m_device_record_t *record = device_records + header->device_count;
-            header->device_count++;
+    // struct m_device_record_t *device_records = (struct m_device_record_t *)header->devices;
+    // for(uint32_t device_index = 0; device_index < dev_devices.cursor; device_index++)
+    // {
+    //     struct dev_t *device = dev_GetDevice(device_index);
+    //     if(device != NULL)
+    //     {
+    //         device->serialized_index = header->device_count;
+    //         struct m_device_record_t *record = device_records + header->device_count;
+    //         header->device_count++;
 
-            record->position[0] = device->position[0];
-            record->position[1] = device->position[1];
-            record->flip = device->flip;
-            record->angle = device->rotation;
-            record->type = device->type;
-            record->extra = 0;
-        }
-    }
+    //         record->position[0] = device->position[0];
+    //         record->position[1] = device->position[1];
+    //         record->flip = device->flip;
+    //         record->angle = device->rotation;
+    //         record->type = device->type;
+    //         record->extra = 0;
+    //     }
+    // }
 
-    struct m_wire_record_t *wire_records = (struct m_wire_record_t *)header->wires;
-    struct m_segment_record_t *segment_records = (struct m_segment_record_t *)header->segments;
-    struct m_junction_record_t *junction_records = (struct m_junction_record_t *)header->junctions;
-    struct m_seg_junc_record_t *seg_junc_records = (struct m_seg_junc_record_t *)header->seg_juncs;
+    // struct m_wire_record_t *wire_records = (struct m_wire_record_t *)header->wires;
+    // struct m_segment_record_t *segment_records = (struct m_segment_record_t *)header->segments;
+    // struct m_junction_record_t *junction_records = (struct m_junction_record_t *)header->junctions;
+    // struct m_seg_junc_record_t *seg_junc_records = (struct m_seg_junc_record_t *)header->seg_juncs;
 
-    for(uint32_t wire_index = 0; wire_index < w_wires.cursor; wire_index++)
-    {
-        struct wire_t *wire = w_GetWire(wire_index);
-        if(wire != NULL)
-        {
-            struct m_wire_record_t *wire_record = wire_records + header->wire_count;
-            header->wire_count++;
+    // for(uint32_t wire_index = 0; wire_index < w_wires.cursor; wire_index++)
+    // {
+    //     struct wire_t *wire = w_GetWire(wire_index);
+    //     if(wire != NULL)
+    //     {
+    //         struct m_wire_record_t *wire_record = wire_records + header->wire_count;
+    //         header->wire_count++;
 
-            wire_record->segments = header->segment_count;
-            wire_record->junctions = header->junction_count;
-            // wire_record->segment_count = header->segment_count;
-            // wire_record->junction_count = header->junction_count;
+    //         wire_record->segments = header->segment_count;
+    //         wire_record->junctions = header->junction_count;
+    //         // wire_record->segment_count = header->segment_count;
+    //         // wire_record->junction_count = header->junction_count;
 
-            struct wire_seg_t *segment = wire->first_segment;
-            while(segment != NULL)
-            {   
-                segment->serialized_index = header->segment_count;
-                struct m_segment_record_t *segment_record = segment_records + header->segment_count;
-                header->segment_count++;
+    //         struct wire_seg_t *segment = wire->first_segment;
+    //         while(segment != NULL)
+    //         {   
+    //             segment->serialized_index = header->segment_count;
+    //             struct m_segment_record_t *segment_record = segment_records + header->segment_count;
+    //             header->segment_count++;
 
-                for(uint32_t tip_index = WIRE_SEG_START_INDEX; tip_index <= WIRE_SEG_END_INDEX; tip_index++)
-                {
-                    segment_record->ends[tip_index][0] = segment->ends[tip_index][0];
-                    segment_record->ends[tip_index][1] = segment->ends[tip_index][1];    
-                }
+    //             for(uint32_t tip_index = WIRE_SEG_START_INDEX; tip_index <= WIRE_SEG_END_INDEX; tip_index++)
+    //             {
+    //                 segment_record->ends[tip_index][0] = segment->ends[tip_index][0];
+    //                 segment_record->ends[tip_index][1] = segment->ends[tip_index][1];    
+    //             }
 
-                segment = segment->wire_next;
-            }
+    //             segment = segment->wire_next;
+    //         }
 
-            segment = wire->first_segment;
-            while(segment != NULL)
-            {   
-                struct m_segment_record_t *segment_record = segment_records + segment->serialized_index;
+    //         segment = wire->first_segment;
+    //         while(segment != NULL)
+    //         {   
+    //             struct m_segment_record_t *segment_record = segment_records + segment->serialized_index;
 
-                for(uint32_t tip_index = WIRE_SEG_START_INDEX; tip_index <= WIRE_SEG_END_INDEX; tip_index++)
-                {
-                    if(segment->segments[tip_index] != NULL)
-                    {
-                        struct wire_seg_t *linked_segment = segment->segments[tip_index];
-                        segment_record->segments[tip_index] = linked_segment->serialized_index;
-                    }
-                    else
-                    {
-                        segment_record->segments[tip_index] = WIRE_INVALID_WIRE;
-                    }
-                }
+    //             for(uint32_t tip_index = WIRE_SEG_START_INDEX; tip_index <= WIRE_SEG_END_INDEX; tip_index++)
+    //             {
+    //                 if(segment->segments[tip_index] != NULL)
+    //                 {
+    //                     struct wire_seg_t *linked_segment = segment->segments[tip_index];
+    //                     segment_record->segments[tip_index] = linked_segment->serialized_index;
+    //                 }
+    //                 else
+    //                 {
+    //                     segment_record->segments[tip_index] = WIRE_INVALID_WIRE;
+    //                 }
+    //             }
 
-                segment = segment->wire_next;
-            }
+    //             segment = segment->wire_next;
+    //         }
 
-            struct wire_junc_t *junction = wire->first_junction;
-            while(junction != NULL)
-            {
-                struct m_junction_record_t *junction_record = junction_records + header->junction_count;
-                header->junction_count++;
+    //         struct wire_junc_t *junction = wire->first_junction;
+    //         while(junction != NULL)
+    //         {
+    //             struct m_junction_record_t *junction_record = junction_records + header->junction_count;
+    //             header->junction_count++;
 
-                if(junction->pin.device != DEV_INVALID_DEVICE)
-                {
-                    struct dev_t *device = dev_GetDevice(junction->pin.device);
-                    junction_record->device = device->serialized_index;
-                    junction_record->pin = junction->pin.pin;
-                }
-                else
-                {
-                    junction_record->device = DEV_INVALID_DEVICE;
-                    junction_record->pin = DEV_INVALID_PIN;
-                }
+    //             if(junction->pin.device != DEV_INVALID_DEVICE)
+    //             {
+    //                 struct dev_t *device = dev_GetDevice(junction->pin.device);
+    //                 junction_record->device = device->serialized_index;
+    //                 junction_record->pin = junction->pin.pin;
+    //             }
+    //             else
+    //             {
+    //                 junction_record->device = DEV_INVALID_DEVICE;
+    //                 junction_record->pin = DEV_INVALID_PIN;
+    //             }
 
-                junction_record->first_segment = header->seg_junc_count;
+    //             junction_record->first_segment = header->seg_junc_count;
 
-                struct wire_seg_t *segment = junction->first_segment;
-                while(segment)
-                {
-                    struct  m_seg_junc_record_t *seg_junc_record = seg_junc_records + header->seg_junc_count;
-                    header->seg_junc_count++;
-                    junction_record->segment_count++;
+    //             struct wire_seg_t *segment = junction->first_segment;
+    //             while(segment)
+    //             {
+    //                 struct  m_seg_junc_record_t *seg_junc_record = seg_junc_records + header->seg_junc_count;
+    //                 header->seg_junc_count++;
+    //                 junction_record->segment_count++;
 
-                    seg_junc_record->tip_index = segment->junctions[WIRE_SEG_END_INDEX].junction == junction;
-                    seg_junc_record->segment = segment->serialized_index;
-                    segment = segment->junctions[seg_junc_record->tip_index].next;
-                }
+    //                 seg_junc_record->tip_index = segment->junctions[WIRE_SEG_END_INDEX].junction == junction;
+    //                 seg_junc_record->segment = segment->serialized_index;
+    //                 segment = segment->junctions[seg_junc_record->tip_index].next;
+    //             }
 
-                junction = junction->wire_next;
-            }
+    //             junction = junction->wire_next;
+    //         }
 
-            wire_record->segment_count = header->segment_count - wire_record->segments;
-            wire_record->junction_count = header->junction_count - wire_record->junctions;
-        }
-    }
+    //         wire_record->segment_count = header->segment_count - wire_record->segments;
+    //         wire_record->junction_count = header->junction_count - wire_record->junctions;
+    //     }
+    // }
 
-    header->devices -= (uintptr_t)buffer;
-    header->wires -= (uintptr_t)buffer;
-    header->segments -= (uintptr_t)buffer;
-    header->junctions -= (uintptr_t)buffer;
-    header->seg_juncs -= (uintptr_t)buffer;
-
-    // printf("buffer size: %d, written size: %d\n", buffer_size, out - (uintptr_t)buffer);
-    // printf("device count: %d - %d\n", device_count, header->device_count);
-    // printf("wire count: %d - %d\n", wire_count, header->wire_count);
-    // printf("segment count: %d - %d\n", segment_count, header->segment_count);
-    // printf("junction count: %d - %d\n", junction_count, header->junction_count);
+    // header->devices -= (uintptr_t)buffer;
+    // header->wires -= (uintptr_t)buffer;
+    // header->segments -= (uintptr_t)buffer;
+    // header->junctions -= (uintptr_t)buffer;
+    // header->seg_juncs -= (uintptr_t)buffer;
 }
 
 void m_DeserializeCircuit(void *file_buffer, size_t file_buffer_size)
 {
-    struct m_file_header_t *file_header = file_buffer;
-    if(!strcmp(file_header->magic, M_FILE_HEADER_MAGIC))
-    {
-        file_header->devices += (uintptr_t)file_buffer;
-        file_header->wires += (uintptr_t)file_buffer;
-        file_header->segments += (uintptr_t)file_buffer;
-        file_header->junctions += (uintptr_t)file_buffer;
-        file_header->seg_juncs += (uintptr_t)file_buffer;
+    // struct m_file_header_t *file_header = file_buffer;
+    // if(!strcmp(file_header->magic, M_FILE_HEADER_MAGIC))
+    // {
+    //     file_header->devices += (uintptr_t)file_buffer;
+    //     file_header->wires += (uintptr_t)file_buffer;
+    //     file_header->segments += (uintptr_t)file_buffer;
+    //     file_header->junctions += (uintptr_t)file_buffer;
+    //     file_header->seg_juncs += (uintptr_t)file_buffer;
         
-        struct m_device_record_t *device_records = (struct m_device_record_t *)file_header->devices;
-        struct m_wire_record_t *wire_records = (struct m_wire_record_t *)file_header->wires;
-        struct m_segment_record_t *segment_records = (struct m_segment_record_t *)file_header->segments;
-        struct m_junction_record_t *junction_records = (struct m_junction_record_t *)file_header->junctions;
-        struct m_seg_junc_record_t *seg_junc_records = (struct m_seg_junc_record_t *)file_header->seg_juncs;
+    //     struct m_device_record_t *device_records = (struct m_device_record_t *)file_header->devices;
+    //     struct m_wire_record_t *wire_records = (struct m_wire_record_t *)file_header->wires;
+    //     struct m_segment_record_t *segment_records = (struct m_segment_record_t *)file_header->segments;
+    //     struct m_junction_record_t *junction_records = (struct m_junction_record_t *)file_header->junctions;
+    //     struct m_seg_junc_record_t *seg_junc_records = (struct m_seg_junc_record_t *)file_header->seg_juncs;
 
-        for(uint32_t index = 0; index < file_header->device_count; index++)
-        {
-            struct m_device_record_t *record = device_records + index;
-            struct dev_t *device = dev_CreateDevice(record->type);
-            device->position[0] = record->position[0];
-            device->position[1] = record->position[1];
-            device->flip = record->flip;
-            device->rotation = record->angle;
-            struct m_object_t *object = m_CreateObject(M_OBJECT_TYPE_DEVICE, device);
-            record->deserialized_index = device->element_index;
-        }
+    //     for(uint32_t index = 0; index < file_header->device_count; index++)
+    //     {
+    //         struct m_device_record_t *record = device_records + index;
+    //         struct dev_t *device = dev_CreateDevice(record->type);
+    //         device->position[0] = record->position[0];
+    //         device->position[1] = record->position[1];
+    //         device->flip = record->flip;
+    //         device->rotation = record->angle;
+    //         struct m_object_t *object = m_CreateObject(M_OBJECT_TYPE_DEVICE, device);
+    //         record->deserialized_index = device->element_index;
+    //     }
 
-        for(uint32_t index = 0; index < file_header->wire_count; index++)
-        {
-            struct m_wire_record_t *wire_record = wire_records + index;
-            struct wire_t *wire = w_AllocWire();
-            wire_record->deserialized_index = wire->element_index;
+    //     for(uint32_t index = 0; index < file_header->wire_count; index++)
+    //     {
+    //         struct m_wire_record_t *wire_record = wire_records + index;
+    //         struct wire_t *wire = w_AllocWire();
+    //         wire_record->deserialized_index = wire->element_index;
             
-            for(uint32_t segment_index = 0; segment_index < wire_record->segment_count; segment_index++)
-            {
-                struct m_segment_record_t *segment_record = segment_records + wire_record->segments + segment_index;
-                struct wire_seg_t *segment = w_AllocWireSegment(wire);
-                segment_record->deserialized_index = segment->base.element_index;
-                for(uint32_t tip_index = WIRE_SEG_START_INDEX; tip_index <= WIRE_SEG_END_INDEX; tip_index++)
-                {
-                    segment->ends[tip_index][0] = segment_record->ends[tip_index][0];
-                    segment->ends[tip_index][1] = segment_record->ends[tip_index][1];
-                }
-                struct m_object_t *object = m_CreateObject(M_OBJECT_TYPE_SEGMENT, segment);
-            }
+    //         for(uint32_t segment_index = 0; segment_index < wire_record->segment_count; segment_index++)
+    //         {
+    //             struct m_segment_record_t *segment_record = segment_records + wire_record->segments + segment_index;
+    //             struct wire_seg_t *segment = w_AllocWireSegment(wire);
+    //             segment_record->deserialized_index = segment->base.element_index;
+    //             for(uint32_t tip_index = WIRE_SEG_START_INDEX; tip_index <= WIRE_SEG_END_INDEX; tip_index++)
+    //             {
+    //                 segment->ends[tip_index][0] = segment_record->ends[tip_index][0];
+    //                 segment->ends[tip_index][1] = segment_record->ends[tip_index][1];
+    //             }
+    //             struct m_object_t *object = m_CreateObject(M_OBJECT_TYPE_SEGMENT, segment);
+    //         }
 
-            for(uint32_t segment_index = 0; segment_index < wire_record->segment_count; segment_index++)
-            {
-                struct m_segment_record_t *segment_record = segment_records + wire_record->segments + segment_index;
-                struct wire_seg_t *segment = pool_GetElement(&w_wire_segs, segment_record->deserialized_index);
+    //         for(uint32_t segment_index = 0; segment_index < wire_record->segment_count; segment_index++)
+    //         {
+    //             struct m_segment_record_t *segment_record = segment_records + wire_record->segments + segment_index;
+    //             struct wire_seg_t *segment = pool_GetElement(&w_wire_segs, segment_record->deserialized_index);
 
-                for(uint32_t tip_index = WIRE_SEG_START_INDEX; tip_index <= WIRE_SEG_END_INDEX; tip_index++)
-                {
-                    if(segment_record->segments[tip_index] != WIRE_INVALID_WIRE)
-                    {
-                        struct m_segment_record_t *linked_segment_record = segment_records + segment_record->segments[tip_index];
-                        struct wire_seg_t *linked_segment = pool_GetElement(&w_wire_segs, linked_segment_record->deserialized_index);
-                        segment->segments[tip_index] = linked_segment;
-                    }
-                }
-            }
+    //             for(uint32_t tip_index = WIRE_SEG_START_INDEX; tip_index <= WIRE_SEG_END_INDEX; tip_index++)
+    //             {
+    //                 if(segment_record->segments[tip_index] != WIRE_INVALID_WIRE)
+    //                 {
+    //                     struct m_segment_record_t *linked_segment_record = segment_records + segment_record->segments[tip_index];
+    //                     struct wire_seg_t *linked_segment = pool_GetElement(&w_wire_segs, linked_segment_record->deserialized_index);
+    //                     segment->segments[tip_index] = linked_segment;
+    //                 }
+    //             }
+    //         }
 
-            for(uint32_t junction_index = 0; junction_index < wire_record->junction_count; junction_index++)
-            {
-                struct m_junction_record_t *junction_record = junction_records + wire_record->junctions + junction_index;
-                struct m_seg_junc_record_t *seg_junc_record = seg_junc_records + junction_record->first_segment;
-                struct wire_junc_t *junction = w_AllocWireJunction(wire);
+    //         for(uint32_t junction_index = 0; junction_index < wire_record->junction_count; junction_index++)
+    //         {
+    //             struct m_junction_record_t *junction_record = junction_records + wire_record->junctions + junction_index;
+    //             struct m_seg_junc_record_t *seg_junc_record = seg_junc_records + junction_record->first_segment;
+    //             struct wire_junc_t *junction = w_AllocWireJunction(wire);
 
-                for(uint32_t segment_index = 0; segment_index < junction_record->segment_count; segment_index++)
-                {
-                    struct m_seg_junc_record_t *seg_junc = seg_junc_record + segment_index;
-                    struct wire_seg_t *segment = pool_GetElement(&w_wire_segs, seg_junc->segment);
-                    w_LinkSegmentToJunction(segment, junction, seg_junc->tip_index);
-                }
+    //             for(uint32_t segment_index = 0; segment_index < junction_record->segment_count; segment_index++)
+    //             {
+    //                 struct m_seg_junc_record_t *seg_junc = seg_junc_record + segment_index;
+    //                 struct wire_seg_t *segment = pool_GetElement(&w_wire_segs, seg_junc->segment);
+    //                 w_LinkSegmentToJunction(segment, junction, seg_junc->tip_index);
+    //             }
 
-                if(junction_record->device != DEV_INVALID_DEVICE)
-                {
-                    struct m_device_record_t *device_record = device_records + junction_record->device;
-                    struct dev_t *device = dev_GetDevice(device_record->deserialized_index);
-                    w_ConnectPin(junction, device, junction_record->pin);
-                }
-            }
-        }
+    //             if(junction_record->device != DEV_INVALID_DEVICE)
+    //             {
+    //                 struct m_device_record_t *device_record = device_records + junction_record->device;
+    //                 struct dev_t *device = dev_GetDevice(device_record->deserialized_index);
+    //                 w_ConnectPin(junction, device, junction_record->pin);
+    //             }
+    //         }
+    //     }
 
         
-    }
+    // }
 }
 
 void m_SaveCircuit(const char *file_name)
@@ -905,8 +855,8 @@ void m_ClearCircuit()
 {
     dev_ClearDevices();
     w_ClearWires();
-    pool_Reset(&m_objects[M_OBJECT_TYPE_DEVICE]);
-    pool_Reset(&m_objects[M_OBJECT_TYPE_SEGMENT]);
+    pool_Reset(&obj_objects[OBJECT_TYPE_DEVICE]);
+    pool_Reset(&obj_objects[OBJECT_TYPE_SEGMENT]);
 }
 
 uint32_t m_cur_state = M_STATE_EDIT;
@@ -938,17 +888,17 @@ void m_EditState()
     {
         m_SetEditFunc(M_EDIT_FUNC_WIRE);
     }
-    else if(igIsKeyPressed_Bool(ImGuiKey_T, 0))
-    {
-        if(m_selections.cursor > 0)
-        {
-            struct m_object_t *object = *(struct m_object_t **)list_GetElement(&m_selections, 0);
-            if(object->type == M_OBJECT_TYPE_SEGMENT)
-            {
-                printf("%d\n", w_TryReachSegment(object->object));
-            }
-        }
-    }
+    // else if(igIsKeyPressed_Bool(ImGuiKey_T, 0))
+    // {
+    //     if(m_selections.cursor > 0)
+    //     {
+    //         struct m_object_t *object = *(struct m_object_t **)list_GetElement(&m_selections, 0);
+    //         if(object->type == M_OBJECT_TYPE_SEGMENT)
+    //         {
+    //             printf("%d\n", w_TryReachSegment(object->object));
+    //         }
+    //     }
+    // }
 
     switch(m_cur_edit_func)
     { 
@@ -962,7 +912,7 @@ void m_EditState()
                     struct dev_t *device = dev_CreateDevice(m_selected_device_type);
                     device->position[0] = m_place_device_x;
                     device->position[1] = m_place_device_y;
-                    m_CreateObject(M_OBJECT_TYPE_DEVICE, device);
+                    obj_CreateObject(OBJECT_TYPE_DEVICE, device);
                 }
             }
         break;
@@ -976,18 +926,18 @@ void m_EditState()
                     if(!m_run_simulation)
                     {
                         uint32_t multiple = igIsKeyDown_Nil(ImGuiKey_LeftShift);
-                        m_GetTypedObjectsInsideBox(M_OBJECT_TYPE_DEVICE, (int32_t []){m_mouse_x, m_mouse_y}, (int32_t []){m_mouse_x, m_mouse_y});
-                        if(m_objects_in_box.cursor != 0)
+                        obj_GetTypedObjectsInsideBox(OBJECT_TYPE_DEVICE, (int32_t []){m_mouse_x, m_mouse_y}, (int32_t []){m_mouse_x, m_mouse_y});
+                        if(obj_objects_in_box.cursor != 0)
                         {
-                            struct m_object_t *object = *(struct m_object_t **)list_GetElement(&m_objects_in_box, 0);
+                            struct obj_t *object = *(struct obj_t **)list_GetElement(&obj_objects_in_box, 0);
                             m_SelectObject(object, multiple);
                         }
                         else
                         {
-                            m_GetTypedObjectsInsideBox(M_OBJECT_TYPE_SEGMENT, (int32_t []){m_mouse_x, m_mouse_y}, (int32_t []){m_mouse_x, m_mouse_y});
-                            if(m_objects_in_box.cursor != 0)
+                            obj_GetTypedObjectsInsideBox(OBJECT_TYPE_SEGMENT, (int32_t []){m_mouse_x, m_mouse_y}, (int32_t []){m_mouse_x, m_mouse_y});
+                            if(obj_objects_in_box.cursor != 0)
                             {
-                                struct m_object_t *object = *(struct m_object_t **)list_GetElement(&m_objects_in_box, 0);
+                                struct obj_t *object = *(struct obj_t **)list_GetElement(&obj_objects_in_box, 0);
                                 m_SelectObject(object, multiple);
                             }
                         }
@@ -1085,9 +1035,9 @@ void m_EditState()
                     printf("clicked on object %p of type %d\n", m_picked_objects[m_wire_func_stage].object, m_picked_objects[m_wire_func_stage].object->type);
                     switch(m_picked_objects[m_wire_func_stage].object->type)
                     {
-                        case M_OBJECT_TYPE_DEVICE:
+                        case OBJECT_TYPE_DEVICE:
                         {
-                            struct dev_t *device = m_picked_objects[m_wire_func_stage].object->object;
+                            struct dev_t *device = m_picked_objects[m_wire_func_stage].object->base_object;
                             dev_GetDeviceLocalPinPosition(device, m_picked_objects[m_wire_func_stage].index, m_cur_wire_segment->ends[WIRE_SEG_START_INDEX]);
                             m_cur_wire_segment->ends[WIRE_SEG_START_INDEX][0] += device->position[0];
                             m_cur_wire_segment->ends[WIRE_SEG_START_INDEX][1] += device->position[1];
@@ -1096,9 +1046,9 @@ void m_EditState()
                         }
                         break;
 
-                        case M_OBJECT_TYPE_SEGMENT:
+                        case OBJECT_TYPE_SEGMENT:
                         {
-                            struct wire_seg_t *segment = m_picked_objects[m_wire_func_stage].object->object;
+                            struct wire_seg_t *segment = m_picked_objects[m_wire_func_stage].object->base_object;
                         }
                         break;
                     }
@@ -1278,11 +1228,11 @@ int main(int argc, char *argv[])
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
     free(pixels);
 
-    m_selections = list_Create(sizeof(struct m_object_t *), 512);
-    m_objects_in_box = list_Create(sizeof(struct m_object_t *), 512);
+    m_selections = list_Create(sizeof(struct obj_t *), 512);
     m_wire_seg_pos = list_Create(sizeof(union m_wire_seg_t), 512);
-    m_objects[M_OBJECT_TYPE_DEVICE] = pool_CreateTyped(struct m_object_t, 16384);
-    m_objects[M_OBJECT_TYPE_SEGMENT] = pool_CreateTyped(struct m_object_t, 16384);
+    obj_objects_in_box = list_Create(sizeof(struct obj_t *), 512);
+    obj_objects[OBJECT_TYPE_DEVICE] = pool_CreateTyped(struct obj_t, 16384);
+    obj_objects[OBJECT_TYPE_SEGMENT] = pool_CreateTyped(struct obj_t, 16384);
 
     d_Init();
     ui_Init();
@@ -1431,8 +1381,8 @@ int main(int argc, char *argv[])
             {
                 for(uint32_t index = 0; index < m_selections.cursor; index++)
                 {
-                    struct m_object_t *object = *(struct m_object_t **)list_GetElement(&m_selections, index);
-                    struct dev_t *device = object->object;
+                    struct obj_t *object = *(struct obj_t **)list_GetElement(&m_selections, index);
+                    struct dev_t *device = object->base_object;
                     device->rotation = (device->rotation + 1) % 4;
                 }
                 m_SetEditFunc(M_EDIT_FUNC_SELECT);
@@ -1451,8 +1401,8 @@ int main(int argc, char *argv[])
             {
                 for(uint32_t index = 0; index < m_selections.cursor; index++)
                 {
-                    struct m_object_t *object = *(struct m_object_t **)list_GetElement(&m_selections, index);
-                    struct dev_t *device = object->object;
+                    struct obj_t *object = *(struct obj_t **)list_GetElement(&m_selections, index);
+                    struct dev_t *device = object->base_object;
                     if(device->rotation == 0)
                     {
                         device->rotation = 4;
@@ -1476,8 +1426,8 @@ int main(int argc, char *argv[])
             {
                 for(uint32_t index = 0; index < m_selections.cursor; index++)
                 {
-                    struct m_object_t *object = *(struct m_object_t **)list_GetElement(&m_selections, index);
-                    struct dev_t *device = object->object;
+                    struct obj_t *object = *(struct obj_t **)list_GetElement(&m_selections, index);
+                    struct dev_t *device = object->base_object;
 
                     if(device->rotation == DEV_DEVICE_ROTATION_90 || device->rotation == DEV_DEVICE_ROTATION_270)
                     {
@@ -1505,8 +1455,8 @@ int main(int argc, char *argv[])
             {
                 for(uint32_t index = 0; index < m_selections.cursor; index++)
                 {
-                    struct m_object_t *object = *(struct m_object_t **)list_GetElement(&m_selections, index);
-                    struct dev_t *device = object->object;
+                    struct obj_t *object = *(struct obj_t **)list_GetElement(&m_selections, index);
+                    struct dev_t *device = object->base_object;
 
                     if(device->rotation == DEV_DEVICE_ROTATION_90 || device->rotation == DEV_DEVICE_ROTATION_270)
                     {
