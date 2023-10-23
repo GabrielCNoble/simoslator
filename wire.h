@@ -196,11 +196,13 @@ struct wire_junc_t *w_AddJunctionAtMiddle(struct wire_seg_t *segment, int32_t *p
 
 struct wire_junc_t *w_AddJunctionAtTip(struct wire_seg_t *segment, uint32_t tip_index);
 
-void w_RemoveJunction(struct wire_junc_t *junction);
+struct wire_seg_t *w_RemoveJunction(struct wire_junc_t *junction);
 
 struct wire_t *w_MergeWires(struct wire_t *wire_a, struct wire_t *wire_b);
 
 void w_MoveSegmentsToWire(struct wire_t *wire, struct wire_seg_t *segment);
+
+void w_MoveJunctionToWire(struct wire_t *wire, struct wire_junc_t *junction);
 
 uint32_t w_TryReachOppositeSegmentTip(struct wire_seg_t *target_segment);
 
