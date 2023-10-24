@@ -99,7 +99,7 @@ union m_wire_seg_t
     struct wire_seg_t *       segment;
 };
 
-#define M_SNAP_VALUE                20
+#define M_SNAP_VALUE                10
 #define M_REGION_SIZE               (M_SNAP_VALUE*20)
 // #define M_DEVICE_PIN_PIXEL_WIDTH    8
 // #define M_WIRE_PIXEL_WIDTH          4

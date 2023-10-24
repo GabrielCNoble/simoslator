@@ -1581,7 +1581,8 @@ int main(int argc, char *argv[])
                 {
                     struct obj_t *object = *(struct obj_t **)list_GetElement(&m_selections, index);
                     struct dev_t *device = object->base_object;
-                    device->rotation = (device->rotation + 1) % 4;
+                    dev_RotateDevice(device, 1);
+                    // device->rotation = (device->rotation + 1) % 4;
                 }
                 m_SetEditFunc(M_EDIT_FUNC_SELECT);
             }
@@ -1601,11 +1602,12 @@ int main(int argc, char *argv[])
                 {
                     struct obj_t *object = *(struct obj_t **)list_GetElement(&m_selections, index);
                     struct dev_t *device = object->base_object;
-                    if(device->rotation == 0)
-                    {
-                        device->rotation = 4;
-                    }
-                    device->rotation--;
+                    dev_RotateDevice(device, 0);
+                    // if(device->rotation == 0)
+                    // {
+                    //     device->rotation = 4;
+                    // }
+                    // device->rotation--;
                 }
                 m_SetEditFunc(M_EDIT_FUNC_SELECT);
             }
@@ -1627,14 +1629,17 @@ int main(int argc, char *argv[])
                     struct obj_t *object = *(struct obj_t **)list_GetElement(&m_selections, index);
                     struct dev_t *device = object->base_object;
 
-                    if(device->rotation == DEV_DEVICE_ROTATION_90 || device->rotation == DEV_DEVICE_ROTATION_270)
-                    {
-                        device->flip ^= 1 << DEV_DEVICE_FLIP_X;
-                    }
-                    else
-                    {
-                        device->flip ^= 1 << DEV_DEVICE_FLIP_Y;
-                    }
+                    device->flip ^= DEV_DEVICE_FLIP_Y;
+                    dev_UpdateDeviceRotation(device);
+
+                    // if(device->rotation == DEV_DEVICE_ROTATION_90 || device->rotation == DEV_DEVICE_ROTATION_270)
+                    // {
+                    //     device->flip ^= 1 << DEV_DEVICE_FLIP_X;
+                    // }
+                    // else
+                    // {
+                    //     device->flip ^= 1 << DEV_DEVICE_FLIP_Y;
+                    // }
                 }
                 m_SetEditFunc(M_EDIT_FUNC_SELECT);
             }
@@ -1656,14 +1661,17 @@ int main(int argc, char *argv[])
                     struct obj_t *object = *(struct obj_t **)list_GetElement(&m_selections, index);
                     struct dev_t *device = object->base_object;
 
-                    if(device->rotation == DEV_DEVICE_ROTATION_90 || device->rotation == DEV_DEVICE_ROTATION_270)
-                    {
-                        device->flip ^= 1 << DEV_DEVICE_FLIP_Y;
-                    }
-                    else
-                    {
-                        device->flip ^= 1 << DEV_DEVICE_FLIP_X;
-                    }
+                    device->flip ^= DEV_DEVICE_FLIP_X;
+                    dev_UpdateDeviceRotation(device);
+
+                    // if(device->rotation == DEV_DEVICE_ROTATION_90 || device->rotation == DEV_DEVICE_ROTATION_270)
+                    // {
+                    //     device->flip ^= 1 << DEV_DEVICE_FLIP_Y;
+                    // }
+                    // else
+                    // {
+                    //     device->flip ^= 1 << DEV_DEVICE_FLIP_X;
+                    // }
                 }
                 m_SetEditFunc(M_EDIT_FUNC_SELECT);
             }
@@ -1753,7 +1761,7 @@ int main(int argc, char *argv[])
             sim_Step();
         }
 
-        d_DrawDevices();
+        d_Draw();
 
         SDL_GL_SwapWindow(m_window);
     }

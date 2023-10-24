@@ -21,6 +21,7 @@ enum DEV_DEVICE_TYPES
     DEV_DEVICE_TYPE_POW,
     DEV_DEVICE_TYPE_CLOCK,
     DEV_DEVICE_TYPE_INPUT,
+    DEV_DEVICE_TYPE_7SEG,
     DEV_DEVICE_TYPE_LAST,
 };
 
@@ -57,12 +58,13 @@ enum DEV_DEVICE_ROTATION
     DEV_DEVICE_ROTATION_90,
     DEV_DEVICE_ROTATION_180,
     DEV_DEVICE_ROTATION_270,
+    DEV_DEVICE_ROTATION_360
 };
 
 enum DEV_DEVICE_FLIP
 {
-    DEV_DEVICE_FLIP_Y,
-    DEV_DEVICE_FLIP_X,
+    DEV_DEVICE_FLIP_X = 1,
+    DEV_DEVICE_FLIP_Y = 1 << 1,
 };
 
 struct dev_pin_t
@@ -85,13 +87,14 @@ struct dev_t
     void *                      data;
     uint64_t                    sim_data;
     uint64_t                    selection_index;
-    int32_t                     position[2];
-    uint32_t                    type;
-    struct dev_pin_block_t *    pin_blocks;
-    uint16_t                    rotation;
-    uint16_t                    flip;
-    uint32_t                    regions[4];
     uintptr_t                   serialized_index;
+    int32_t                     position[2];
+    int32_t                     origin[2];
+    struct dev_pin_block_t *    pin_blocks;
+    uint8_t                     tex_coords;
+    uint8_t                     type;
+    uint8_t                     rotation;
+    uint8_t                     flip;
 };
 
 struct dev_clock_t
@@ -108,6 +111,13 @@ struct dev_input_t
     uint8_t         init_value;
 };
 
+struct dev_7seg_disp_t
+{
+    POOL_ELEMENT;
+    struct dev_t *  device;
+    uint8_t         value;
+};
+
 void dev_Init();
 
 void dev_Shutdown();
@@ -115,6 +125,10 @@ void dev_Shutdown();
 struct dev_t *dev_CreateDevice(uint32_t type);
 
 void dev_DestroyDevice(struct dev_t *device);
+
+void dev_UpdateDeviceRotation(struct dev_t *device);
+
+void dev_RotateDevice(struct dev_t *device, uint32_t ccw);
 
 void dev_ClearDevices();
 
