@@ -18,6 +18,11 @@ struct obj_t *obj_CreateObject(uint32_t type, void *base_object)
     return object;
 }
 
+void obj_FreeObject(struct obj_t *object)
+{
+    pool_RemoveElement(&obj_objects[object->type], object->element_index);
+}
+
 void obj_DestroyObject(struct obj_t *object)
 {
     switch(object->type)
@@ -40,8 +45,6 @@ void obj_DestroyObject(struct obj_t *object)
         }
         break;
     }
-
-    pool_RemoveElement(&obj_objects[object->type], object->element_index);
 }
 
 void obj_UpdateObject(struct obj_t *object)

@@ -24,6 +24,7 @@
         "float   position[2];\n"                                    \
         "int     tex_coord_set;\n"                                  \
         "int     flip_size;\n"                                      \
+        "int     selected;\n"                                       \
     "};\n"                                                          \
                                                                     \
     "layout (std430) buffer d_device_data_buffer\n"                 \
@@ -136,7 +137,7 @@
 //         "gl_Position = d_model_view_projection_matrix * position;\n"
 //     "}\n";
 
-const char *d_draw_device_vertex_shader =
+const char *d_device_vertex_shader =
     D_VERSION_EXTS
 
     "layout (location = 0) in vec4 d_position;\n"
@@ -162,10 +163,10 @@ const char *d_draw_device_vertex_shader =
         "tex_coords = coord_offset + vec2(data.device_tex_size[0] * tex_coords.x, data.device_tex_size[1] * tex_coords.y);\n"
         "vec4 position = vec4(d_position.x * device_size[data.flip_size], d_position.y * device_size[data.flip_size ^ 1], 0.1f, 1);\n"
         "gl_Position = d_model_view_projection_matrix * (position + vec4(data.position[0], data.position[1], 0, 0));\n"
-        "selected = 0;\n"
+        "selected = data.selected;\n"
     "}\n";
 
-const char *d_draw_device_fragment_shader = 
+const char *d_device_fragment_shader = 
     D_VERSION_EXTS
 
     "in vec2 tex_coords;\n"
@@ -192,7 +193,7 @@ const char *d_draw_device_fragment_shader =
 
 
 
-const char *d_draw_7seg_mask_vertex_shader = 
+const char *d_7seg_mask_vertex_shader = 
     D_VERSION_EXTS
 
     "layout (location = 0) in vec4 d_position;\n"
@@ -217,7 +218,7 @@ const char *d_draw_7seg_mask_vertex_shader =
         "gl_Position = d_model_view_projection_matrix * (position + vec4(data.position[0], data.position[1], 0, 0));\n"
     "}\n";
 
-const char *d_draw_7seg_mask_fragment_shader = 
+const char *d_7seg_mask_fragment_shader = 
     D_VERSION_EXTS
 
     "uniform usampler2D d_texture;\n"
@@ -231,16 +232,18 @@ const char *d_draw_7seg_mask_fragment_shader =
 
     "void main()\n"
     "{\n"
-        "int data = d_7seg_data[display_index >> 2];\n"
-        "uvec4 mask = texture(d_texture, tex_coords);\n"
-        "if(mask.r == 0 || mask.a == 0)\n"
+        "int data = (d_7seg_data[display_index >> 2] >> ((display_index % 4) << 3)) & 0xff;\n"
+        "vec2 tex_size = textureSize(d_texture, 0);\n"
+        "uvec4 mask = texture(d_texture, tex_coords /* + vec2(1.0f / tex_size.x, 1.0f / tex_size.y) */);\n"
+        "if(mask.a == 0 || (data & (1 << mask.r)) == 0)\n"
         "{\n"
             "discard;"
         "}\n"
+
         "gl_FragColor = vec4(1.0f, 0.0f, 0.0f, 1.0f);\n"
     "}\n";
 
-const char *d_draw_wire_vertex_shader = 
+const char *d_wire_vertex_shader = 
     D_VERSION_EXTS
 
     "layout (location = 0) in vec4 d_position;\n"
@@ -257,7 +260,7 @@ const char *d_draw_wire_vertex_shader =
         "selected = d_value_sel >> 16;"
     "}\n";
 
-const char *d_draw_wire_fragment_shader = 
+const char *d_wire_fragment_shader = 
     D_VERSION_EXTS
     "layout (std430) buffer d_wire_colors\n"
     "{\n"
@@ -278,36 +281,67 @@ const char *d_draw_wire_fragment_shader =
         "}\n"
         "gl_FragColor = color;\n"
     "}\n";
+
+const char *d_selection_box_vertex_shader = 
+    D_VERSION_EXTS
+    "layout (location = 0) in vec4 d_position;\n"
+    "layout (location = 1) in vec4 d_color;\n"
+
+    "uniform mat4 d_model_view_projection_matrix;\n"
+    "out vec4 color;\n"
+
+    "void main()\n"
+    "{\n"
+        "color = d_color;\n"
+        "gl_Position = d_model_view_projection_matrix * d_position;\n"
+    "}\n";
+
+const char *d_selection_box_fragment_shader = 
+    D_VERSION_EXTS
+    "in vec4 color;\n"
+
+    "void main()\n"
+    "{\n"
+        "gl_FragColor = color;\n"
+    "}\n";
  
 #define D_DEVICE_VERTEX_BUFFER_SIZE     4
 #define D_DEVICE_INDEX_BUFFER_SIZE      6
-#define D_DEVICE_STORAGE_BUFFER_SIZE    0xfffff
+#define D_DEVICE_DATA_BUFFER_SIZE       0xfffff
+#define D_DEVICE_DATA_BUFFER_COUNT      8
+
 #define D_WIRE_VERTEX_BUFFER_SIZE       0xfffff
+#define D_WIRE_VERTEX_BUFFER_COUNT      8
+
+#define D_7SEG_DISPLAY_DATA_BUFFER_SIZE 0xfff
 
 GLuint                      d_vao;
 
 GLuint                      d_wire_value_color_buffer;
 GLuint                      d_device_tex_coords_buffer;
-
-GLuint                      d_draw_device_shader;
-uint32_t                    d_draw_device_shader_model_view_projection_matrix;
-uint32_t                    d_draw_device_shader_texture;
+GLuint                      d_device_shader;
+uint32_t                    d_device_shader_model_view_projection_matrix;
+uint32_t                    d_device_shader_texture;
+uint32_t                    d_device_data_buffer_index;
 GLuint                      d_device_vertex_buffer;
 GLuint                      d_device_index_buffer;
-GLuint                      d_device_data_buffer;
+GLuint                      d_device_data_buffer[D_DEVICE_DATA_BUFFER_COUNT];
 struct d_device_data_t *    d_device_data;
 
-GLuint                      d_draw_wire_shader;
-uint32_t                    d_draw_wire_shader_model_view_projection_matrix;
+GLuint                      d_wire_shader;
+uint32_t                    d_wire_shader_model_view_projection_matrix;
 GLuint                      d_wire_vertex_buffer;
 struct d_wire_vert_t *      d_wire_vertices;
 
-GLuint                      d_draw_7seg_mask_shader;
-uint32_t                    d_draw_7seg_mask_shader_model_view_projection_matrix;
-uint32_t                    d_draw_7seg_mask_shader_texture;
+GLuint                      d_7seg_mask_shader;
+uint32_t                    d_7seg_mask_shader_model_view_projection_matrix;
+uint32_t                    d_7seg_mask_shader_texture;
 GLuint                      d_7seg_display_data_buffer;
 uint32_t *                  d_7seg_display_data;
 
+GLuint                      d_selection_box_shader;
+GLuint                      d_selection_box_vertex_buffer;
+uint32_t                    d_selection_box_shader_model_view_projection_matrix;
 // GLuint                      d_wire_id_buffer;
 // uint32_t *                  d_wire_ids;
 
@@ -340,8 +374,10 @@ extern float                m_offset_y;
 extern uint32_t             m_run_simulation;
 extern uint32_t             m_selected_device_type;
 extern struct dev_t *       m_selected_device;
-extern int32_t              m_mouse_x;
-extern int32_t              m_mouse_y;
+extern uint32_t             m_draw_selection_box;
+extern int32_t              m_selection_box_min[2];
+extern int32_t              m_selection_box_max[2];
+extern int32_t              m_mouse_pos[2];
 extern int32_t              m_place_device_x;
 extern int32_t              m_place_device_y;
 extern struct list_t        m_wire_seg_pos;
@@ -356,59 +392,73 @@ void d_Init()
     glGenVertexArrays(1, &d_vao);
     glBindVertexArray(d_vao);
 
-    glGenBuffers(1, &d_device_vertex_buffer);
-    glBindBuffer(GL_ARRAY_BUFFER, d_device_vertex_buffer);
-    glBufferData(GL_ARRAY_BUFFER, D_DEVICE_VERTEX_BUFFER_SIZE * sizeof(struct d_vert_t), NULL, GL_STATIC_DRAW);
-
-    glGenBuffers(1, &d_device_index_buffer);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, d_device_index_buffer);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, D_DEVICE_INDEX_BUFFER_SIZE * sizeof(uint32_t), NULL, GL_STATIC_DRAW);
-
-    glGenBuffers(1, &d_device_data_buffer);
-    glBindBuffer(GL_SHADER_STORAGE_BUFFER, d_device_data_buffer);
-    glBufferData(GL_SHADER_STORAGE_BUFFER, D_DEVICE_STORAGE_BUFFER_SIZE * sizeof(struct d_device_data_t), NULL, GL_DYNAMIC_DRAW);
-    d_device_data = calloc(D_DEVICE_STORAGE_BUFFER_SIZE, sizeof(struct d_device_data_t));
-
-    struct d_vert_t vertices[] = {
+    struct d_device_vert_t vertices[] = {
         {.position = {-1.0, 1.0}, .tex_coords = {0.0, 0.0}},
         {.position = {-1.0,-1.0}, .tex_coords = {0.0, 1.0}},
         {.position = { 1.0,-1.0}, .tex_coords = {1.0, 1.0}},
         {.position = { 1.0, 1.0}, .tex_coords = {1.0, 0.0}},
     };
 
+    glGenBuffers(1, &d_device_vertex_buffer);
+    glBindBuffer(GL_ARRAY_BUFFER, d_device_vertex_buffer);
+    glBufferData(GL_ARRAY_BUFFER, D_DEVICE_VERTEX_BUFFER_SIZE * sizeof(struct d_device_vert_t), vertices, GL_STATIC_DRAW);
+
     uint32_t indices[] = {
         0, 1, 2, 2, 3, 0
     };
 
-    glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(vertices), vertices);
-    glBufferSubData(GL_ELEMENT_ARRAY_BUFFER, 0, sizeof(indices), indices);
+    glGenBuffers(1, &d_device_index_buffer);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, d_device_index_buffer);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, D_DEVICE_INDEX_BUFFER_SIZE * sizeof(uint32_t), indices, GL_STATIC_DRAW);
+
+    for(uint32_t index = 0; index < D_DEVICE_DATA_BUFFER_COUNT; index++)
+    {
+        glGenBuffers(1, &d_device_data_buffer[index]);
+        glBindBuffer(GL_SHADER_STORAGE_BUFFER, d_device_data_buffer[index]);
+        glBufferData(GL_SHADER_STORAGE_BUFFER, D_DEVICE_DATA_BUFFER_SIZE * sizeof(struct d_device_data_t), NULL, GL_DYNAMIC_DRAW);
+    }
+    d_device_data = calloc(D_DEVICE_DATA_BUFFER_SIZE, sizeof(struct d_device_data_t));
+
+    glGenBuffers(1, &d_7seg_display_data_buffer);
+    glBindBuffer(GL_SHADER_STORAGE_BUFFER, d_7seg_display_data_buffer);
+    glBufferData(GL_SHADER_STORAGE_BUFFER, D_7SEG_DISPLAY_DATA_BUFFER_SIZE * sizeof(uint32_t), NULL, GL_DYNAMIC_DRAW);
+    d_7seg_display_data = calloc(D_7SEG_DISPLAY_DATA_BUFFER_SIZE, sizeof(uint32_t));
 
     glGenBuffers(1, &d_wire_vertex_buffer);
     glBindBuffer(GL_ARRAY_BUFFER, d_wire_vertex_buffer);
     glBufferData(GL_ARRAY_BUFFER, D_WIRE_VERTEX_BUFFER_SIZE * sizeof(struct d_wire_vert_t), NULL, GL_STATIC_DRAW);
     d_wire_vertices = calloc(D_WIRE_VERTEX_BUFFER_SIZE, sizeof(struct d_wire_vert_t));
 
-    d_draw_device_shader = d_CreateShader(d_draw_device_vertex_shader, d_draw_device_fragment_shader, "draw_device_shader");
-    d_draw_device_shader_model_view_projection_matrix = glGetUniformLocation(d_draw_device_shader, "d_model_view_projection_matrix");
-    d_draw_device_shader_texture = glGetUniformLocation(d_draw_device_shader, "d_texture");
-    GLuint device_data_block = glGetProgramResourceIndex(d_draw_device_shader, GL_SHADER_STORAGE_BLOCK, "d_device_data_buffer");
-    glShaderStorageBlockBinding(d_draw_device_shader, device_data_block, D_DEVICE_DATA_BINDING);
-    GLuint device_tex_coords_block = glGetProgramResourceIndex(d_draw_device_shader, GL_SHADER_STORAGE_BLOCK, "d_device_tex_coords_buffer");
-    glShaderStorageBlockBinding(d_draw_device_shader, device_tex_coords_block, D_DEVICE_TEX_COORDS_BINDING);
-    
-    d_draw_wire_shader = d_CreateShader(d_draw_wire_vertex_shader, d_draw_wire_fragment_shader, "draw_wire_shader");
-    d_draw_wire_shader_model_view_projection_matrix = glGetUniformLocation(d_draw_wire_shader, "d_model_view_projection_matrix");
-    uint32_t wire_colors_block = glGetProgramResourceIndex(d_draw_wire_shader, GL_SHADER_STORAGE_BLOCK, "d_wire_colors");
-    glShaderStorageBlockBinding(d_draw_wire_shader, wire_colors_block, 1);
+    glGenBuffers(1, &d_selection_box_vertex_buffer);
+    glBindBuffer(GL_ARRAY_BUFFER, d_selection_box_vertex_buffer);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(struct d_color_vert_t) * 4, NULL, GL_STATIC_DRAW);
 
-    d_draw_7seg_mask_shader = d_CreateShader(d_draw_7seg_mask_vertex_shader, d_draw_7seg_mask_fragment_shader, "draw_7seg_mask");
-    d_draw_7seg_mask_shader_model_view_projection_matrix = glGetUniformLocation(d_draw_7seg_mask_shader, "d_model_view_projection_matrix");
-    d_draw_7seg_mask_shader_texture = glGetUniformLocation(d_draw_7seg_mask_shader, "d_texture");
-    device_data_block = glGetProgramResourceIndex(d_draw_7seg_mask_shader, GL_SHADER_STORAGE_BLOCK, "d_device_data_buffer");
-    glShaderStorageBlockBinding(d_draw_7seg_mask_shader, device_data_block, D_DEVICE_DATA_BINDING);
-    device_tex_coords_block = glGetProgramResourceIndex(d_draw_7seg_mask_shader, GL_SHADER_STORAGE_BLOCK, "d_device_tex_coords_buffer");
-    glShaderStorageBlockBinding(d_draw_7seg_mask_shader, device_tex_coords_block, D_DEVICE_TEX_COORDS_BINDING);
+    d_device_shader = d_CreateShader(d_device_vertex_shader, d_device_fragment_shader, "device_shader");
+    d_device_shader_model_view_projection_matrix = glGetUniformLocation(d_device_shader, "d_model_view_projection_matrix");
+    d_device_shader_texture = glGetUniformLocation(d_device_shader, "d_texture");
+    GLuint device_data_block = glGetProgramResourceIndex(d_device_shader, GL_SHADER_STORAGE_BLOCK, "d_device_data_buffer");
+    glShaderStorageBlockBinding(d_device_shader, device_data_block, D_DEVICE_DATA_BINDING);
+    GLuint device_tex_coords_block = glGetProgramResourceIndex(d_device_shader, GL_SHADER_STORAGE_BLOCK, "d_device_tex_coords_buffer");
+    glShaderStorageBlockBinding(d_device_shader, device_tex_coords_block, D_DEVICE_TEX_COORDS_BINDING);
     
+    d_wire_shader = d_CreateShader(d_wire_vertex_shader, d_wire_fragment_shader, "wire_shader");
+    d_wire_shader_model_view_projection_matrix = glGetUniformLocation(d_wire_shader, "d_model_view_projection_matrix");
+    uint32_t wire_colors_block = glGetProgramResourceIndex(d_wire_shader, GL_SHADER_STORAGE_BLOCK, "d_wire_colors");
+    glShaderStorageBlockBinding(d_wire_shader, wire_colors_block, 1);
+
+    d_7seg_mask_shader = d_CreateShader(d_7seg_mask_vertex_shader, d_7seg_mask_fragment_shader, "7seg_mask_shader");
+    d_7seg_mask_shader_model_view_projection_matrix = glGetUniformLocation(d_7seg_mask_shader, "d_model_view_projection_matrix");
+    d_7seg_mask_shader_texture = glGetUniformLocation(d_7seg_mask_shader, "d_texture");
+    device_data_block = glGetProgramResourceIndex(d_7seg_mask_shader, GL_SHADER_STORAGE_BLOCK, "d_device_data_buffer");
+    glShaderStorageBlockBinding(d_7seg_mask_shader, device_data_block, D_DEVICE_DATA_BINDING);
+    device_tex_coords_block = glGetProgramResourceIndex(d_7seg_mask_shader, GL_SHADER_STORAGE_BLOCK, "d_device_tex_coords_buffer");
+    glShaderStorageBlockBinding(d_7seg_mask_shader, device_tex_coords_block, D_DEVICE_TEX_COORDS_BINDING);
+    uint32_t display_data_block = glGetProgramResourceIndex(d_7seg_mask_shader, GL_SHADER_STORAGE_BLOCK, "d_7seg_data_buffer");
+    glShaderStorageBlockBinding(d_7seg_mask_shader, display_data_block, D_7SEG_DATA_BINDING);
+    
+    d_selection_box_shader = d_CreateShader(d_selection_box_vertex_shader, d_selection_box_fragment_shader, "selection_box_shader");
+    d_selection_box_shader_model_view_projection_matrix = glGetUniformLocation(d_selection_box_shader, "d_model_view_projection_matrix");
+
 
     float wire_colors[][4] = {
         [WIRE_VALUE_0S]     = {0, 0.5, 0, 1},
@@ -528,7 +578,7 @@ void d_Draw()
     d_model_view_projection_matrix[0] = 2.0 / ((float)m_window_width / m_zoom);
     d_model_view_projection_matrix[5] = 2.0 / ((float)m_window_height / m_zoom);
     d_model_view_projection_matrix[12] = -m_offset_x * d_model_view_projection_matrix[0];
-    d_model_view_projection_matrix[13] = -m_offset_y * d_model_view_projection_matrix[1];
+    d_model_view_projection_matrix[13] = -m_offset_y * d_model_view_projection_matrix[5];
 
     glDisable(GL_CULL_FACE);
     glDisable(GL_SCISSOR_TEST);
@@ -539,28 +589,28 @@ void d_Draw()
     glBindBuffer(GL_ARRAY_BUFFER, d_device_vertex_buffer);
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, d_device_index_buffer);
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, D_DEVICE_TEX_COORDS_BINDING, d_device_tex_coords_buffer);
-    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, D_DEVICE_DATA_BINDING, d_device_data_buffer);
-    glUseProgram(d_draw_device_shader);
+    // glBindBufferBase(GL_SHADER_STORAGE_BUFFER, D_DEVICE_DATA_BINDING, d_device_data_buffer);
+    glUseProgram(d_device_shader);
     glEnableVertexAttribArray(0);
-    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, sizeof(struct d_vert_t), (void *)(offsetof(struct d_vert_t, position)));
+    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, sizeof(struct d_device_vert_t), (void *)(offsetof(struct d_device_vert_t, position)));
     glEnableVertexAttribArray(1);
-    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, sizeof(struct d_vert_t), (void *)(offsetof(struct d_vert_t, tex_coords)));
+    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, sizeof(struct d_device_vert_t), (void *)(offsetof(struct d_device_vert_t, tex_coords)));
     glDisableVertexAttribArray(2);
 
-    glUniformMatrix4fv(d_draw_device_shader_model_view_projection_matrix, 1, GL_FALSE, d_model_view_projection_matrix);
+    glUniformMatrix4fv(d_device_shader_model_view_projection_matrix, 1, GL_FALSE, d_model_view_projection_matrix);
     glBindTexture(GL_TEXTURE_2D, dev_devices_texture);
-    glUniform1i(d_draw_device_shader_texture, 0);
+    glUniform1i(d_device_shader_texture, 0);
 
     uint32_t device_count = dev_devices.cursor - (dev_devices.free_indices_top + 1);
-    uint32_t update_count = device_count / D_DEVICE_STORAGE_BUFFER_SIZE;
+    uint32_t update_count = device_count / D_DEVICE_DATA_BUFFER_SIZE;
 
-    if(device_count % D_DEVICE_STORAGE_BUFFER_SIZE)
+    if(device_count % D_DEVICE_DATA_BUFFER_SIZE)
     {
         update_count++;
     }
 
     uint32_t first_device = 0;
-    uint32_t last_device = D_DEVICE_STORAGE_BUFFER_SIZE;
+    uint32_t last_device = D_DEVICE_DATA_BUFFER_SIZE;
 
     for(uint32_t update_index = 0; update_index < update_count; update_index++)
     {
@@ -597,20 +647,24 @@ void d_Draw()
                 data->position[1] = device->position[1] - device->origin[1];
                 data->tex_coord_offset[0] = (float)desc->tex_offset[0] / (float)dev_devices_texture_width;
                 data->tex_coord_offset[1] = (float)desc->tex_offset[1] / (float)dev_devices_texture_height;
+                data->selected = device->selection_index != INVALID_LIST_INDEX;
                 buffer_offset++;
             }
         }
 
+        glBindBufferBase(GL_SHADER_STORAGE_BUFFER, D_DEVICE_DATA_BINDING, d_device_data_buffer[d_device_data_buffer_index]);
         glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, buffer_offset * sizeof(struct d_device_data_t), d_device_data);
         glDrawElementsInstanced(GL_TRIANGLES, 6, GL_UNSIGNED_INT, (void *)0, buffer_offset);
 
-        first_device += D_DEVICE_STORAGE_BUFFER_SIZE;
-        last_device += D_DEVICE_STORAGE_BUFFER_SIZE;
+        first_device += D_DEVICE_DATA_BUFFER_SIZE;
+        last_device += D_DEVICE_DATA_BUFFER_SIZE;
 
         if(last_device > dev_devices.cursor)
         {
             last_device = dev_devices.cursor;
         }
+
+        d_device_data_buffer_index = (d_device_data_buffer_index + 1) % D_DEVICE_DATA_BUFFER_COUNT;
     }
 
     if(m_selected_device_type != DEV_DEVICE_TYPE_LAST)
@@ -637,61 +691,69 @@ void d_Draw()
         d_device_data->tex_coord_offset[0] = (float)desc->tex_offset[0] / (float)dev_devices_texture_width;
         d_device_data->tex_coord_offset[1] = (float)desc->tex_offset[1] / (float)dev_devices_texture_height;
 
+        glBindBufferBase(GL_SHADER_STORAGE_BUFFER, D_DEVICE_DATA_BINDING, d_device_data_buffer[d_device_data_buffer_index]);
         glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(struct d_device_data_t), d_device_data);
         glDrawElementsInstanced(GL_TRIANGLES, 6, GL_UNSIGNED_INT, (void *)0, 1);
     }
 
     if(dev_7seg_disps.cursor)
     {
-        glUseProgram(d_draw_7seg_mask_shader);
+        glUseProgram(d_7seg_mask_shader);
         glEnableVertexAttribArray(0);
-        glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, sizeof(struct d_vert_t), (void *)(offsetof(struct d_vert_t, position)));
+        glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, sizeof(struct d_device_vert_t), (void *)(offsetof(struct d_device_vert_t, position)));
         glEnableVertexAttribArray(1);
-        glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, sizeof(struct d_vert_t), (void *)(offsetof(struct d_vert_t, tex_coords)));
+        glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, sizeof(struct d_device_vert_t), (void *)(offsetof(struct d_device_vert_t, tex_coords)));
         glDisableVertexAttribArray(2);
 
-        glUniformMatrix4fv(d_draw_7seg_mask_shader_model_view_projection_matrix, 1, GL_FALSE, d_model_view_projection_matrix);
+        glUniformMatrix4fv(d_7seg_mask_shader_model_view_projection_matrix, 1, GL_FALSE, d_model_view_projection_matrix);
         glBindTexture(GL_TEXTURE_2D, dev_7seg_mask_texture);
-        glUniform1i(d_draw_7seg_mask_shader_texture, 0);
-        uint32_t buffer_offset = 0;
+        glUniform1i(d_7seg_mask_shader_texture, 0);
         glDisable(GL_DEPTH_TEST);
+        uint32_t buffer_offset = 0;
         for(uint32_t index = 0; index < dev_7seg_disps.cursor; index++)
         {
             struct dev_7seg_disp_t *display = pool_GetValidElement(&dev_7seg_disps, index);
+            uint32_t display_value = m_run_simulation ? display->value : 0;
 
             if(display != NULL)
             {
                 struct dev_t *device = display->device;
                 struct dev_desc_t *desc = dev_device_descs + device->type;
-                struct d_device_data_t *data = d_device_data + buffer_offset;
-                data->device_quad_size[0] = desc->width >> 1;
-                data->device_quad_size[1] = desc->height >> 1;
+                struct d_device_data_t *device_data = d_device_data + buffer_offset;
+                d_7seg_display_data[buffer_offset >> 2] |= display_value << ((buffer_offset % 4) << 3);
+                device_data->device_quad_size[0] = desc->width >> 1;
+                device_data->device_quad_size[1] = desc->height >> 1;
                 // data->device_tex_size[0] = (float)desc->width / (float)dev_devices_texture_width;
                 // data->device_tex_size[1] = (float)desc->height / (float)dev_devices_texture_height;
-                data->tex_coord_set = device->tex_coords;
-                data->flip_size = device->rotation == DEV_DEVICE_ROTATION_90 || device->rotation == DEV_DEVICE_ROTATION_270;
-                data->position[0] = device->position[0] - device->origin[0];
-                data->position[1] = device->position[1] - device->origin[1];
+                device_data->tex_coord_set = device->tex_coords;
+                device_data->flip_size = device->rotation == DEV_DEVICE_ROTATION_90 || device->rotation == DEV_DEVICE_ROTATION_270;
+                device_data->position[0] = device->position[0] - device->origin[0];
+                device_data->position[1] = device->position[1] - device->origin[1];
                 // data->tex_coord_offset[0] = (float)desc->tex_offset[0] / (float)dev_devices_texture_width;
                 // data->tex_coord_offset[1] = (float)desc->tex_offset[1] / (float)dev_devices_texture_height;
                 buffer_offset++;
             }
         }
 
+        glBindBufferBase(GL_SHADER_STORAGE_BUFFER, D_7SEG_DATA_BINDING, d_7seg_display_data_buffer);
+        glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, buffer_offset * sizeof(uint32_t), d_7seg_display_data);
+        
+        glBindBufferBase(GL_SHADER_STORAGE_BUFFER, D_DEVICE_DATA_BINDING, d_device_data_buffer[d_device_data_buffer_index]);
         glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, buffer_offset * sizeof(struct d_device_data_t), d_device_data);
         glDrawElementsInstanced(GL_TRIANGLES, 6, GL_UNSIGNED_INT, (void *)0, buffer_offset);
+        d_device_data_buffer_index = (d_device_data_buffer_index + 1) % D_DEVICE_DATA_BUFFER_COUNT;
     }
 
     glBindBuffer(GL_ARRAY_BUFFER, d_wire_vertex_buffer);
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, d_wire_value_color_buffer);
-    glUseProgram(d_draw_wire_shader);
+    glUseProgram(d_wire_shader);
     glEnableVertexAttribArray(0);
     glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, sizeof(struct d_wire_vert_t), (void *)(offsetof(struct d_wire_vert_t, position)));
     glEnableVertexAttribArray(1);
     glVertexAttribIPointer(1, 1, GL_INT, sizeof(struct d_wire_vert_t), (void *)(offsetof(struct d_wire_vert_t, value_sel)));
 
-    glUniformMatrix4fv(d_draw_wire_shader_model_view_projection_matrix, 1, GL_FALSE, d_model_view_projection_matrix);
+    glUniformMatrix4fv(d_wire_shader_model_view_projection_matrix, 1, GL_FALSE, d_model_view_projection_matrix);
     glLineWidth(2.0f);
     glPointSize(4.0f);
 
@@ -837,4 +899,27 @@ void d_Draw()
         glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(struct d_wire_vert_t) * buffer_offset, d_wire_vertices);
         glDrawArrays(GL_LINES, 0, buffer_offset);
     }    
+
+
+    if(m_draw_selection_box)
+    {
+        glUseProgram(d_selection_box_shader);
+        glBindBuffer(GL_ARRAY_BUFFER, d_selection_box_vertex_buffer);
+        glEnableVertexAttribArray(0);
+        glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, sizeof(struct d_color_vert_t), (void *)(offsetof(struct d_color_vert_t, position)));
+        glEnableVertexAttribArray(1);
+        glVertexAttribPointer(1, 4, GL_FLOAT, GL_FALSE, sizeof(struct d_color_vert_t), (void *)(offsetof(struct d_color_vert_t, color)));
+        glDisableVertexAttribArray(2);
+        glUniformMatrix4fv(d_selection_box_shader_model_view_projection_matrix, 1, GL_FALSE, d_model_view_projection_matrix);
+
+        struct d_color_vert_t box_verts[] = {
+            {.position = {m_selection_box_min[0], m_selection_box_max[1]}, .color = {0.0f, 1.0f, 0.0f, 1.0f}},
+            {.position = {m_selection_box_min[0], m_selection_box_min[1]}, .color = {0.0f, 1.0f, 0.0f, 1.0f}},
+            {.position = {m_selection_box_max[0], m_selection_box_min[1]}, .color = {0.0f, 1.0f, 0.0f, 1.0f}},
+            {.position = {m_selection_box_max[0], m_selection_box_max[1]}, .color = {0.0f, 1.0f, 0.0f, 1.0f}},
+        };
+
+        glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(box_verts), box_verts);
+        glDrawArrays(GL_LINE_LOOP, 0, 4);
+    }
 }

@@ -25,6 +25,7 @@ struct sim_wire_data_t      sim_invalid_wires[2] = {{.value = WIRE_VALUE_Z}, {.v
 extern struct pool_t        dev_devices;
 extern struct pool_t        dev_inputs;
 extern struct pool_t        dev_clocks;
+extern struct pool_t        dev_7seg_disps;
 extern struct dev_desc_t    dev_device_descs[];
 
 extern uint8_t              w_wire_value_resolution[][WIRE_VALUE_LAST];
@@ -335,11 +336,10 @@ void sim_Step()
     uint64_t cur_count = SDL_GetPerformanceCounter();
     uint64_t substep_count = (cur_count - sim_prev_counter) / sim_substeps_per_count;
     sim_prev_counter = cur_count;
-    uint64_t elasped_substeps;
     
     while(substep_count)
     {
-        elasped_substeps = 1;
+        uint64_t elasped_substeps = 1;
 
         for(uint32_t update_index = 0; update_index < sim_update_devices.cursor; update_index++)
         {
@@ -385,5 +385,15 @@ void sim_Step()
         }
 
         substep_count -= elasped_substeps;
+    }
+
+    for(uint32_t index = 0; index < dev_7seg_disps.cursor; index++)
+    {
+        struct dev_7seg_disp_t *display = pool_GetValidElement(&dev_7seg_disps, index);
+
+        if(display != NULL)
+        {
+            dev_Update7SegDisplay(display);
+        }
     }
 }

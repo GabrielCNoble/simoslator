@@ -5,6 +5,7 @@
 #include "wire.h"
 #include "sim.h"
 #include "draw.h"
+#include "obj.h"
 
 
 // struct pool_t dev_primitives;
@@ -158,7 +159,7 @@ struct dev_desc_t dev_device_descs[DEV_DEVICE_TYPE_LAST] = {
         .width = 42,
         .height = 80,
         .tex_offset = {50, 0},
-        .origin = {1, 0},
+        .origin = {0, 0},
         .pin_count = 3,
         .pins = (struct dev_pin_desc_t []) {
             [DEV_MOS_PIN_SOURCE]    = {.type = DEV_PIN_TYPE_IN,  .offset = {-20, -40}},
@@ -171,7 +172,7 @@ struct dev_desc_t dev_device_descs[DEV_DEVICE_TYPE_LAST] = {
         .width = 42,
         .height = 80,
         .tex_offset = {0, 0},
-        .origin = {2, 0},
+        .origin = {0, 0},
         .pin_count = 3,
         .pins = (struct dev_pin_desc_t []) {
             [DEV_MOS_PIN_SOURCE]    = {.type = DEV_PIN_TYPE_IN,  .offset = {-20, -40}},
@@ -206,7 +207,7 @@ struct dev_desc_t dev_device_descs[DEV_DEVICE_TYPE_LAST] = {
         .pin_count = 1,
         .width = 70,
         .height = 57,
-        .tex_offset = {104, 72}, 
+        .tex_offset = {104, 71}, 
         .origin = {15, 0},
         .pins = (struct dev_pin_desc_t []) {
             {.type = DEV_PIN_TYPE_OUT, .offset = {20, 0}},
@@ -226,19 +227,20 @@ struct dev_desc_t dev_device_descs[DEV_DEVICE_TYPE_LAST] = {
 
     [DEV_DEVICE_TYPE_7SEG] = {
         .pin_count = 8,
-        .width = 105,
-        .height = 150,
-        .tex_offset = {183, 0},
-        .origin = {5, 5},
+        .width = 94,
+        .height = 160,
+        .tex_offset = {196, 0},
+        .origin = {-2, 0},
         .pins = (struct dev_pin_desc_t []) {
-            {.type = DEV_PIN_TYPE_IN, .offset = {  0,  70}},
-            {.type = DEV_PIN_TYPE_IN, .offset = {-52,  50}},
-            {.type = DEV_PIN_TYPE_IN, .offset = {-52,  30}},
-            {.type = DEV_PIN_TYPE_IN, .offset = {-52,  10}},
-            {.type = DEV_PIN_TYPE_IN, .offset = {-52, -10}},
-            {.type = DEV_PIN_TYPE_IN, .offset = {-52, -30}},
-            {.type = DEV_PIN_TYPE_IN, .offset = {-52, -50}},
-            {.type = DEV_PIN_TYPE_IN, .offset = {-52, -70}},
+            {.type = DEV_PIN_TYPE_IN, .offset = {  0,  80}},
+
+            {.type = DEV_PIN_TYPE_IN, .offset = {-30, -80}},
+            {.type = DEV_PIN_TYPE_IN, .offset = {-20, -80}},
+            {.type = DEV_PIN_TYPE_IN, .offset = {-10, -80}},
+            {.type = DEV_PIN_TYPE_IN, .offset = {  0, -80}},
+            {.type = DEV_PIN_TYPE_IN, .offset = { 10, -80}},
+            {.type = DEV_PIN_TYPE_IN, .offset = { 20, -80}},
+            {.type = DEV_PIN_TYPE_IN, .offset = { 30, -80}},
         }
     }
 };
@@ -260,9 +262,7 @@ void dev_Init()
     int32_t width;
     int32_t height;
     pixels = stbi_load("res/7seg_mask.png", &width, &height, &channels, STBI_rgb_alpha);
-    while(glGetError() != GL_NO_ERROR);
     dev_7seg_mask_texture = d_CreateTexture(width, height, GL_RGBA8UI, GL_NEAREST, GL_NEAREST, 0, GL_RGBA_INTEGER, pixels);
-    printf("%x\n", glGetError());
 
     // while(glGetError() != GL_NO_ERROR);
     // glGenTextures(1, &dev_7seg_mask_texture);
@@ -357,6 +357,7 @@ struct dev_t *dev_CreateDevice(uint32_t type)
     }
 
     dev_UpdateDeviceRotation(device);
+    device->object = obj_CreateObject(OBJECT_TYPE_DEVICE, device);
 
     return device;
 }
@@ -365,6 +366,7 @@ void dev_DestroyDevice(struct dev_t *device)
 {
     if(device != NULL)
     {
+        obj_FreeObject(device->object);
         struct dev_pin_block_t *pin_block = device->pin_blocks;
         while(pin_block)
         {
@@ -572,5 +574,25 @@ void dev_ToggleInput(struct dev_input_t *input)
             pin->value = WIRE_VALUE_0S;
         }
         sim_QueueDevice(sim_data);
+    }
+}
+
+void dev_Update7SegDisplay(struct dev_7seg_disp_t *display)
+{
+    // struct dev_7seg_disp_t *display = device->device->data;
+    struct sim_dev_data_t *device = list_GetElement(&sim_dev_data, display->device->sim_data);
+    display->value = 0;
+
+    struct dev_pin_t *power_pin = list_GetElement(&sim_dev_pins, device->first_pin + DEV_7SEG_PIN_POW);
+    struct sim_wire_data_t *power = sim_GetWireSimData(power_pin->wire, DEV_PIN_TYPE_IN);
+
+    if(power->value == WIRE_VALUE_1S || power->value == WIRE_VALUE_1W)
+    {
+        for(uint32_t index = 0; index < 7; index++)
+        {
+            struct dev_pin_t *segment_pin = list_GetElement(&sim_dev_pins, device->first_pin + DEV_7SEG_PIN_SEG0 + index);
+            struct sim_wire_data_t *segment_wire = sim_GetWireSimData(segment_pin->wire, DEV_PIN_TYPE_IN);
+            display->value |= (segment_wire->value == WIRE_VALUE_0S || segment_wire->value == WIRE_VALUE_0W) << index;
+        }
     }
 }

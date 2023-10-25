@@ -40,6 +40,8 @@ struct obj_t
 
 struct obj_t *obj_CreateObject(uint32_t type, void *base_object);
 
+void obj_FreeObject(struct obj_t *object);
+
 void obj_DestroyObject(struct obj_t *object);
 
 void obj_UpdateObject(struct obj_t *object);

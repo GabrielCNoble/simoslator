@@ -107,6 +107,10 @@ uint32_t ui_keyboard_map[SDL_NUM_SCANCODES] = {
     [SDL_SCANCODE_LCTRL]        = ImGuiKey_LeftCtrl,
     [SDL_SCANCODE_ESCAPE]       = ImGuiKey_Escape,
     [SDL_SCANCODE_DELETE]       = ImGuiKey_Delete,
+    [SDL_SCANCODE_LEFT]         = ImGuiKey_LeftArrow,
+    [SDL_SCANCODE_RIGHT]        = ImGuiKey_RightArrow,
+    [SDL_SCANCODE_UP]           = ImGuiKey_UpArrow,
+    [SDL_SCANCODE_DOWN]         = ImGuiKey_DownArrow,
 };
 
 

@@ -217,9 +217,9 @@ struct wire_seg_t *w_AllocWireSegment(struct wire_t *wire)
     segment->selection_index = 0xffffffff;
     segment->wire_next = NULL;
     segment->wire_prev = NULL;
-    segment->object = NULL;
     segment->traversal_id = 0;
 
+    segment->object = obj_CreateObject(OBJECT_TYPE_SEGMENT, segment);
     w_LinkSegmentToWire(wire, segment);    
 
     return segment;
@@ -228,6 +228,7 @@ struct wire_seg_t *w_AllocWireSegment(struct wire_t *wire)
 void w_FreeWireSegment(struct wire_seg_t *segment)
 {
     struct wire_t *wire = segment->base.wire;
+    obj_FreeObject(segment->object);
     w_UnlinkSegmentFromWire(segment);
     pool_RemoveElement(&w_wire_segs, segment->base.element_index);
 }
@@ -562,7 +563,7 @@ struct wire_seg_t *w_RemoveJunction(struct wire_junc_t *junction)
                 // list_AddElement(&w_deleted_segments, &second_segment->object);
                 struct obj_t *object = second_segment->object;
                 w_FreeWireSegment(second_segment);
-                obj_DestroyObject(object);
+                // obj_DestroyObject(object);
             }
             else
             {

@@ -4,7 +4,13 @@
 #include <stdint.h>
 #include "GL/glew.h"
 
-struct d_vert_t
+struct d_color_vert_t
+{
+    float position[2];
+    float color[4];
+};
+
+struct d_device_vert_t
 {
     float position[2];
     float tex_coords[2];
@@ -23,6 +29,7 @@ struct d_device_tex_coords_t
 
 #define D_DEVICE_DATA_BINDING       0
 #define D_DEVICE_TEX_COORDS_BINDING 1
+#define D_7SEG_DATA_BINDING         2
 // struct d_device_data_t
 // {
 //     int32_t pos_x;
@@ -42,6 +49,7 @@ struct d_device_data_t
     float       position[2];
     int32_t     tex_coord_set;
     int32_t     flip_size;
+    int32_t     selected;
 }; 
 
 // struct d_wire_data_t

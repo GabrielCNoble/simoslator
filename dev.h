@@ -85,6 +85,7 @@ struct dev_t
 {
     POOL_ELEMENT;
     void *                      data;
+    void *                      object;
     uint64_t                    sim_data;
     uint64_t                    selection_index;
     uintptr_t                   serialized_index;
@@ -111,6 +112,14 @@ struct dev_input_t
     uint8_t         init_value;
 };
 
+#define DEV_7SEG_PIN_POW    0
+#define DEV_7SEG_PIN_SEG0   1
+#define DEV_7SEG_PIN_SEG1   2
+#define DEV_7SEG_PIN_SEG2   3
+#define DEV_7SEG_PIN_SEG3   4
+#define DEV_7SEG_PIN_SEG4   5
+#define DEV_7SEG_PIN_SEG5   6
+#define DEV_7SEG_PIN_SEG6   7
 struct dev_7seg_disp_t
 {
     POOL_ELEMENT;
@@ -143,6 +152,8 @@ struct dev_pin_block_t *dev_GetDevicePinBlock(struct dev_t *device, uint16_t pin
 struct dev_pin_t *dev_GetDevicePin(struct dev_t *device, uint16_t pin);
 
 void dev_ToggleInput(struct dev_input_t *input);
+
+void dev_Update7SegDisplay(struct dev_7seg_disp_t *display);
 
 
 #endif

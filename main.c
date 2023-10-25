@@ -18,8 +18,8 @@
 
 SDL_Window *                        m_window;
 SDL_GLContext *                     m_context;
-uint32_t                            m_window_width = 800;
-uint32_t                            m_window_height = 600;
+uint32_t                            m_window_width = 1300;
+uint32_t                            m_window_height = 700;
 float                               m_zoom = 0.6f;
 float                               m_offset_x = 0.0f;
 float                               m_offset_y = 0.0f;
@@ -31,12 +31,18 @@ GLuint                              m_move_texture;
 GLuint                              m_rotate_texture;
 GLuint                              m_fliph_texture;
 GLuint                              m_flipv_texture;
-int32_t                             m_mouse_x;
-int32_t                             m_mouse_y;
+// int32_t                             m_mouse_x;
+// int32_t                             m_mouse_y;
+int32_t                             m_mouse_pos[2];
+int32_t                             m_clicked_mouse_pos[2];
+uint32_t                            m_draw_selection_box;
+int32_t                             m_selection_box_min[2];
+int32_t                             m_selection_box_max[2];
+int32_t                             m_snapped_mouse_pos[2];
 int32_t                             m_place_device_x;
 int32_t                             m_place_device_y;
-int32_t                             m_snapped_mouse_x;
-int32_t                             m_snapped_mouse_y;
+// int32_t                             m_snapped_mouse_x;
+// int32_t                             m_snapped_mouse_y;
 uint32_t                            m_run_simulation;
 uint32_t                            m_run;
 uint32_t                            m_cur_edit_func;
@@ -216,7 +222,7 @@ void m_RotateSelections(int32_t ccw_rotation)
 
 void m_GetTypedObjectsUnderMouse(uint32_t type)
 {
-    obj_GetTypedObjectsInsideBox(type, (int32_t []){m_mouse_x, m_mouse_y}, (int32_t []){m_mouse_x, m_mouse_y});
+    obj_GetTypedObjectsInsideBox(type, (int32_t []){m_mouse_pos[0], m_mouse_pos[1]}, (int32_t []){m_mouse_pos[0], m_mouse_pos[1]});
 }
 
 struct m_object_t *m_GetObjectUnderMouse()
@@ -247,11 +253,11 @@ struct m_picked_object_t m_GetPinUnderMouse()
                 pin_position[0] += device->position[0];
                 pin_position[1] += device->position[1];
 
-                if(m_mouse_x >= pin_position[0] - OBJ_DEVICE_PIN_PIXEL_WIDTH && 
-                    m_mouse_x <= pin_position[0] + OBJ_DEVICE_PIN_PIXEL_WIDTH)
+                if(m_mouse_pos[0] >= pin_position[0] - OBJ_DEVICE_PIN_PIXEL_WIDTH && 
+                    m_mouse_pos[0] <= pin_position[0] + OBJ_DEVICE_PIN_PIXEL_WIDTH)
                 {
-                    if(m_mouse_y >= pin_position[1] - OBJ_DEVICE_PIN_PIXEL_WIDTH && 
-                        m_mouse_y <= pin_position[1] + OBJ_DEVICE_PIN_PIXEL_WIDTH)
+                    if(m_mouse_pos[1] >= pin_position[1] - OBJ_DEVICE_PIN_PIXEL_WIDTH && 
+                       m_mouse_pos[1] <= pin_position[1] + OBJ_DEVICE_PIN_PIXEL_WIDTH)
                     {
                         selected_pin.object = object;
                         selected_pin.index = pin_index;
@@ -372,8 +378,8 @@ struct wire_t *m_CreateWire(struct m_picked_object_t *first_contact, struct m_pi
         }
         prev_segment = segment;
         segment_pos->segment = segment;
-
-        obj_CreateObject(OBJECT_TYPE_SEGMENT, segment);
+        obj_UpdateObject(segment->object);
+        // obj_CreateObject(OBJECT_TYPE_SEGMENT, segment);
     }
 
     if(first_contact->object->type == OBJECT_TYPE_DEVICE)
@@ -588,8 +594,9 @@ void m_DeserializeCircuit(void *file_buffer, size_t file_buffer_size)
             device->position[1] = record->position[1];
             device->flip = record->flip;
             device->rotation = record->angle;
-            struct obj_t *object = obj_CreateObject(OBJECT_TYPE_DEVICE, device);
             record->deserialized_index = device->element_index;
+            dev_UpdateDeviceRotation(device);
+            obj_UpdateObject(device->object);
         }
 
         for(uint32_t index = 0; index < file_header->wire_count; index++)
@@ -608,7 +615,8 @@ void m_DeserializeCircuit(void *file_buffer, size_t file_buffer_size)
                     segment->ends[tip_index][0] = segment_record->ends[tip_index][0];
                     segment->ends[tip_index][1] = segment_record->ends[tip_index][1];
                 }
-                struct obj_t *object = obj_CreateObject(OBJECT_TYPE_SEGMENT, segment);
+                // struct obj_t *object = obj_CreateObject(OBJECT_TYPE_SEGMENT, segment);
+                obj_UpdateObject(segment->object);
             }
 
             for(uint32_t segment_index = 0; segment_index < wire_record->segment_count; segment_index++)
@@ -683,6 +691,8 @@ void m_LoadCircuit(const char *file_name)
 
 void m_ClearCircuit()
 {
+    m_ClearSelections();
+    m_ClearSelectedDeviceType();
     dev_ClearDevices();
     w_ClearWires();
     pool_Reset(&obj_objects[OBJECT_TYPE_DEVICE]);
@@ -725,6 +735,27 @@ uint32_t m_LoadCircuitExplorerCallback(struct m_explorer_state_t *explorer, void
     return 1;
 }
 
+void m_SnapCoords(int32_t *coords, int32_t *snapped_coords)
+{
+    if(coords[0] > 0)
+    {
+        snapped_coords[0] = M_SNAP_VALUE * ((coords[0] / M_SNAP_VALUE) + ((coords[0] % M_SNAP_VALUE) > M_SNAP_VALUE / 2));    
+    }
+    else
+    {
+        snapped_coords[0] = M_SNAP_VALUE * ((coords[0] / M_SNAP_VALUE) - ((abs(coords[0]) % M_SNAP_VALUE) > M_SNAP_VALUE / 2));    
+    }
+
+    if(coords[1] > 0)
+    {
+        snapped_coords[1] = M_SNAP_VALUE * ((coords[1] / M_SNAP_VALUE) + ((coords[1] % M_SNAP_VALUE) > M_SNAP_VALUE / 2));    
+    }
+    else
+    {
+        snapped_coords[1] = M_SNAP_VALUE * ((coords[1] / M_SNAP_VALUE) - ((abs(coords[1]) % M_SNAP_VALUE) > M_SNAP_VALUE / 2));    
+    }
+}
+
 void m_EditState()
 {
     if(igIsPopupOpen_Str(M_OVERWRITE_MODAL_WINDOW_NAME, 0))
@@ -746,11 +777,28 @@ void m_EditState()
         m_SetEditFunc(M_EDIT_FUNC_WIRE);
     }
 
+    if(igIsKeyDown_Nil(ImGuiKey_LeftArrow))
+    {
+        m_offset_x -= 5.0f;
+    }
+    if(igIsKeyDown_Nil(ImGuiKey_RightArrow))
+    {
+        m_offset_x += 5.0f;
+    }
+    if(igIsKeyDown_Nil(ImGuiKey_UpArrow))
+    {
+        m_offset_y += 5.0f;
+    }
+    if(igIsKeyDown_Nil(ImGuiKey_DownArrow))
+    {
+        m_offset_y -= 5.0f;
+    }
+
     switch(m_cur_edit_func)
     { 
         case M_EDIT_FUNC_PLACE:
-            m_place_device_x = m_snapped_mouse_x;
-            m_place_device_y = m_snapped_mouse_y;
+            m_place_device_x = m_snapped_mouse_pos[0];
+            m_place_device_y = m_snapped_mouse_pos[1];
             if(igIsMouseClicked_Bool(ImGuiMouseButton_Left, 0) && ui_IsMouseAvailable() && !m_run_simulation)
             {
                 if(m_selected_device_type != DEV_DEVICE_TYPE_LAST)
@@ -767,12 +815,51 @@ void m_EditState()
 
             if(ui_IsMouseAvailable())
             {
-                if(igIsMouseClicked_Bool(ImGuiMouseButton_Left, 0))
+                if(!m_run_simulation)
                 {
-                    if(!m_run_simulation)
+                    if(igIsMouseDown_Nil(ImGuiMouseButton_Left))
+                    {
+                        if(igIsMouseClicked_Bool(ImGuiMouseButton_Left, 0))
+                        {
+                            m_clicked_mouse_pos[0] = m_mouse_pos[0];
+                            m_clicked_mouse_pos[1] = m_mouse_pos[1];
+                        }
+
+                        int32_t box_width = abs(m_mouse_pos[0] - m_clicked_mouse_pos[0]);
+                        int32_t box_height = abs(m_mouse_pos[1] - m_clicked_mouse_pos[1]);
+
+                        if(abs(m_mouse_pos[0] - m_clicked_mouse_pos[0]) == 0 || abs(m_mouse_pos[1] - m_clicked_mouse_pos[1]) == 0)
+                        {
+                            m_selection_box_min[0] = m_clicked_mouse_pos[0];
+                            m_selection_box_min[1] = m_clicked_mouse_pos[1];
+                            m_selection_box_max[0] = m_mouse_pos[0];
+                            m_selection_box_max[1] = m_mouse_pos[1];
+                        }
+                        else
+                        {
+                            m_draw_selection_box = 1;
+
+                            for(uint32_t index = 0; index < 2; index++)
+                            {
+                                if(m_clicked_mouse_pos[index] > m_mouse_pos[index])
+                                {
+                                    m_selection_box_min[index] = m_mouse_pos[index];
+                                    m_selection_box_max[index] = m_clicked_mouse_pos[index];
+                                }
+                                else
+                                {
+                                    m_selection_box_max[index] = m_mouse_pos[index];
+                                    m_selection_box_min[index] = m_clicked_mouse_pos[index];
+                                }
+                            }
+                        }
+                    }
+
+                    if(igIsMouseReleased_Nil(ImGuiMouseButton_Left))
                     {
                         uint32_t multiple = igIsKeyDown_Nil(ImGuiKey_LeftShift);
-                        obj_GetTypedObjectsInsideBox(OBJECT_TYPE_DEVICE, (int32_t []){m_mouse_x, m_mouse_y}, (int32_t []){m_mouse_x, m_mouse_y});
+
+                        obj_GetTypedObjectsInsideBox(OBJECT_TYPE_DEVICE, m_selection_box_min, m_selection_box_max);
                         if(obj_objects_in_box.cursor != 0)
                         {
                             struct obj_t *object = *(struct obj_t **)list_GetElement(&obj_objects_in_box, 0);
@@ -780,7 +867,7 @@ void m_EditState()
                         }
                         else
                         {
-                            obj_GetTypedObjectsInsideBox(OBJECT_TYPE_SEGMENT, (int32_t []){m_mouse_x, m_mouse_y}, (int32_t []){m_mouse_x, m_mouse_y});
+                            obj_GetTypedObjectsInsideBox(OBJECT_TYPE_SEGMENT, m_selection_box_min, m_selection_box_max);
                             if(obj_objects_in_box.cursor != 0)
                             {
                                 struct obj_t *object = *(struct obj_t **)list_GetElement(&obj_objects_in_box, 0);
@@ -788,25 +875,52 @@ void m_EditState()
                             }
                         }
                     }
-                    else
-                    {
-                        struct dev_input_t *input = m_GetInputUnderMouse();
-                        dev_ToggleInput(input);
-                    }
                 }
+                else if(igIsMouseClicked_Bool(ImGuiMouseButton_Left, 0))
+                {
+                    struct dev_input_t *input = m_GetInputUnderMouse();
+                    dev_ToggleInput(input);
+                }
+                // if(igIsMouseClicked_Bool(ImGuiMouseButton_Left, 0))
+                // {
+                //     if(!m_run_simulation)
+                //     {
+                //         uint32_t multiple = igIsKeyDown_Nil(ImGuiKey_LeftShift);
+                //         obj_GetTypedObjectsInsideBox(OBJECT_TYPE_DEVICE, (int32_t []){m_mouse_pos[0], m_mouse_pos[1]}, (int32_t []){m_mouse_pos[0], m_mouse_pos[1]});
+                //         if(obj_objects_in_box.cursor != 0)
+                //         {
+                //             struct obj_t *object = *(struct obj_t **)list_GetElement(&obj_objects_in_box, 0);
+                //             m_SelectObject(object, multiple);
+                //         }
+                //         else
+                //         {
+                //             obj_GetTypedObjectsInsideBox(OBJECT_TYPE_SEGMENT, (int32_t []){m_mouse_pos[0], m_mouse_pos[1]}, (int32_t []){m_mouse_pos[0], m_mouse_pos[1]});
+                //             if(obj_objects_in_box.cursor != 0)
+                //             {
+                //                 struct obj_t *object = *(struct obj_t **)list_GetElement(&obj_objects_in_box, 0);
+                //                 m_SelectObject(object, multiple);
+                //             }
+                //         }
+                //     }
+                //     else
+                //     {
+                //         struct dev_input_t *input = m_GetInputUnderMouse();
+                //         dev_ToggleInput(input);
+                //     }
+                // }
                 if(!m_run_simulation && igIsMouseDown_Nil(ImGuiMouseButton_Right))
                 {
-                    int32_t dx = m_snapped_mouse_x - m_place_device_x;
-                    int32_t dy = m_snapped_mouse_y - m_place_device_y;
+                    int32_t dx = m_snapped_mouse_pos[0] - m_place_device_x;
+                    int32_t dy = m_snapped_mouse_pos[1] - m_place_device_y;
                     
                     if(dx != 0)
                     {
-                        m_place_device_x = m_snapped_mouse_x;
+                        m_place_device_x = m_snapped_mouse_pos[0];
                     }
 
                     if(dy != 0)
                     {
-                        m_place_device_y = m_snapped_mouse_y;
+                        m_place_device_y = m_snapped_mouse_pos[1];
                     }
 
                     if(igIsMouseClicked_Bool(ImGuiMouseButton_Right, 0))
@@ -829,26 +943,27 @@ void m_EditState()
 
             if(m_cur_wire_segment != NULL)
             {
-                int32_t dx = m_cur_wire_segment->ends[WIRE_SEG_START_INDEX][0] - m_snapped_mouse_x;
-                int32_t dy = m_cur_wire_segment->ends[WIRE_SEG_START_INDEX][1] - m_snapped_mouse_y;
+                int32_t dx = m_cur_wire_segment->ends[WIRE_SEG_START_INDEX][0] - m_snapped_mouse_pos[0];
+                int32_t dy = m_cur_wire_segment->ends[WIRE_SEG_START_INDEX][1] - m_snapped_mouse_pos[1];
                 if(abs(dx) > abs(dy))
                 {
-                    m_cur_wire_segment->ends[WIRE_SEG_END_INDEX][0] = m_snapped_mouse_x;
+                    m_cur_wire_segment->ends[WIRE_SEG_END_INDEX][0] = m_snapped_mouse_pos[0];
                     m_cur_wire_segment->ends[WIRE_SEG_END_INDEX][1] = m_cur_wire_segment->ends[WIRE_SEG_START_INDEX][1];
                 }
                 else
                 {
                     m_cur_wire_segment->ends[WIRE_SEG_END_INDEX][0] = m_cur_wire_segment->ends[WIRE_SEG_START_INDEX][0];
-                    m_cur_wire_segment->ends[WIRE_SEG_END_INDEX][1] = m_snapped_mouse_y;
+                    m_cur_wire_segment->ends[WIRE_SEG_END_INDEX][1] = m_snapped_mouse_pos[1];
                 }
             }
 
             if(igIsMouseClicked_Bool(ImGuiMouseButton_Left, 0) && ui_IsMouseAvailable())
             {
+                struct wire_seg_pos_t *prev_segment = NULL;
                 if(m_cur_wire_segment == NULL || m_cur_wire_segment->ends[WIRE_SEG_START_INDEX][0] != m_cur_wire_segment->ends[WIRE_SEG_END_INDEX][0] ||
-                                                    m_cur_wire_segment->ends[WIRE_SEG_START_INDEX][1] != m_cur_wire_segment->ends[WIRE_SEG_END_INDEX][1])
+                                                 m_cur_wire_segment->ends[WIRE_SEG_START_INDEX][1] != m_cur_wire_segment->ends[WIRE_SEG_END_INDEX][1])
                 {
-                    struct wire_seg_pos_t *prev_segment = m_cur_wire_segment;
+                    prev_segment = m_cur_wire_segment;
                     uint64_t segment_index = list_AddElement(&m_wire_seg_pos, NULL);
                     m_cur_wire_segment = list_GetElement(&m_wire_seg_pos, segment_index);
 
@@ -859,19 +974,19 @@ void m_EditState()
                     }
                     else
                     {
-                        m_cur_wire_segment->ends[WIRE_SEG_START_INDEX][0] = m_snapped_mouse_x;
-                        m_cur_wire_segment->ends[WIRE_SEG_START_INDEX][1] = m_snapped_mouse_y;
+                        m_cur_wire_segment->ends[WIRE_SEG_START_INDEX][0] = m_snapped_mouse_pos[0];
+                        m_cur_wire_segment->ends[WIRE_SEG_START_INDEX][1] = m_snapped_mouse_pos[1];
                     }
 
-                    m_cur_wire_segment->ends[WIRE_SEG_END_INDEX][0] = m_snapped_mouse_x;
-                    m_cur_wire_segment->ends[WIRE_SEG_END_INDEX][1] = m_snapped_mouse_y;
+                    m_cur_wire_segment->ends[WIRE_SEG_END_INDEX][0] = m_snapped_mouse_pos[0];
+                    m_cur_wire_segment->ends[WIRE_SEG_END_INDEX][1] = m_snapped_mouse_pos[1];
                 }
 
-                m_picked_objects[m_wire_func_stage] = m_GetPinUnderMouse();
+                m_picked_objects[m_wire_func_stage] = m_GetSegmentUnderMouse();
 
                 if(m_picked_objects[m_wire_func_stage].object == NULL)
                 {
-                    m_picked_objects[m_wire_func_stage] = m_GetSegmentUnderMouse();
+                    m_picked_objects[m_wire_func_stage] = m_GetPinUnderMouse();                    
                 }
 
                 if(m_picked_objects[m_wire_func_stage].object != NULL)
@@ -887,8 +1002,17 @@ void m_EditState()
                             dev_GetDeviceLocalPinPosition(device, m_picked_objects[m_wire_func_stage].index, m_cur_wire_segment->ends[WIRE_SEG_START_INDEX]);
                             m_cur_wire_segment->ends[WIRE_SEG_START_INDEX][0] += device->position[0];
                             m_cur_wire_segment->ends[WIRE_SEG_START_INDEX][1] += device->position[1];
+
+                            m_SnapCoords(m_cur_wire_segment->ends[WIRE_SEG_START_INDEX], m_cur_wire_segment->ends[WIRE_SEG_START_INDEX]);
+
                             m_cur_wire_segment->ends[WIRE_SEG_END_INDEX][0] = m_cur_wire_segment->ends[WIRE_SEG_START_INDEX][0];
                             m_cur_wire_segment->ends[WIRE_SEG_END_INDEX][1] = m_cur_wire_segment->ends[WIRE_SEG_START_INDEX][1];
+
+                            // if(prev_segment != NULL)
+                            // {
+                            //     prev_segment->ends[WIRE_SEG_END_INDEX][0] = m_cur_wire_segment->ends[WIRE_SEG_START_INDEX][0];
+                            //     prev_segment->ends[WIRE_SEG_END_INDEX][1] = m_cur_wire_segment->ends[WIRE_SEG_START_INDEX][1];
+                            // }
                         }
                         break;
 
@@ -1258,7 +1382,7 @@ int main(int argc, char *argv[])
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 0);
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
 
-    m_window = SDL_CreateWindow("simoslator", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, 800, 600, SDL_WINDOW_OPENGL);
+    m_window = SDL_CreateWindow("simoslator", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, m_window_width, m_window_height, SDL_WINDOW_OPENGL);
     m_context = SDL_GL_CreateContext(m_window);
     SDL_GL_MakeCurrent(m_window, m_context);
     SDL_GL_SetSwapInterval(1);
@@ -1274,101 +1398,33 @@ int main(int argc, char *argv[])
     int channels;
     int width;
     int height;
+    
     stbi_uc *pixels = stbi_load("res/cursor.png", &width, &height, &channels, STBI_rgb_alpha);
-
-    glGenTextures(1, &m_cursor_texture);
-    glBindTexture(GL_TEXTURE_2D, m_cursor_texture);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_BASE_LEVEL, 0);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_LEVEL, 4);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
+    m_cursor_texture = d_CreateTexture(width, height, GL_RGBA8, GL_NEAREST, GL_NEAREST, 4, GL_RGBA, pixels);
     free(pixels);
 
     pixels = stbi_load("res/play.png", &width, &height, &channels, STBI_rgb_alpha);
-    glGenTextures(1, &m_play_texture);
-    glBindTexture(GL_TEXTURE_2D, m_play_texture);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_BASE_LEVEL, 0);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_LEVEL, 4);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
+    m_play_texture = d_CreateTexture(width, height, GL_RGBA8, GL_NEAREST, GL_NEAREST, 4, GL_RGBA, pixels);
     free(pixels);
 
     pixels = stbi_load("res/pause.png", &width, &height, &channels, STBI_rgb_alpha);
-    glGenTextures(1, &m_pause_texture);
-    glBindTexture(GL_TEXTURE_2D, m_pause_texture);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_BASE_LEVEL, 0);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_LEVEL, 4);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
+    m_pause_texture = d_CreateTexture(width, height, GL_RGBA8, GL_NEAREST, GL_NEAREST, 4, GL_RGBA, pixels);
     free(pixels);
 
     pixels = stbi_load("res/connected.png", &width, &height, &channels, STBI_rgb_alpha);
-    glGenTextures(1, &m_wire_texture);
-    glBindTexture(GL_TEXTURE_2D, m_wire_texture);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_BASE_LEVEL, 0);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_LEVEL, 4);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
+    m_wire_texture = d_CreateTexture(width, height, GL_RGBA8, GL_NEAREST, GL_NEAREST, 4, GL_RGBA, pixels);
     free(pixels);
 
     pixels = stbi_load("res/rotate.png", &width, &height, &channels, STBI_rgb_alpha);
-    glGenTextures(1, &m_rotate_texture);
-    glBindTexture(GL_TEXTURE_2D, m_rotate_texture);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_BASE_LEVEL, 0);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_LEVEL, 4);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
+    m_rotate_texture = d_CreateTexture(width, height, GL_RGBA8, GL_NEAREST, GL_NEAREST, 4, GL_RGBA, pixels);
     free(pixels);
 
     pixels = stbi_load("res/fliph.png", &width, &height, &channels, STBI_rgb_alpha);
-    glGenTextures(1, &m_fliph_texture);
-    glBindTexture(GL_TEXTURE_2D, m_fliph_texture);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_BASE_LEVEL, 0);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_LEVEL, 4);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
+    m_fliph_texture = d_CreateTexture(width, height, GL_RGBA8, GL_NEAREST, GL_NEAREST, 4, GL_RGBA, pixels);
     free(pixels);
 
     pixels = stbi_load("res/flipv.png", &width, &height, &channels, STBI_rgb_alpha);
-    glGenTextures(1, &m_flipv_texture);
-    glBindTexture(GL_TEXTURE_2D, m_flipv_texture);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_BASE_LEVEL, 0);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_LEVEL, 4);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
-    free(pixels);
-
-    pixels = stbi_load("res/move.png", &width, &height, &channels, STBI_rgb_alpha);
-    glGenTextures(1, &m_move_texture);
-    glBindTexture(GL_TEXTURE_2D, m_move_texture);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_BASE_LEVEL, 0);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_LEVEL, 4);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
+    m_flipv_texture = d_CreateTexture(width, height, GL_RGBA8, GL_NEAREST, GL_NEAREST, 4, GL_RGBA, pixels);
     free(pixels);
 
     m_selections = list_Create(sizeof(struct obj_t *), 512);
@@ -1484,26 +1540,28 @@ int main(int argc, char *argv[])
             }
         }
 
-        m_mouse_x = in_mouse_x / d_model_view_projection_matrix[0] + d_model_view_projection_matrix[12];
-        m_mouse_y = in_mouse_y / d_model_view_projection_matrix[5] + d_model_view_projection_matrix[13];
+        m_mouse_pos[0] = (in_mouse_x - d_model_view_projection_matrix[12]) / d_model_view_projection_matrix[0];
+        m_mouse_pos[1] = (in_mouse_y - d_model_view_projection_matrix[13]) / d_model_view_projection_matrix[5];
 
-        if(m_mouse_x > 0)
-        {
-            m_snapped_mouse_x = M_SNAP_VALUE * ((m_mouse_x / M_SNAP_VALUE) + ((m_mouse_x % M_SNAP_VALUE) > M_SNAP_VALUE / 2));    
-        }
-        else
-        {
-            m_snapped_mouse_x = M_SNAP_VALUE * ((m_mouse_x / M_SNAP_VALUE) - ((abs(m_mouse_x) % M_SNAP_VALUE) > M_SNAP_VALUE / 2));    
-        }
+        m_SnapCoords(m_mouse_pos, m_snapped_mouse_pos);
 
-        if(m_mouse_y > 0)
-        {
-            m_snapped_mouse_y = M_SNAP_VALUE * ((m_mouse_y / M_SNAP_VALUE) + ((m_mouse_y % M_SNAP_VALUE) > M_SNAP_VALUE / 2));    
-        }
-        else
-        {
-            m_snapped_mouse_y = M_SNAP_VALUE * ((m_mouse_y / M_SNAP_VALUE) - ((abs(m_mouse_y) % M_SNAP_VALUE) > M_SNAP_VALUE / 2));    
-        }
+        // if(m_mouse_pos[0] > 0)
+        // {
+        //     m_snapped_mouse_x = M_SNAP_VALUE * ((m_mouse_pos[0] / M_SNAP_VALUE) + ((m_mouse_pos[0] % M_SNAP_VALUE) > M_SNAP_VALUE / 2));    
+        // }
+        // else
+        // {
+        //     m_snapped_mouse_x = M_SNAP_VALUE * ((m_mouse_pos[0] / M_SNAP_VALUE) - ((abs(m_mouse_pos[0]) % M_SNAP_VALUE) > M_SNAP_VALUE / 2));    
+        // }
+
+        // if(m_mouse_pos[1] > 0)
+        // {
+        //     m_snapped_mouse_y = M_SNAP_VALUE * ((m_mouse_pos[1] / M_SNAP_VALUE) + ((m_mouse_pos[1] % M_SNAP_VALUE) > M_SNAP_VALUE / 2));    
+        // }
+        // else
+        // {
+        //     m_snapped_mouse_y = M_SNAP_VALUE * ((m_mouse_pos[1] / M_SNAP_VALUE) - ((abs(m_mouse_pos[1]) % M_SNAP_VALUE) > M_SNAP_VALUE / 2));    
+        // }
 
 
         igSetNextWindowPos((ImVec2){0, 18}, 0, (ImVec2){});
@@ -1582,7 +1640,6 @@ int main(int argc, char *argv[])
                     struct obj_t *object = *(struct obj_t **)list_GetElement(&m_selections, index);
                     struct dev_t *device = object->base_object;
                     dev_RotateDevice(device, 1);
-                    // device->rotation = (device->rotation + 1) % 4;
                 }
                 m_SetEditFunc(M_EDIT_FUNC_SELECT);
             }
@@ -1603,11 +1660,6 @@ int main(int argc, char *argv[])
                     struct obj_t *object = *(struct obj_t **)list_GetElement(&m_selections, index);
                     struct dev_t *device = object->base_object;
                     dev_RotateDevice(device, 0);
-                    // if(device->rotation == 0)
-                    // {
-                    //     device->rotation = 4;
-                    // }
-                    // device->rotation--;
                 }
                 m_SetEditFunc(M_EDIT_FUNC_SELECT);
             }
@@ -1631,15 +1683,6 @@ int main(int argc, char *argv[])
 
                     device->flip ^= DEV_DEVICE_FLIP_Y;
                     dev_UpdateDeviceRotation(device);
-
-                    // if(device->rotation == DEV_DEVICE_ROTATION_90 || device->rotation == DEV_DEVICE_ROTATION_270)
-                    // {
-                    //     device->flip ^= 1 << DEV_DEVICE_FLIP_X;
-                    // }
-                    // else
-                    // {
-                    //     device->flip ^= 1 << DEV_DEVICE_FLIP_Y;
-                    // }
                 }
                 m_SetEditFunc(M_EDIT_FUNC_SELECT);
             }
@@ -1663,15 +1706,6 @@ int main(int argc, char *argv[])
 
                     device->flip ^= DEV_DEVICE_FLIP_X;
                     dev_UpdateDeviceRotation(device);
-
-                    // if(device->rotation == DEV_DEVICE_ROTATION_90 || device->rotation == DEV_DEVICE_ROTATION_270)
-                    // {
-                    //     device->flip ^= 1 << DEV_DEVICE_FLIP_Y;
-                    // }
-                    // else
-                    // {
-                    //     device->flip ^= 1 << DEV_DEVICE_FLIP_X;
-                    // }
                 }
                 m_SetEditFunc(M_EDIT_FUNC_SELECT);
             }
@@ -1750,6 +1784,7 @@ int main(int argc, char *argv[])
                 igPopID();
             }
 
+            m_draw_selection_box = 0;
             m_StateFuncs[m_cur_state]();
         }
         igEnd();
