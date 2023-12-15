@@ -61,17 +61,62 @@ uint32_t dev_tex_coords_lut[4][4] = {
     },
 };
 
+uint8_t dev_pmos_table[WIRE_VALUE_LAST][WIRE_VALUE_LAST] = {
+    [WIRE_VALUE_0S] = {
+        [WIRE_VALUE_1W] = WIRE_VALUE_1W,
+        [WIRE_VALUE_1S] = WIRE_VALUE_1S,
+         WIRE_VALUE_Z,
+         WIRE_VALUE_Z,
+         WIRE_VALUE_Z,
+         WIRE_VALUE_Z,
+         WIRE_VALUE_Z,
+         WIRE_VALUE_Z,
+    },
+    [WIRE_VALUE_1S] = {
+        WIRE_VALUE_Z,
+        WIRE_VALUE_Z,
+        WIRE_VALUE_Z,
+        WIRE_VALUE_Z,
+        WIRE_VALUE_Z,
+        WIRE_VALUE_Z,
+        WIRE_VALUE_Z,
+        WIRE_VALUE_Z,
+    },
+    [WIRE_VALUE_0W] = {
+        [WIRE_VALUE_1W] = WIRE_VALUE_1W,
+        [WIRE_VALUE_1S] = WIRE_VALUE_1S,
+         WIRE_VALUE_Z,
+         WIRE_VALUE_Z,
+         WIRE_VALUE_Z,
+         WIRE_VALUE_Z,
+         WIRE_VALUE_Z,
+         WIRE_VALUE_Z,
+    },
+
+    [WIRE_VALUE_1W] = {
+        WIRE_VALUE_Z,
+        WIRE_VALUE_Z,
+        WIRE_VALUE_Z,
+        WIRE_VALUE_Z,
+        WIRE_VALUE_Z,
+        WIRE_VALUE_Z,
+        WIRE_VALUE_Z,
+        WIRE_VALUE_Z,
+    },
+};
+
 void dev_PMosStep(struct sim_dev_data_t *device)
 {
-    struct dev_pin_t *gate_pin = list_GetElement(&sim_dev_pins, device->first_pin + DEV_MOS_PIN_GATE);
-    struct dev_pin_t *source_pin = list_GetElement(&sim_dev_pins, device->first_pin + DEV_MOS_PIN_SOURCE);
-    struct dev_pin_t *drain_pin = list_GetElement(&sim_dev_pins, device->first_pin + DEV_MOS_PIN_DRAIN);
+    struct sim_dev_pin_t *gate_pin = list_GetElement(&sim_dev_pins, device->first_pin + DEV_MOS_PIN_GATE);
+    struct sim_dev_pin_t *source_pin = list_GetElement(&sim_dev_pins, device->first_pin + DEV_MOS_PIN_SOURCE);
+    struct sim_dev_pin_t *drain_pin = list_GetElement(&sim_dev_pins, device->first_pin + DEV_MOS_PIN_DRAIN);
     struct sim_wire_data_t *gate_wire = sim_GetWireSimData(gate_pin->wire, DEV_PIN_TYPE_IN);
     struct sim_wire_data_t *source_wire = sim_GetWireSimData(source_pin->wire, DEV_PIN_TYPE_IN);
     struct sim_wire_data_t *drain_wire = sim_GetWireSimData(drain_pin->wire, DEV_PIN_TYPE_OUT);
     uint8_t prev_value = drain_pin->value;
 
-    if((gate_wire->value == WIRE_VALUE_0S || gate_wire->value == WIRE_VALUE_0W) && (source_wire->value == WIRE_VALUE_1S || source_wire->value == WIRE_VALUE_1W))
+    if((gate_wire->value == WIRE_VALUE_0S || gate_wire->value == WIRE_VALUE_0W) && 
+       (source_wire->value == WIRE_VALUE_1S || source_wire->value == WIRE_VALUE_1W || source_wire->value == WIRE_VALUE_IND))
     {
         drain_pin->value = source_wire->value;
     }
@@ -88,15 +133,16 @@ void dev_PMosStep(struct sim_dev_data_t *device)
 
 void dev_NMosStep(struct sim_dev_data_t *device)
 {
-    struct dev_pin_t *gate_pin = list_GetElement(&sim_dev_pins, device->first_pin + DEV_MOS_PIN_GATE);
-    struct dev_pin_t *source_pin = list_GetElement(&sim_dev_pins, device->first_pin + DEV_MOS_PIN_SOURCE);
-    struct dev_pin_t *drain_pin = list_GetElement(&sim_dev_pins, device->first_pin + DEV_MOS_PIN_DRAIN);
+    struct sim_dev_pin_t *gate_pin = list_GetElement(&sim_dev_pins, device->first_pin + DEV_MOS_PIN_GATE);
+    struct sim_dev_pin_t *source_pin = list_GetElement(&sim_dev_pins, device->first_pin + DEV_MOS_PIN_SOURCE);
+    struct sim_dev_pin_t *drain_pin = list_GetElement(&sim_dev_pins, device->first_pin + DEV_MOS_PIN_DRAIN);
     struct sim_wire_data_t *gate_wire = sim_GetWireSimData(gate_pin->wire, DEV_PIN_TYPE_IN);
     struct sim_wire_data_t *source_wire = sim_GetWireSimData(source_pin->wire, DEV_PIN_TYPE_IN);
     struct sim_wire_data_t *drain_wire = sim_GetWireSimData(drain_pin->wire, DEV_PIN_TYPE_OUT);
     uint8_t prev_value = drain_pin->value;
 
-    if((gate_wire->value == WIRE_VALUE_1S || gate_wire->value == WIRE_VALUE_1W) && (source_wire->value == WIRE_VALUE_0S || source_wire->value == WIRE_VALUE_0W))
+    if((gate_wire->value == WIRE_VALUE_1S || gate_wire->value == WIRE_VALUE_1W) && 
+       (source_wire->value == WIRE_VALUE_0S || source_wire->value == WIRE_VALUE_0W || source_wire->value == WIRE_VALUE_IND))
     {
         drain_pin->value = source_wire->value;
     }
@@ -113,7 +159,7 @@ void dev_NMosStep(struct sim_dev_data_t *device)
 
 void dev_PowerStep(struct sim_dev_data_t *device)
 {
-    struct dev_pin_t *pin = list_GetElement(&sim_dev_pins, device->first_pin);
+    struct sim_dev_pin_t *pin = list_GetElement(&sim_dev_pins, device->first_pin);
     pin->value = WIRE_VALUE_1S;
     struct sim_wire_data_t *wire = sim_GetWireSimData(pin->wire, DEV_PIN_TYPE_OUT);
     sim_QueueWire(wire);
@@ -121,7 +167,7 @@ void dev_PowerStep(struct sim_dev_data_t *device)
 
 void dev_GroundStep(struct sim_dev_data_t *device)
 {
-    struct dev_pin_t *pin = list_GetElement(&sim_dev_pins, device->first_pin);
+    struct sim_dev_pin_t *pin = list_GetElement(&sim_dev_pins, device->first_pin);
     pin->value = WIRE_VALUE_0S;
     struct sim_wire_data_t *wire = sim_GetWireSimData(pin->wire, DEV_PIN_TYPE_OUT);
     sim_QueueWire(wire);
@@ -134,7 +180,7 @@ void dev_ClockStep(struct sim_dev_data_t *device)
 
 void dev_InputStep(struct sim_dev_data_t *device)
 {
-    struct dev_pin_t *pin = list_GetElement(&sim_dev_pins, device->first_pin);
+    struct sim_dev_pin_t *pin = list_GetElement(&sim_dev_pins, device->first_pin);
     struct sim_wire_data_t *wire = sim_GetWireSimData(pin->wire, DEV_PIN_TYPE_OUT);
     sim_QueueWire(wire);
 }
@@ -162,7 +208,7 @@ struct dev_desc_t dev_device_descs[DEV_DEVICE_TYPE_LAST] = {
         .origin = {0, 0},
         .pin_count = 3,
         .pins = (struct dev_pin_desc_t []) {
-            [DEV_MOS_PIN_SOURCE]    = {.type = DEV_PIN_TYPE_IN,  .offset = {-20, -40}},
+            [DEV_MOS_PIN_SOURCE]    = {.type = DEV_PIN_TYPE_IN,  .offset = {-20, -40}, .immediate = 1},
             [DEV_MOS_PIN_GATE]      = {.type = DEV_PIN_TYPE_IN,  .offset = {20, 0}},
             [DEV_MOS_PIN_DRAIN]     = {.type = DEV_PIN_TYPE_OUT, .offset = {-20,  40}},
         },
@@ -175,7 +221,7 @@ struct dev_desc_t dev_device_descs[DEV_DEVICE_TYPE_LAST] = {
         .origin = {0, 0},
         .pin_count = 3,
         .pins = (struct dev_pin_desc_t []) {
-            [DEV_MOS_PIN_SOURCE]    = {.type = DEV_PIN_TYPE_IN,  .offset = {-20, -40}},
+            [DEV_MOS_PIN_SOURCE]    = {.type = DEV_PIN_TYPE_IN,  .offset = {-20, -40}, .immediate = 1},
             [DEV_MOS_PIN_GATE]      = {.type = DEV_PIN_TYPE_IN,  .offset = {20, 0}},
             [DEV_MOS_PIN_DRAIN]     = {.type = DEV_PIN_TYPE_OUT, .offset = {-20,  40}},
         },
@@ -290,7 +336,7 @@ struct dev_t *dev_CreateDevice(uint32_t type)
     struct dev_t *device = pool_AddElement(&dev_devices, NULL);
     device->type = type;
     device->pin_blocks = NULL;
-    device->selection_index = INVALID_LIST_INDEX;
+    // device->selection_index = INVALID_LIST_INDEX;
     device->rotation = DEV_DEVICE_ROTATION_0;
     // device->tex_coords[0] = 0.0f;
     // device->tex_coords[1] = 1.0f;
@@ -321,8 +367,9 @@ struct dev_t *dev_CreateDevice(uint32_t type)
 
         for(uint32_t pin_index = 0; pin_index < DEV_PIN_BLOCK_PIN_COUNT; pin_index++)
         {
-            pin_block->pins[pin_index].wire = WIRE_INVALID_WIRE;
-            pin_block->pins[pin_index].value = WIRE_VALUE_Z;
+            // pin_block->pins[pin_index].wire = WIRE_INVALID_WIRE;
+            // pin_block->pins[pin_index].value = WIRE_VALUE_Z;
+            pin_block->pins[pin_index].junction = INVALID_POOL_INDEX;
         }
     }
 
@@ -367,9 +414,28 @@ void dev_DestroyDevice(struct dev_t *device)
     if(device != NULL)
     {
         obj_FreeObject(device->object);
+        struct dev_desc_t *desc = dev_device_descs + device->type;
         struct dev_pin_block_t *pin_block = device->pin_blocks;
+        uint32_t total_pin_count = desc->pin_count;
         while(pin_block)
         {
+            uint32_t pin_count = DEV_PIN_BLOCK_PIN_COUNT;
+            if(pin_count > total_pin_count)
+            {
+                pin_count = total_pin_count;
+            }
+
+            for(uint32_t pin_index = 0; pin_index < pin_count; pin_index++)
+            {
+                struct dev_pin_t *pin = pin_block->pins + pin_index;
+                if(pin->junction != INVALID_POOL_INDEX)
+                {
+                    struct wire_junc_t *junction = w_GetWireJunction(pin->junction);
+                    w_DisconnectJunctionFromPin(junction);
+                    // struct wire_t *wire = w_GetWire(pin->wire);
+                    // w_DisconnectPin(wire, device, )
+                }
+            }
             pool_RemoveElement(&dev_pin_blocks, pin_block->element_index);
             pin_block = pin_block->next;
         }
@@ -563,7 +629,7 @@ void dev_ToggleInput(struct dev_input_t *input)
     if(input != NULL)
     {
         struct sim_dev_data_t *sim_data = list_GetElement(&sim_dev_data, input->device->sim_data);
-        struct dev_pin_t *pin = list_GetElement(&sim_dev_pins, sim_data->first_pin);
+        struct sim_dev_pin_t *pin = list_GetElement(&sim_dev_pins, sim_data->first_pin);
 
         if(pin->value == WIRE_VALUE_0S)
         {
@@ -583,14 +649,14 @@ void dev_Update7SegDisplay(struct dev_7seg_disp_t *display)
     struct sim_dev_data_t *device = list_GetElement(&sim_dev_data, display->device->sim_data);
     display->value = 0;
 
-    struct dev_pin_t *power_pin = list_GetElement(&sim_dev_pins, device->first_pin + DEV_7SEG_PIN_POW);
+    struct sim_dev_pin_t *power_pin = list_GetElement(&sim_dev_pins, device->first_pin + DEV_7SEG_PIN_POW);
     struct sim_wire_data_t *power = sim_GetWireSimData(power_pin->wire, DEV_PIN_TYPE_IN);
 
     if(power->value == WIRE_VALUE_1S || power->value == WIRE_VALUE_1W)
     {
         for(uint32_t index = 0; index < 7; index++)
         {
-            struct dev_pin_t *segment_pin = list_GetElement(&sim_dev_pins, device->first_pin + DEV_7SEG_PIN_SEG0 + index);
+            struct sim_dev_pin_t *segment_pin = list_GetElement(&sim_dev_pins, device->first_pin + DEV_7SEG_PIN_SEG0 + index);
             struct sim_wire_data_t *segment_wire = sim_GetWireSimData(segment_pin->wire, DEV_PIN_TYPE_IN);
             display->value |= (segment_wire->value == WIRE_VALUE_0S || segment_wire->value == WIRE_VALUE_0W) << index;
         }

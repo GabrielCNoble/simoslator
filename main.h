@@ -108,6 +108,7 @@ union m_wire_seg_t
 enum M_MODES
 {
     M_STATE_EDIT = 0,
+    M_STATE_SELECTION_BOX,
     M_STATE_EXPLORER,
     M_STATE_LAST,
 };
@@ -211,6 +212,8 @@ void m_DeserializeCircuit(void *file_buffer, size_t file_buffer_size);
 void m_SaveCircuit(const char *file_name);
 
 void m_ClearCircuit();
+
+void m_SelectionBoxState();
 
 void m_EditState();
 

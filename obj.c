@@ -139,7 +139,6 @@ void obj_GetTypedObjectsInsideBox(uint32_t type, int32_t *box_min, int32_t *box_
 {
     struct pool_t *object_list = &obj_objects[type];
     obj_objects_in_box.cursor = 0;
-
     for(uint32_t index = 0; index < object_list->cursor; index++)
     {
         struct obj_t *object = pool_GetValidElement(object_list, index);

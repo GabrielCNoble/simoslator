@@ -36,6 +36,7 @@ struct dev_pin_desc_t
 {
     int32_t offset[2];
     uint8_t type;
+    uint8_t immediate;
 };
 
 struct dev_desc_t
@@ -69,8 +70,9 @@ enum DEV_DEVICE_FLIP
 
 struct dev_pin_t
 {
-    uint64_t wire:  48;
-    uint64_t value: 4;
+    // uint64_t wire:  48;
+    // uint64_t value: 4;
+    uint64_t junction;
 };
 
 struct dev_pin_block_t

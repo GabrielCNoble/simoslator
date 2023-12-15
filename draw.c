@@ -372,6 +372,7 @@ extern float                m_zoom;
 extern float                m_offset_x;
 extern float                m_offset_y;
 extern uint32_t             m_run_simulation;
+extern uint32_t             m_single_step;
 extern uint32_t             m_selected_device_type;
 extern struct dev_t *       m_selected_device;
 extern uint32_t             m_draw_selection_box;
@@ -468,6 +469,7 @@ void d_Init()
         [WIRE_VALUE_Z]      = {0.3, 0.3, 0.3, 1},
         [WIRE_VALUE_U]      = {0.3, 0.0, 0.5, 1},
         [WIRE_VALUE_ERR]    = {1, 0, 0, 1},
+        [WIRE_VALUE_IND]    = {0.5f, 1, 0, 1}
     };
 
     glGenBuffers(1, &d_wire_value_color_buffer);
@@ -713,7 +715,7 @@ void d_Draw()
         for(uint32_t index = 0; index < dev_7seg_disps.cursor; index++)
         {
             struct dev_7seg_disp_t *display = pool_GetValidElement(&dev_7seg_disps, index);
-            uint32_t display_value = m_run_simulation ? display->value : 0;
+            uint32_t display_value = (m_run_simulation || m_single_step) ? display->value : 0;
 
             if(display != NULL)
             {
@@ -787,7 +789,7 @@ void d_Draw()
                 // struct wire_seg_pos_block_t *segment_block = wire->first_segment_pos;
                 struct wire_seg_t *segment = wire->first_segment;
                 struct sim_wire_data_t *wire_data = list_GetValidElement(&sim_wire_data, wire->sim_data);
-                uint8_t wire_value = m_run_simulation ? wire_data->value : WIRE_VALUE_Z;
+                uint8_t wire_value = (m_run_simulation || m_single_step) ? wire_data->value : WIRE_VALUE_Z;
                 // uint32_t total_segment_count = wire->segment_pos_count;
 
                 while(segment != NULL)
@@ -848,7 +850,7 @@ void d_Draw()
 
                 // struct wire_junc_pos_block_t *junction_block = wire->first_junction_pos;
                 struct sim_wire_data_t *wire_data = list_GetValidElement(&sim_wire_data, wire->sim_data);
-                uint8_t wire_value = m_run_simulation ? wire_data->value : WIRE_VALUE_Z;
+                uint8_t wire_value = (m_run_simulation || m_single_step) ? wire_data->value : WIRE_VALUE_Z;
                 uint32_t total_junction_count = wire->junction_count;
                 struct wire_junc_t *junction = wire->first_junction;
 

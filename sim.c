@@ -10,7 +10,8 @@ the device step, the simulation would update all devices of one type before goin
 This should improve instruction cache usage somewhat. The problem with this idea is that filling
 those lists will require a fair amount of scattered writes. */
 struct list_t               sim_update_devices;
-struct list_t               sim_update_wires;
+struct list_t               sim_update_wires[2];
+struct list_t               sim_source_updates;
 uint32_t                    sim_cur_step;
 
 struct list_t               sim_wire_data;
@@ -41,13 +42,15 @@ uint64_t                    sim_next_clock_count;
 void sim_Init()
 {
     sim_update_devices = list_Create(sizeof(struct sim_dev_data_t *), 16384);
-    sim_update_wires = list_Create(sizeof(struct sim_wire_data_t *), 16384);
+    sim_update_wires[0] = list_Create(sizeof(struct sim_wire_data_t *), 16384);
+    sim_update_wires[1] = list_Create(sizeof(struct sim_wire_data_t *), 16384);
+    sim_source_updates = list_Create(sizeof(struct sim_dev_data_t *), 16384);
 
     sim_wire_data = list_Create(sizeof(struct sim_wire_data_t), 16384);
     sim_wire_pins = list_Create(sizeof(struct wire_pin_t), 16384);
 
     sim_dev_data = list_Create(sizeof(struct sim_dev_data_t), 16384);
-    sim_dev_pins = list_Create(sizeof(struct dev_pin_t), 16384);
+    sim_dev_pins = list_Create(sizeof(struct sim_dev_pin_t), 16384);
 
     sim_clocks = list_Create(sizeof(struct sim_clock_data_t), 256);
 
@@ -60,7 +63,7 @@ void sim_Shutdown()
 
 }
 
-uint32_t sim_CmpXchg16(uint16_t *location, uint32_t compare, uint32_t new_value) 
+uint32_t sim_CmpXchg8(uint8_t *location, uint32_t compare, uint32_t new_value) 
 {
     uint32_t exchanged = 0;
     __asm__ volatile
@@ -68,7 +71,7 @@ uint32_t sim_CmpXchg16(uint16_t *location, uint32_t compare, uint32_t new_value)
         "mov rcx, %1\n"
         "mov ebx, %2\n"
         "mov eax, %3\n"
-        "lock cmpxchg word ptr [rcx], bx\n"
+        "lock cmpxchg byte ptr [rcx], bl\n"
         "setz al\n"
         "movzx eax, al\n"
         "mov %0, eax\n" 
@@ -100,7 +103,7 @@ uint64_t sim_XInc64(uint64_t *location)
 
 void sim_QueueDevice(struct sim_dev_data_t *device)
 {
-    if(sim_CmpXchg16(&device->queued, 0, 1))
+    if(sim_CmpXchg8(&device->queued, 0, 1))
     {
         // uint64_t index = list_AddElement(&sim_update_devices, NULL);
         uint64_t index = sim_XInc64(&sim_update_devices.cursor);
@@ -111,13 +114,20 @@ void sim_QueueDevice(struct sim_dev_data_t *device)
 
 void sim_QueueWire(struct sim_wire_data_t *wire)
 {
-    if(wire != &sim_invalid_wires[DEV_PIN_TYPE_IN] && wire != &sim_invalid_wires[DEV_PIN_TYPE_OUT] && sim_CmpXchg16(&wire->queued, 0, 1))
+    if(wire != &sim_invalid_wires[DEV_PIN_TYPE_IN] && wire != &sim_invalid_wires[DEV_PIN_TYPE_OUT] && sim_CmpXchg8(&wire->queued, 0, 1))
     {
-        // uint64_t index = list_AddElement(&sim_update_wires, NULL);
-        uint64_t index = sim_XInc64(&sim_update_wires.cursor);
-        struct sim_wire_data_t **update_wire = list_GetElement(&sim_update_wires, index);
+        struct list_t *wire_update_list = &sim_update_wires[wire->source_count == 0];
+        uint64_t index = sim_XInc64(&wire_update_list->cursor);
+        struct sim_wire_data_t **update_wire = list_GetElement(wire_update_list, index);
         *update_wire = wire;
     }
+}
+
+void sim_QueueSource(struct sim_dev_data_t *device)
+{
+    uint64_t index = sim_XInc64(&sim_source_updates.cursor);
+    struct sim_dev_data_t **update_source = list_GetElement(&sim_source_updates, index);
+    *update_source = device;
 }
 
 void sim_BeginSimulation()
@@ -127,7 +137,9 @@ void sim_BeginSimulation()
     sim_dev_data.cursor = 0;
     sim_dev_pins.cursor = 0;
     sim_update_devices.cursor = 0;
-    sim_update_wires.cursor = 0;
+    sim_update_wires[0].cursor = 0;
+    sim_update_wires[1].cursor = 0;
+    sim_source_updates.cursor = 0;
     sim_clocks.cursor = 0;
 
     for(uint32_t index = 0; index < w_wires.cursor; index++)
@@ -137,11 +149,15 @@ void sim_BeginSimulation()
         if(wire != NULL)
         {
             uint32_t cur_input = sim_wire_pins.cursor;
+            uint32_t next_source_move = cur_input;
+            // uint32_t source_count = 0;
             uint32_t cur_output = cur_input + wire->input_count;
             uint32_t pin_count = wire->input_count + wire->output_count;
 
             wire->sim_data = list_AddElement(&sim_wire_data, NULL);
             struct sim_wire_data_t *wire_data = list_GetElement(&sim_wire_data, wire->sim_data);
+            // wire_data->mos_source = 0;
+            wire_data->source_count = 0;
             wire_data->value = WIRE_VALUE_Z;
             wire_data->queued = 0;
             wire_data->first_pin[DEV_PIN_TYPE_IN] = cur_input;
@@ -168,6 +184,21 @@ void sim_BeginSimulation()
                     {
                         sim_pin = list_GetElement(&sim_wire_pins, cur_input);
                         cur_input++;
+
+                        if((device->type == DEV_DEVICE_TYPE_NMOS || device->type == DEV_DEVICE_TYPE_PMOS) && junction->pin.pin == DEV_MOS_PIN_SOURCE)
+                        {
+                            wire_data->source_count++;
+                        }
+                        else
+                        {
+                            if(wire_data->source_count > 0)
+                            {
+                                struct wire_pin_t *move_pin = list_GetElement(&sim_wire_pins, next_source_move);
+                                *sim_pin = *move_pin;
+                                sim_pin = move_pin;
+                            }
+                            next_source_move++;
+                        }
                     }
                     else
                     {
@@ -202,8 +233,8 @@ void sim_BeginSimulation()
             {
                 struct dev_pin_t *pin = dev_GetDevicePin(device, pin_index);
                 uint64_t sim_pin_index = list_AddElement(&sim_dev_pins, NULL);
-                struct dev_pin_t *sim_pin = list_GetElement(&sim_dev_pins, sim_pin_index);
-                sim_pin->wire = pin->wire;
+                struct sim_dev_pin_t *sim_pin = list_GetElement(&sim_dev_pins, sim_pin_index);
+                sim_pin->wire = pin->junction;
                 sim_pin->value = WIRE_VALUE_U;
             }
         }
@@ -216,9 +247,10 @@ void sim_BeginSimulation()
         sim_wire_pin->device = device->sim_data;
 
         struct sim_dev_data_t *dev_sim_data = list_GetElement(&sim_dev_data, device->sim_data);
-        struct dev_pin_t *sim_dev_pin = list_GetElement(&sim_dev_pins, dev_sim_data->first_pin + sim_wire_pin->pin);
-        struct wire_t *wire = w_GetWire(sim_dev_pin->wire);
-        sim_dev_pin->wire = wire->sim_data;
+        struct sim_dev_pin_t *sim_dev_pin = list_GetElement(&sim_dev_pins, dev_sim_data->first_pin + sim_wire_pin->pin);
+        // struct wire_t *wire = w_GetWire(sim_dev_pin->wire);
+        struct wire_junc_t *junction = w_GetWireJunction(sim_dev_pin->wire);
+        sim_dev_pin->wire = junction->base.wire->sim_data;
     }
 
     /* allocate enough update slots upfront */
@@ -229,9 +261,16 @@ void sim_BeginSimulation()
     sim_update_devices.cursor = 0;
     for(uint32_t index = 0; index < sim_wire_data.cursor; index++)
     {
-        list_AddElement(&sim_update_wires, NULL);
+        list_AddElement(&sim_update_wires[0], NULL);
+        list_AddElement(&sim_update_wires[1], NULL);
     }
-    sim_update_wires.cursor = 0;
+    sim_update_wires[0].cursor = 0;
+    sim_update_wires[1].cursor = 0;
+    for(uint32_t index = 0; index < sim_dev_data.cursor; index++)
+    {
+        list_AddElement(&sim_source_updates, NULL);
+    }
+    sim_source_updates.cursor = 0;
 
     /* queue all devices to jumpstart the simulation */
     for(uint32_t index = 0; index < sim_dev_data.cursor; index++)
@@ -247,7 +286,7 @@ void sim_BeginSimulation()
         if(input != NULL)
         {
             struct sim_dev_data_t *sim_data = list_GetElement(&sim_dev_data, input->device->sim_data);
-            struct dev_pin_t *pin = list_GetElement(&sim_dev_pins, sim_data->first_pin);
+            struct sim_dev_pin_t *pin = list_GetElement(&sim_dev_pins, sim_data->first_pin);
             pin->value = input->init_value;
         }
     }
@@ -269,7 +308,7 @@ void sim_BeginSimulation()
             sim_next_clock_count = (sim_clock->substeps_left < sim_next_clock_count) ? sim_clock->substeps_left : sim_next_clock_count;
 
             struct sim_dev_data_t *sim_data = list_GetElement(&sim_dev_data, clock->device->sim_data);
-            struct dev_pin_t *pin = list_GetElement(&sim_dev_pins, sim_data->first_pin);
+            struct sim_dev_pin_t *pin = list_GetElement(&sim_dev_pins, sim_data->first_pin);
             pin->value = WIRE_VALUE_0S;
         }
     }
@@ -305,21 +344,43 @@ void sim_WireStep(struct sim_wire_data_t *wire)
     {
         struct wire_pin_t *wire_pin = list_GetElement(&sim_wire_pins, wire->first_pin[DEV_PIN_TYPE_OUT] + pin_index);
         struct sim_dev_data_t *dev_data = list_GetElement(&sim_dev_data, wire_pin->device);
-        struct dev_pin_t *device_pin = list_GetElement(&sim_dev_pins, dev_data->first_pin + wire_pin->pin);
+        struct sim_dev_pin_t *device_pin = list_GetElement(&sim_dev_pins, dev_data->first_pin + wire_pin->pin);
         wire_value = w_wire_value_resolution[wire_value][device_pin->value];
     }
 
     if(wire_value != wire->value)
     {
-        for(uint32_t pin_index = 0; pin_index < wire->pin_count[DEV_PIN_TYPE_IN]; pin_index++)
+        uint32_t pin_count = wire->pin_count[DEV_PIN_TYPE_IN] - wire->source_count;
+        // uint32_t pin_count = wire->pin_count[DEV_PIN_TYPE_IN];
+
+        for(uint32_t pin_index = 0; pin_index < pin_count; pin_index++)
         {
             struct wire_pin_t *wire_pin = list_GetElement(&sim_wire_pins, wire->first_pin[DEV_PIN_TYPE_IN] + pin_index);
             struct sim_dev_data_t *dev_sim_data = list_GetElement(&sim_dev_data, wire_pin->device);
             sim_QueueDevice(dev_sim_data);
         }
+
+        uint32_t first_pin = wire->first_pin[DEV_PIN_TYPE_IN] + pin_count;
+
+        if(wire->source_count > 0 && wire_value == WIRE_VALUE_ERR)
+        {
+            wire_value = WIRE_VALUE_IND;
+        }
+
+        for(uint32_t pin_index = 0; pin_index < wire->source_count; pin_index++)
+        {
+            struct wire_pin_t *wire_pin = list_GetElement(&sim_wire_pins, wire->first_pin[DEV_PIN_TYPE_IN] + pin_index);
+            struct sim_dev_data_t *dev_sim_data = list_GetElement(&sim_dev_data, wire_pin->device);
+            sim_QueueSource(dev_sim_data);
+        }
     }
 
     wire->value = wire_value;
+}
+
+void sim_IndWireStep(struct sim_wire_data_t *wire)
+{
+
 }
 
 void sim_DeviceStep(struct sim_dev_data_t *device)
@@ -330,16 +391,53 @@ void sim_DeviceStep(struct sim_dev_data_t *device)
     }
 }
 
-void sim_Step()
+void sim_Step(uint32_t single_substep)
 {
     sim_cur_step = SIM_STEP_DEVICE;
     uint64_t cur_count = SDL_GetPerformanceCounter();
     uint64_t substep_count = (cur_count - sim_prev_counter) / sim_substeps_per_count;
     sim_prev_counter = cur_count;
+
+    if(substep_count > SIM_MAX_SUBSTEPS_PER_FRAME)
+    {
+        substep_count = SIM_MAX_SUBSTEPS_PER_FRAME;
+    }
+
+    if(single_substep)
+    {
+        substep_count = 1;
+    }
     
     while(substep_count)
     {
         uint64_t elasped_substeps = 1;
+
+        // if(sim_source_updates.cursor > 0)
+        // {
+        //     printf("source propagation step\n");
+        //     for(uint32_t source_index = 0; source_index < sim_source_updates.cursor; source_index++)
+        //     {
+        //         struct sim_dev_data_t *device = *(struct sim_dev_data_t **)list_GetElement(&sim_source_updates, source_index);
+        //         sim_DeviceStep(device);
+        //         device->device->selection_index = 0;
+        //     }
+        //     sim_source_updates.cursor = 0;
+        // }
+        // else
+        // {
+        //     printf("device update step\n");
+
+        //     if(sim_update_devices.cursor == 0)
+        //     {
+        //         for(uint32_t index = 0; index < dev_devices.cursor; index++)
+        //         {
+        //             struct dev_t *device = dev_GetDevice(index);
+        //             if(device != NULL)
+        //             {
+        //                 device->selection_index = INVALID_LIST_INDEX;
+        //             }
+        //         }
+        //     }
 
         for(uint32_t update_index = 0; update_index < sim_update_devices.cursor; update_index++)
         {
@@ -348,16 +446,40 @@ void sim_Step()
             device->queued = 0;
         }
         sim_update_devices.cursor = 0;
+        // }
 
-        for(uint32_t update_index = 0; update_index < sim_update_wires.cursor; update_index++)
+        // for(uint32_t update_index = 0; update_index < sim_update_devices.cursor; update_index++)
+        // {
+        //     struct sim_dev_data_t *device = *(struct sim_dev_data_t **)list_GetElement(&sim_update_devices, update_index);
+        //     sim_DeviceStep(device);
+        //     device->queued = 0;
+        // }
+        // sim_update_devices.cursor = 0;
+
+        struct list_t *wire_update_list;
+
+        do
         {
-            struct sim_wire_data_t *wire = *(struct sim_wire_data_t **)list_GetElement(&sim_update_wires, update_index);
-            sim_WireStep(wire);
-            wire->queued = 0;
-        }
-        sim_update_wires.cursor = 0;
+            for(uint32_t source_index = 0; source_index < sim_source_updates.cursor; source_index++)
+            {
+                struct sim_dev_data_t *device = *(struct sim_dev_data_t **)list_GetElement(&sim_source_updates, source_index);
+                sim_DeviceStep(device);
+            }
+            sim_source_updates.cursor = 0;
 
-        if(!(sim_update_devices.cursor || sim_update_wires.cursor))
+            wire_update_list = &sim_update_wires[sim_update_wires[0].cursor == 0];
+
+            for(uint32_t update_index = 0; update_index < wire_update_list->cursor; update_index++)
+            {
+                struct sim_wire_data_t *wire = *(struct sim_wire_data_t **)list_GetElement(wire_update_list, update_index);
+                sim_WireStep(wire);
+                wire->queued = 0;
+            }
+            wire_update_list->cursor = 0;
+        }
+        while(sim_source_updates.cursor > 0);
+
+        if(!(sim_update_devices.cursor || wire_update_list->cursor))
         {
             elasped_substeps = sim_next_clock_count;
             if(elasped_substeps > substep_count)
@@ -376,7 +498,7 @@ void sim_Step()
             {
                 clock->substeps_left = clock->half_period;
                 struct sim_dev_data_t *device = list_GetElement(&sim_dev_data, clock->device);
-                struct dev_pin_t *pin = list_GetElement(&sim_dev_pins, device->first_pin);
+                struct sim_dev_pin_t *pin = list_GetElement(&sim_dev_pins, device->first_pin);
                 pin->value = !pin->value;
                 sim_QueueDevice(device);
             }

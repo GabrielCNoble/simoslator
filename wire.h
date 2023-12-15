@@ -25,6 +25,8 @@ enum WIRE_VALUES
     WIRE_VALUE_U,
     /* error */
     WIRE_VALUE_ERR,
+    /* temporary indeterminate value */
+    WIRE_VALUE_IND,
 
     WIRE_VALUE_LAST,
 };
@@ -113,6 +115,7 @@ struct wire_junc_t
     struct wire_junc_t *            wire_prev;
     uint64_t                        traversal_id;
     uint32_t                        selection_index;
+    uint32_t                        segment_count;
 };
 
 struct wire_seg_t
@@ -180,6 +183,8 @@ struct wire_junc_t *w_AllocWireJunction(struct wire_t *wire);
 
 void w_FreeWireJunction(struct wire_junc_t *junction);
 
+struct wire_junc_t *w_GetWireJunction(uint64_t junction_index);
+
 void w_LinkJunctionToWire(struct wire_t *wire, struct wire_junc_t *junction);
 
 void w_UnlinkJunctionFromWire(struct wire_junc_t *junction);
@@ -214,7 +219,9 @@ void w_ConnectPinToSegment(struct wire_seg_t *segment, uint32_t tip_index, struc
 
 void w_ConnectPinToJunction(struct wire_junc_t *junction, struct dev_t *device, uint16_t pin);
 
-void w_DisconnectPin(struct wire_junc_t *junction);
+void w_DisconnectJunctionFromPin(struct wire_junc_t *junction);
+
+void w_DisconnectPin(struct wire_t *wire, struct dev_t *device, uint16_t pin);
 
 
 #endif
