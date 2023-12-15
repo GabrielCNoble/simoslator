@@ -22,6 +22,7 @@ enum DEV_DEVICE_TYPES
     DEV_DEVICE_TYPE_CLOCK,
     DEV_DEVICE_TYPE_INPUT,
     DEV_DEVICE_TYPE_7SEG,
+    DEV_DEVICE_TYPE_OUTPUT,
     DEV_DEVICE_TYPE_LAST,
 };
 
@@ -112,6 +113,12 @@ struct dev_input_t
     POOL_ELEMENT;
     struct dev_t *  device;
     uint8_t         init_value;
+};
+
+struct dev_output_t
+{
+    POOL_ELEMENT;
+    struct dev_t *  device;
 };
 
 #define DEV_7SEG_PIN_POW    0

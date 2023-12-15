@@ -30,6 +30,8 @@ struct d_device_tex_coords_t
 #define D_DEVICE_DATA_BINDING       0
 #define D_DEVICE_TEX_COORDS_BINDING 1
 #define D_7SEG_DATA_BINDING         2
+#define D_OUTPUT_DATA_BINDING       3
+#define D_WIRE_COLOR_BINDING        4
 // struct d_device_data_t
 // {
 //     int32_t pos_x;

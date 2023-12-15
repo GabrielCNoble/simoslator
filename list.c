@@ -89,7 +89,7 @@ void *list_GetElement(struct list_t *list, uint64_t index)
 {
     void *element = NULL;
 
-    if(list != NULL)
+    if(list != NULL && list->buffers != NULL)
     {
         uint64_t buffer_index = index / list->buffer_elem_count;
         uint64_t element_index = index % list->buffer_elem_count;

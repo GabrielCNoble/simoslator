@@ -70,6 +70,10 @@ void sim_BeginSimulation();
 
 void sim_StopSimulation();
 
+struct sim_dev_data_t *sim_GetDevSimData(uint64_t data);
+
+struct sim_dev_pin_t *sim_GetDevSimPin(struct sim_dev_data_t *data, uint16_t pin);
+
 struct sim_wire_data_t *sim_GetWireSimData(uint64_t wire, uint32_t pin_type);
 
 void sim_WireStep(struct sim_wire_data_t *wire);

@@ -11,6 +11,7 @@
 // struct pool_t dev_primitives;
 struct pool_t                       dev_devices;
 struct pool_t                       dev_inputs;
+struct pool_t                       dev_outputs;
 struct pool_t                       dev_clocks;
 struct pool_t                       dev_7seg_disps;
 struct pool_t                       dev_pin_blocks;
@@ -25,14 +26,15 @@ extern struct list_t                sim_wire_pins;
 extern struct list_t                sim_dev_data;
 extern struct list_t                sim_dev_pins;
 
-GLuint      dev_devices_texture;
-uint32_t    dev_devices_texture_width;
-uint32_t    dev_devices_texture_height;
-GLuint      dev_7seg_mask_texture;
+GLuint                              dev_devices_texture;
+uint32_t                            dev_devices_texture_width;
+uint32_t                            dev_devices_texture_height;
+GLuint                              dev_7seg_mask_texture;
+GLuint                              dev_output_mask_texture;
 
-GLuint      dev_devices_texture_small;
-uint32_t    dev_devices_texture_small_width;
-uint32_t    dev_devices_texture_small_height;
+GLuint                              dev_devices_texture_small;
+uint32_t                            dev_devices_texture_small_width;
+uint32_t                            dev_devices_texture_small_height;
 
 uint32_t dev_tex_coords_lut[4][4] = {
     [DEV_DEVICE_ROTATION_0] = {
@@ -185,19 +187,27 @@ void dev_InputStep(struct sim_dev_data_t *device)
     sim_QueueWire(wire);
 }
 
+void dev_OutputStep(struct sim_dev_data_t *device)
+{
+    struct sim_dev_pin_t *pin = list_GetElement(&sim_dev_pins, device->first_pin);
+    struct sim_wire_data_t *wire = sim_GetWireSimData(pin->wire, DEV_PIN_TYPE_IN);
+    pin->value = wire->value;
+}
+
 void dev_NullStep(struct sim_dev_data_t *device)
 {
 
 }
 
 void (*dev_DeviceFuncs[DEV_DEVICE_TYPE_LAST])(struct sim_dev_data_t *device) = {
-    [DEV_DEVICE_TYPE_PMOS]  = dev_PMosStep,
-    [DEV_DEVICE_TYPE_NMOS]  = dev_NMosStep,
-    [DEV_DEVICE_TYPE_POW]   = dev_PowerStep,
-    [DEV_DEVICE_TYPE_GND]   = dev_GroundStep,
-    [DEV_DEVICE_TYPE_CLOCK] = dev_InputStep,
-    [DEV_DEVICE_TYPE_INPUT] = dev_InputStep,
-    [DEV_DEVICE_TYPE_7SEG]  = dev_NullStep,
+    [DEV_DEVICE_TYPE_PMOS]      = dev_PMosStep,
+    [DEV_DEVICE_TYPE_NMOS]      = dev_NMosStep,
+    [DEV_DEVICE_TYPE_POW]       = dev_PowerStep,
+    [DEV_DEVICE_TYPE_GND]       = dev_GroundStep,
+    [DEV_DEVICE_TYPE_CLOCK]     = dev_InputStep,
+    [DEV_DEVICE_TYPE_INPUT]     = dev_InputStep,
+    [DEV_DEVICE_TYPE_7SEG]      = dev_NullStep,
+    [DEV_DEVICE_TYPE_OUTPUT]    = dev_OutputStep
 };
 
 struct dev_desc_t dev_device_descs[DEV_DEVICE_TYPE_LAST] = {
@@ -288,13 +298,25 @@ struct dev_desc_t dev_device_descs[DEV_DEVICE_TYPE_LAST] = {
             {.type = DEV_PIN_TYPE_IN, .offset = { 20, -80}},
             {.type = DEV_PIN_TYPE_IN, .offset = { 30, -80}},
         }
-    }
+    },
+
+    [DEV_DEVICE_TYPE_OUTPUT] = {
+        .pin_count = 1,
+        .width = 38,
+        .height = 22,
+        .tex_offset = {114, 150}, 
+        .origin = {18, 0},
+        .pins = (struct dev_pin_desc_t []) {
+            {.type = DEV_PIN_TYPE_IN, .offset = {0, 0}},
+        },
+    },
 };
 
 void dev_Init()
 {
     dev_devices = pool_CreateTyped(struct dev_t, 4096);
     dev_inputs = pool_CreateTyped(struct dev_input_t, 512);
+    dev_outputs = pool_CreateTyped(struct dev_output_t, 512);
     dev_clocks = pool_CreateTyped(struct dev_clock_t, 8);
     dev_7seg_disps = pool_CreateTyped(struct dev_7seg_disp_t, 8);
     dev_pin_blocks = pool_CreateTyped(struct dev_pin_block_t, 4096);
@@ -309,19 +331,10 @@ void dev_Init()
     int32_t height;
     pixels = stbi_load("res/7seg_mask.png", &width, &height, &channels, STBI_rgb_alpha);
     dev_7seg_mask_texture = d_CreateTexture(width, height, GL_RGBA8UI, GL_NEAREST, GL_NEAREST, 0, GL_RGBA_INTEGER, pixels);
+    free(pixels);
 
-    // while(glGetError() != GL_NO_ERROR);
-    // glGenTextures(1, &dev_7seg_mask_texture);
-    // glBindTexture(GL_TEXTURE_2D, dev_7seg_mask_texture);
-    // glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    // glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    // glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_BASE_LEVEL, 0);
-    // glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_LEVEL, 0);
-    // glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
-    // glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
-    // glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8UI, width, height, 0, GL_RGBA_INTEGER, GL_UNSIGNED_BYTE, pixels);
-    // // glGenerateMipmap(GL_TEXTURE_2D);
-    // printf("%x\n", glGetError());
+    pixels = stbi_load("res/output_mask.png", &width, &height, &channels, STBI_rgb_alpha);
+    dev_output_mask_texture = d_CreateTexture(width, height, GL_RGBA8UI, GL_NEAREST, GL_NEAREST, 0, GL_RGBA_INTEGER, pixels);
     free(pixels);
 }
 
@@ -381,6 +394,14 @@ struct dev_t *dev_CreateDevice(uint32_t type)
             input->device = device;
             input->init_value = WIRE_VALUE_0S;
             device->data = input;
+        }
+        break;
+
+        case DEV_DEVICE_TYPE_OUTPUT:
+        {
+            struct dev_output_t *output = pool_AddElement(&dev_outputs, NULL);
+            output->device = device;
+            device->data = output;
         }
         break;
 
@@ -446,6 +467,13 @@ void dev_DestroyDevice(struct dev_t *device)
             {
                 struct dev_input_t *input = device->data;
                 pool_RemoveElement(&dev_inputs, input->element_index);
+            }
+            break;
+
+            case DEV_DEVICE_TYPE_OUTPUT:
+            {
+                struct dev_output_t *output = device->data;
+                pool_RemoveElement(&dev_outputs, output->element_index);
             }
             break;
 
@@ -525,6 +553,7 @@ void dev_ClearDevices()
 {
     pool_Reset(&dev_devices);
     pool_Reset(&dev_inputs);
+    pool_Reset(&dev_outputs);
     pool_Reset(&dev_clocks);
     pool_Reset(&dev_pin_blocks);
 }
