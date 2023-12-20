@@ -191,6 +191,10 @@ const char *d_device_fragment_shader =
         // "coords.x += float(coord_offset.x) / tex_size.x;\n"
         // "coords.y += float(coord_offset.y) / tex_size.y;\n"
         "vec4 color = texture(d_texture, tex_coords);\n"
+        "if(color.a == 0.0f)\n"
+        "{\n"
+            "discard;\n"
+        "}\n"
         "if(selected != 0)\n"
         "{\n"
             "color = vec4(0.0f, 0.5f, 0.8f, color.a);\n"
@@ -532,7 +536,7 @@ void d_Init()
         [WIRE_VALUE_Z]      = {0.3, 0.3, 0.3, 1},
         [WIRE_VALUE_U]      = {0.3, 0.0, 0.5, 1},
         [WIRE_VALUE_ERR]    = {1, 0, 0, 1},
-        [WIRE_VALUE_IND]    = {0.5f, 1, 0, 1}
+        [WIRE_VALUE_IND]    = {0.8f, 1, 0, 1}
     };
 
     glGenBuffers(1, &d_wire_value_color_buffer);
@@ -651,6 +655,34 @@ void d_Draw()
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
+    d_DrawWires();
+    d_DrawDevices();
+    
+    if(m_draw_selection_box)
+    {
+        glUseProgram(d_selection_box_shader);
+        glBindBuffer(GL_ARRAY_BUFFER, d_selection_box_vertex_buffer);
+        glEnableVertexAttribArray(0);
+        glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, sizeof(struct d_color_vert_t), (void *)(offsetof(struct d_color_vert_t, position)));
+        glEnableVertexAttribArray(1);
+        glVertexAttribPointer(1, 4, GL_FLOAT, GL_FALSE, sizeof(struct d_color_vert_t), (void *)(offsetof(struct d_color_vert_t, color)));
+        glDisableVertexAttribArray(2);
+        glUniformMatrix4fv(d_selection_box_shader_model_view_projection_matrix, 1, GL_FALSE, d_model_view_projection_matrix);
+
+        struct d_color_vert_t box_verts[] = {
+            {.position = {m_selection_box_min[0], m_selection_box_max[1]}, .color = {0.0f, 1.0f, 0.0f, 1.0f}},
+            {.position = {m_selection_box_min[0], m_selection_box_min[1]}, .color = {0.0f, 1.0f, 0.0f, 1.0f}},
+            {.position = {m_selection_box_max[0], m_selection_box_min[1]}, .color = {0.0f, 1.0f, 0.0f, 1.0f}},
+            {.position = {m_selection_box_max[0], m_selection_box_max[1]}, .color = {0.0f, 1.0f, 0.0f, 1.0f}},
+        };
+
+        glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(box_verts), box_verts);
+        glDrawArrays(GL_LINE_LOOP, 0, 4);
+    }
+}
+
+void d_DrawDevices()
+{
     glBindBuffer(GL_ARRAY_BUFFER, d_device_vertex_buffer);
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, d_device_index_buffer);
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, D_DEVICE_TEX_COORDS_BINDING, d_device_tex_coords_buffer);
@@ -773,7 +805,8 @@ void d_Draw()
         glUniformMatrix4fv(d_7seg_mask_shader_model_view_projection_matrix, 1, GL_FALSE, d_model_view_projection_matrix);
         glBindTexture(GL_TEXTURE_2D, dev_7seg_mask_texture);
         glUniform1i(d_7seg_mask_shader_texture, 0);
-        glDisable(GL_DEPTH_TEST);
+        glDepthFunc(GL_EQUAL);
+        // glDisable(GL_DEPTH_TEST);
         uint32_t buffer_offset = 0;
         for(uint32_t index = 0; index < dev_7seg_disps.cursor; index++)
         {
@@ -821,7 +854,8 @@ void d_Draw()
         glUniformMatrix4fv(d_output_mask_shader_model_view_projection_matrix, 1, GL_FALSE, d_model_view_projection_matrix);
         glBindTexture(GL_TEXTURE_2D, dev_output_mask_texture);
         glUniform1i(d_output_mask_shader_texture, 0);
-        glDisable(GL_DEPTH_TEST);
+        glDepthFunc(GL_EQUAL);
+        // glDisable(GL_DEPTH_TEST);
         uint32_t buffer_offset = 0;
         // printf("%d\n", dev_outputs.cursor);
         for(uint32_t index = 0; index < dev_outputs.cursor; index++)
@@ -871,7 +905,10 @@ void d_Draw()
         glDrawElementsInstanced(GL_TRIANGLES, 6, GL_UNSIGNED_INT, (void *)0, buffer_offset);
         d_device_data_buffer_index = (d_device_data_buffer_index + 1) % D_DEVICE_DATA_BUFFER_COUNT;
     }
+}
 
+void d_DrawWires()
+{
     glBindBuffer(GL_ARRAY_BUFFER, d_wire_vertex_buffer);
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, D_WIRE_COLOR_BINDING, d_wire_value_color_buffer);
@@ -884,9 +921,10 @@ void d_Draw()
     glUniformMatrix4fv(d_wire_shader_model_view_projection_matrix, 1, GL_FALSE, d_model_view_projection_matrix);
     glLineWidth(2.0f);
     glPointSize(4.0f);
+    glDepthFunc(GL_LESS);
 
     uint32_t vertex_count = (w_wire_segs.cursor - (w_wire_segs.free_indices_top + 1)) * 2;
-    update_count = vertex_count / D_WIRE_VERTEX_BUFFER_SIZE;
+    uint32_t update_count = vertex_count / D_WIRE_VERTEX_BUFFER_SIZE;
 
     if(vertex_count % D_WIRE_VERTEX_BUFFER_SIZE)
     {
@@ -1027,27 +1065,4 @@ void d_Draw()
         glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(struct d_wire_vert_t) * buffer_offset, d_wire_vertices);
         glDrawArrays(GL_LINES, 0, buffer_offset);
     }    
-
-
-    if(m_draw_selection_box)
-    {
-        glUseProgram(d_selection_box_shader);
-        glBindBuffer(GL_ARRAY_BUFFER, d_selection_box_vertex_buffer);
-        glEnableVertexAttribArray(0);
-        glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, sizeof(struct d_color_vert_t), (void *)(offsetof(struct d_color_vert_t, position)));
-        glEnableVertexAttribArray(1);
-        glVertexAttribPointer(1, 4, GL_FLOAT, GL_FALSE, sizeof(struct d_color_vert_t), (void *)(offsetof(struct d_color_vert_t, color)));
-        glDisableVertexAttribArray(2);
-        glUniformMatrix4fv(d_selection_box_shader_model_view_projection_matrix, 1, GL_FALSE, d_model_view_projection_matrix);
-
-        struct d_color_vert_t box_verts[] = {
-            {.position = {m_selection_box_min[0], m_selection_box_max[1]}, .color = {0.0f, 1.0f, 0.0f, 1.0f}},
-            {.position = {m_selection_box_min[0], m_selection_box_min[1]}, .color = {0.0f, 1.0f, 0.0f, 1.0f}},
-            {.position = {m_selection_box_max[0], m_selection_box_min[1]}, .color = {0.0f, 1.0f, 0.0f, 1.0f}},
-            {.position = {m_selection_box_max[0], m_selection_box_max[1]}, .color = {0.0f, 1.0f, 0.0f, 1.0f}},
-        };
-
-        glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(box_verts), box_verts);
-        glDrawArrays(GL_LINE_LOOP, 0, 4);
-    }
 }

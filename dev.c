@@ -63,49 +63,66 @@ uint32_t dev_tex_coords_lut[4][4] = {
     },
 };
 
-uint8_t dev_pmos_table[WIRE_VALUE_LAST][WIRE_VALUE_LAST] = {
-    [WIRE_VALUE_0S] = {
-        [WIRE_VALUE_1W] = WIRE_VALUE_1W,
-        [WIRE_VALUE_1S] = WIRE_VALUE_1S,
-         WIRE_VALUE_Z,
-         WIRE_VALUE_Z,
-         WIRE_VALUE_Z,
-         WIRE_VALUE_Z,
-         WIRE_VALUE_Z,
-         WIRE_VALUE_Z,
-    },
-    [WIRE_VALUE_1S] = {
-        WIRE_VALUE_Z,
-        WIRE_VALUE_Z,
-        WIRE_VALUE_Z,
-        WIRE_VALUE_Z,
-        WIRE_VALUE_Z,
-        WIRE_VALUE_Z,
-        WIRE_VALUE_Z,
-        WIRE_VALUE_Z,
-    },
-    [WIRE_VALUE_0W] = {
-        [WIRE_VALUE_1W] = WIRE_VALUE_1W,
-        [WIRE_VALUE_1S] = WIRE_VALUE_1S,
-         WIRE_VALUE_Z,
-         WIRE_VALUE_Z,
-         WIRE_VALUE_Z,
-         WIRE_VALUE_Z,
-         WIRE_VALUE_Z,
-         WIRE_VALUE_Z,
+// uint8_t dev_pmos_table[2][WIRE_VALUE_LAST] = {
+//     { [WIRE_VALUE_0S] = 1, [WIRE_VALUE_0W] = 1 },
+//     { [WIRE_VALUE_1S] = 1, [WIRE_VALUE_1W] = 1, [WIRE_VALUE_IND] = 1 }
+// };
+
+
+
+struct dev_mos_table_t dev_mos_tables[2] = {
+    [DEV_DEVICE_TYPE_PMOS] = {
+        .gate_table = {
+            [WIRE_VALUE_0S] = 1,
+            [WIRE_VALUE_0W] = 1        
+        },
+        .source_table = {
+            [WIRE_VALUE_0S]     = WIRE_VALUE_Z,
+            [WIRE_VALUE_1S]     = WIRE_VALUE_1S,
+            [WIRE_VALUE_0W]     = WIRE_VALUE_Z,
+            [WIRE_VALUE_1W]     = WIRE_VALUE_1W,
+            [WIRE_VALUE_Z]      = WIRE_VALUE_Z,
+            [WIRE_VALUE_U]      = WIRE_VALUE_U,
+            [WIRE_VALUE_ERR]    = WIRE_VALUE_ERR,
+            [WIRE_VALUE_IND]    = WIRE_VALUE_IND,
+        }
     },
 
-    [WIRE_VALUE_1W] = {
-        WIRE_VALUE_Z,
-        WIRE_VALUE_Z,
-        WIRE_VALUE_Z,
-        WIRE_VALUE_Z,
-        WIRE_VALUE_Z,
-        WIRE_VALUE_Z,
-        WIRE_VALUE_Z,
-        WIRE_VALUE_Z,
-    },
+    [DEV_DEVICE_TYPE_NMOS] = {
+        .gate_table = {
+            [WIRE_VALUE_1S] = 1,
+            [WIRE_VALUE_1W] = 1
+        },
+        .source_table = {
+            [WIRE_VALUE_0S]     = WIRE_VALUE_0S,
+            [WIRE_VALUE_1S]     = WIRE_VALUE_Z,
+            [WIRE_VALUE_0W]     = WIRE_VALUE_0W,
+            [WIRE_VALUE_1W]     = WIRE_VALUE_Z,
+            [WIRE_VALUE_Z]      = WIRE_VALUE_Z,
+            [WIRE_VALUE_U]      = WIRE_VALUE_U,
+            [WIRE_VALUE_ERR]    = WIRE_VALUE_ERR,
+            [WIRE_VALUE_IND]    = WIRE_VALUE_IND,
+        }
+    }
 };
+
+// uint8_t dev_pmos_gate_table[WIRE_VALUE_LAST] = {
+//     [WIRE_VALUE_0S] = 1,
+//     [WIRE_VALUE_0W] = 1
+// };
+
+// uint8_t dev_pmos_source_table[WIRE_VALUE_LAST] = {
+//     [WIRE_VALUE_0S]     = WIRE_VALUE_Z,
+//     [WIRE_VALUE_1S]     = WIRE_VALUE_1S,
+//     [WIRE_VALUE_0W]     = WIRE_VALUE_Z,
+//     [WIRE_VALUE_1W]     = WIRE_VALUE_1W,
+//     [WIRE_VALUE_Z]      = WIRE_VALUE_Z,
+//     [WIRE_VALUE_U]      = WIRE_VALUE_U,
+//     [WIRE_VALUE_ERR]    = WIRE_VALUE_ERR,
+//     [WIRE_VALUE_IND]    = WIRE_VALUE_IND,
+// };
+
+
 
 void dev_PMosStep(struct sim_dev_data_t *device)
 {
@@ -115,19 +132,34 @@ void dev_PMosStep(struct sim_dev_data_t *device)
     struct sim_wire_data_t *gate_wire = sim_GetWireSimData(gate_pin->wire, DEV_PIN_TYPE_IN);
     struct sim_wire_data_t *source_wire = sim_GetWireSimData(source_pin->wire, DEV_PIN_TYPE_IN);
     struct sim_wire_data_t *drain_wire = sim_GetWireSimData(drain_pin->wire, DEV_PIN_TYPE_OUT);
-    uint8_t prev_value = drain_pin->value;
+    // uint8_t prev_value = drain_pin->value;
 
-    if((gate_wire->value == WIRE_VALUE_0S || gate_wire->value == WIRE_VALUE_0W) && 
-       (source_wire->value == WIRE_VALUE_1S || source_wire->value == WIRE_VALUE_1W || source_wire->value == WIRE_VALUE_IND))
-    {
-        drain_pin->value = source_wire->value;
-    }
-    else
-    {
-        drain_pin->value = WIRE_VALUE_Z;
-    }
+    // if((gate_wire->value == WIRE_VALUE_0S || gate_wire->value == WIRE_VALUE_0W) && 
+    //    (source_wire->value == WIRE_VALUE_1S || source_wire->value == WIRE_VALUE_1W || source_wire->value == WIRE_VALUE_IND))
+    // {
+    //     drain_pin->value = source_wire->value;
+    // }
+    // else
+    // {
+    //     drain_pin->value = WIRE_VALUE_Z;
+    // }
 
-    if(prev_value != drain_pin->value)
+    // if(dev_pmos_table[0][gate_wire->value] && dev_pmos_table[1][source_wire->value])
+    // {
+    //     drain_pin->value = source_wire->value;
+    // }
+    // else
+    // {
+    //     drain_pin->value = WIRE_VALUE_Z;
+    // }
+
+    // drain_pin->value = dev_pmos_gate_table[gate_wire->value] ? dev_pmos_source_table[source_wire->value] : WIRE_VALUE_Z;
+    gate_pin->value = gate_wire->value;
+    source_pin->value = source_wire->value;
+    drain_pin->value = dev_mos_tables[DEV_DEVICE_TYPE_PMOS].gate_table[gate_wire->value] ? 
+                       dev_mos_tables[DEV_DEVICE_TYPE_PMOS].source_table[source_wire->value] : WIRE_VALUE_Z;
+
+    if(drain_pin->value != drain_wire->value)
     {
         sim_QueueWire(drain_wire);
     }
@@ -143,15 +175,20 @@ void dev_NMosStep(struct sim_dev_data_t *device)
     struct sim_wire_data_t *drain_wire = sim_GetWireSimData(drain_pin->wire, DEV_PIN_TYPE_OUT);
     uint8_t prev_value = drain_pin->value;
 
-    if((gate_wire->value == WIRE_VALUE_1S || gate_wire->value == WIRE_VALUE_1W) && 
-       (source_wire->value == WIRE_VALUE_0S || source_wire->value == WIRE_VALUE_0W || source_wire->value == WIRE_VALUE_IND))
-    {
-        drain_pin->value = source_wire->value;
-    }
-    else
-    {
-        drain_pin->value = WIRE_VALUE_Z;
-    }
+    // if((gate_wire->value == WIRE_VALUE_1S || gate_wire->value == WIRE_VALUE_1W) && 
+    //    (source_wire->value == WIRE_VALUE_0S || source_wire->value == WIRE_VALUE_0W || source_wire->value == WIRE_VALUE_IND))
+    // {
+    //     drain_pin->value = source_wire->value;
+    // }
+    // else
+    // {
+    //     drain_pin->value = WIRE_VALUE_Z;
+    // }
+
+    gate_pin->value = gate_wire->value;
+    source_pin->value = source_wire->value;
+    drain_pin->value = dev_mos_tables[DEV_DEVICE_TYPE_NMOS].gate_table[gate_wire->value] ? 
+                       dev_mos_tables[DEV_DEVICE_TYPE_NMOS].source_table[source_wire->value] : WIRE_VALUE_Z;
 
     if(prev_value != drain_pin->value)
     {

@@ -50,6 +50,12 @@ struct dev_desc_t
     struct dev_pin_desc_t *     pins;
 };
 
+struct dev_mos_table_t
+{
+    uint8_t gate_table[8];
+    uint8_t source_table[8];
+};
+
 #define DEV_PIN_BLOCK_PIN_COUNT 4
 #define DEV_MAX_DEVICE_PINS 0xffff
 // #define DEV_INVALID_WIRE 0xffffff

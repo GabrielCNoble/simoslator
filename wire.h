@@ -193,7 +193,7 @@ void w_LinkSegmentToJunction(struct wire_seg_t *segment, struct wire_junc_t *jun
 
 void w_UnlinkSegmentFromJunction(struct wire_seg_t *segment, struct wire_junc_t *junction);
 
-void w_UnlinkSegmentLinkIndex(struct wire_seg_t *segment, uint32_t link_index);
+void w_UnlinkSegmentFromJunctionLinkIndex(struct wire_seg_t *segment, uint32_t link_index);
 
 struct wire_junc_t *w_AddJunction(struct wire_seg_t *segment, int32_t *position);
 

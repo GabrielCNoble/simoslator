@@ -18,15 +18,19 @@ enum SIM_STEPS
 
 struct sim_wire_data_t 
 {
-    uint32_t    first_pin[2];
-    uint16_t    pin_count[2];
+    // uint32_t    first_pin[2];
+    // uint16_t    pin_count[2];
+    // uint32_t    first_input_pin;
+    // uint32_t    first_output_pin;
+    // uint16_t    output_pin_count;
+    uint32_t    first_input_pin;
+    uint16_t    input_pin_count;
+    uint16_t    output_pin_count;
     uint16_t    source_count;
-    // uint16_t    queued;
-    uint8_t     queued;
-    uint8_t     value:          7;
-    // uint8_t     mos_source:     1;
-    // uint8_t     immediate : 1;
-    // uint16_t value;
+    uint8_t     contention_queued;
+    uint8_t     normal_queued;
+    uint8_t     value;
+    uint8_t     pad[3];
 }; 
 
 struct sim_dev_data_t
@@ -42,7 +46,6 @@ struct sim_dev_pin_t
 {
     uint64_t wire:          48;
     uint64_t value:         4;
-    uint64_t mos_source:    1;
 };
 
 struct sim_clock_data_t

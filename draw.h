@@ -69,5 +69,9 @@ GLuint d_CreateTexture(int32_t width, int32_t height, uint32_t internal_format, 
 
 void d_Draw();
 
+void d_DrawDevices();
+
+void d_DrawWires();
+
 
 #endif
