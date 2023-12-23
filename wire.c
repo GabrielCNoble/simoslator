@@ -585,6 +585,7 @@ struct wire_seg_t *w_RemoveJunction(struct wire_junc_t *junction)
                 /* segments are collinear, so merge them */
                 first_segment->ends[first_link_index][0] = second_segment->ends[!second_link_index][0];
                 first_segment->ends[first_link_index][1] = second_segment->ends[!second_link_index][1];
+                obj_UpdateObject(first_segment->object);
 
                 if(second_segment->junctions[!second_link_index].junction != NULL)
                 {

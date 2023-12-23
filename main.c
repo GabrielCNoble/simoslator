@@ -382,27 +382,58 @@ struct wire_t *m_CreateWire(struct m_picked_object_t *first_contact, struct m_pi
         prev_segment = segment;
         segment_pos->segment = segment;
         obj_UpdateObject(segment->object);
-        // obj_CreateObject(OBJECT_TYPE_SEGMENT, segment);
     }
 
     if(first_contact->object->type == OBJECT_TYPE_DEVICE)
     {
-        w_ConnectPinToSegment(first_segment->segment, WIRE_SEG_START_INDEX, first_contact->object->base_object, first_contact->index);
+        struct dev_t *device = first_contact->object->base_object;
+        struct dev_pin_t *pin = dev_GetDevicePin(device, first_contact->index);
+        struct wire_junc_t *junction = w_GetWireJunction(pin->junction);
+        if(junction != NULL)
+        {
+            /* FIXME: this can happen if the user tries to connect a wire to a pin where there's already something
+            connected to by clicking next to it instead of on it. Because the "hitbox" of the wire is smaller than
+            the pin one, the click will miss the wire and land on the pin instead, and the new wire segments won't 
+            be connected to the existing wire. 
+            
+            Ideally, wire tips should probably have a larger hitbox than device pins. */
+            struct wire_seg_t *segment = junction->first_segment;
+            w_ConnectSegments(first_segment->segment, segment, segment->junctions[WIRE_SEG_END_INDEX].junction == junction);    
+        }
+        else
+        {
+            w_ConnectPinToSegment(first_segment->segment, WIRE_SEG_START_INDEX, device, first_contact->index);
+        }
     }
     else if(first_contact->object->type == OBJECT_TYPE_SEGMENT)
     {
         w_ConnectSegments(first_segment->segment, first_contact->object->base_object, WIRE_SEG_START_INDEX);
-        // obj_UpdateObject(first_contact->object);
     }
 
     if(second_contact->object->type == OBJECT_TYPE_DEVICE)
     {
-        w_ConnectPinToSegment(last_segment->segment, WIRE_SEG_END_INDEX, second_contact->object->base_object, second_contact->index);
+        struct dev_t *device = second_contact->object->base_object;
+        struct dev_pin_t *pin = dev_GetDevicePin(device, second_contact->index);
+        struct wire_junc_t *junction = w_GetWireJunction(pin->junction);
+        if(junction != NULL)
+        {
+            /* FIXME: this can happen if the user tries to connect a wire to a pin where there's already something
+            connected to by clicking next to it instead of on it. Because the "hitbox" of the wire is smaller than
+            the pin one, the click will miss the wire and land on the pin instead, and the new wire segments won't 
+            be connected to the existing wire. 
+            
+            Ideally, wire tips should probably have a larger hitbox than device pins. */
+            struct wire_seg_t *segment = junction->first_segment;
+            w_ConnectSegments(last_segment->segment, segment, segment->junctions[WIRE_SEG_END_INDEX].junction == junction);    
+        }
+        else
+        {
+            w_ConnectPinToSegment(last_segment->segment, WIRE_SEG_END_INDEX, second_contact->object->base_object, second_contact->index);
+        }
     }
     else if(second_contact->object->type == OBJECT_TYPE_SEGMENT)
     {
         w_ConnectSegments(last_segment->segment, second_contact->object->base_object, WIRE_SEG_END_INDEX);
-        // obj_UpdateObject(second_contact->object);
     }
 
     wire = first_segment->segment->base.wire;
