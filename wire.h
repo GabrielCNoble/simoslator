@@ -123,7 +123,7 @@ struct wire_seg_t
     struct wire_elem_t              base;
     
     /* this is here to simplify handling segments created during junction addition/removal */
-    void *                          object;
+    void *                          element;
 
     int32_t                         ends[2][2];
     struct wire_seg_junc_t          junctions[2];

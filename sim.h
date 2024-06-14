@@ -83,7 +83,7 @@ void sim_WireStep(struct sim_wire_data_t *wire);
 
 void sim_IndWireStep(struct sim_wire_data_t *wire);
 
-void sim_DeviceStep();
+void sim_DeviceStep(struct sim_dev_data_t *device);
 
 void sim_Step(uint32_t single_substep);
 

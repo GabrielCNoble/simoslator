@@ -3,6 +3,8 @@
 
 #include <stdint.h>
 #include "pool.h"
+#include "elem.h"
+#include "draw.h"
 
 #define DEV_MAX_DEVICES     0xffffffffffff
 #define DEV_MAX_DEVICE_PINS 0xffff
@@ -13,17 +15,24 @@
 #define DEV_MOS_PIN_DRAIN   1
 #define DEV_MOS_PIN_GATE    2
 
-enum DEV_DEVICE_TYPES
+enum DEV_DEVICE_CLASS
 {
-    DEV_DEVICE_TYPE_PMOS,
-    DEV_DEVICE_TYPE_NMOS,
-    DEV_DEVICE_TYPE_GND,
-    DEV_DEVICE_TYPE_POW,
-    DEV_DEVICE_TYPE_CLOCK,
-    DEV_DEVICE_TYPE_INPUT,
-    DEV_DEVICE_TYPE_7SEG,
-    DEV_DEVICE_TYPE_OUTPUT,
-    DEV_DEVICE_TYPE_LAST,
+    DEV_DEVICE_CLASS_MOSFET,
+    DEV_DEVICE_CLASS_GATE,
+    DEV_DEVICE_CLASS_LAST,
+}; 
+
+enum DEV_DEVICE
+{
+    DEV_DEVICE_PMOS,
+    DEV_DEVICE_NMOS,
+    DEV_DEVICE_GND,
+    DEV_DEVICE_POW,
+    DEV_DEVICE_CLOCK,
+    DEV_DEVICE_INPUT,
+    DEV_DEVICE_7SEG,
+    DEV_DEVICE_OUTPUT,
+    DEV_DEVICE_LAST,
 };
 
 enum DEV_PIN_TYPES
@@ -35,17 +44,17 @@ enum DEV_PIN_TYPES
 
 struct dev_pin_desc_t
 {
-    int32_t offset[2];
+    vec2_t  offset;
     uint8_t type;
-    uint8_t immediate;
 };
 
 struct dev_desc_t
 {
     uint16_t                    width;
     uint16_t                    height;
-    int32_t                     tex_offset[2];
-    int32_t                     origin[2];
+    vec2_t                      origin;
+    float                       angle;
+    int32_t                     tex_coords[2];
     uint32_t                    pin_count;
     struct dev_pin_desc_t *     pins;
 };
@@ -60,14 +69,13 @@ struct dev_mos_table_t
 #define DEV_MAX_DEVICE_PINS 0xffff
 // #define DEV_INVALID_WIRE 0xffffff
 
-enum DEV_DEVICE_ROTATION
-{
-    DEV_DEVICE_ROTATION_0,
-    DEV_DEVICE_ROTATION_90,
-    DEV_DEVICE_ROTATION_180,
-    DEV_DEVICE_ROTATION_270,
-    DEV_DEVICE_ROTATION_360
-};
+// enum DEV_DEVICE_ROTATION
+// {
+//     DEV_DEVICE_ROTATION_0,
+//     DEV_DEVICE_ROTATION_90,
+//     DEV_DEVICE_ROTATION_180,
+//     DEV_DEVICE_ROTATION_270,
+// };
 
 enum DEV_DEVICE_FLIP
 {
@@ -93,18 +101,29 @@ struct dev_pin_block_t
 struct dev_t
 {
     POOL_ELEMENT;
-    void *                      data;
-    void *                      object;
-    uint64_t                    sim_data;
-    uint64_t                    selection_index;
-    uintptr_t                   serialized_index;
-    int32_t                     position[2];
-    int32_t                     origin[2];
-    struct dev_pin_block_t *    pin_blocks;
-    uint8_t                     tex_coords;
-    uint8_t                     type;
-    uint8_t                     rotation;
-    uint8_t                     flip;
+    void *                          data;
+    struct elem_t *                 element;
+
+    uint64_t                        selection_index;
+
+    /* TODO: those two could probably be put inside an union */
+    uint64_t                        sim_data;
+    uintptr_t                       serialized_index;
+
+
+    vec2_t                          position;
+    vec2_t                          origin;
+    // float                       origin[2];
+    // int32_t                     origin[2];
+    // float                       orientation[2][2];
+    mat2_t                          orientation;
+    uint32_t                        type;
+    struct d_device_data_handle_t * draw_data;
+    struct dev_pin_block_t *        pin_blocks;
+    // uint8_t                     tex_coords;
+    
+    // uint8_t                     rotation;
+    // uint8_t                     flip;
 };
 
 struct dev_clock_t
@@ -150,17 +169,27 @@ struct dev_t *dev_CreateDevice(uint32_t type);
 
 void dev_DestroyDevice(struct dev_t *device);
 
-void dev_UpdateDeviceRotation(struct dev_t *device);
+// void dev_UpdateDeviceElement(struct elem_t *element);
+
+// void dev_UpdateDeviceRotation(struct dev_t *device);
 
 void dev_RotateDevice(struct dev_t *device, uint32_t ccw);
+
+void dev_FlipDeviceH(struct dev_t *device);
+
+void dev_FlipDeviceV(struct dev_t *device);
+
+void dev_UpdateDevice(struct dev_t *device);
 
 void dev_ClearDevices();
 
 struct dev_t *dev_GetDevice(uint64_t device_index);
 
-void dev_GetDeviceLocalPinPosition(struct dev_t *device, uint16_t pin, int32_t *pin_position);
+void dev_UpdateDeviceOrigin(struct dev_t *device);
 
-void dev_GetDeviceLocalBoxPosition(struct dev_t *device, int32_t *min, int32_t *max);
+void dev_GetDeviceLocalPinPosition(struct dev_t *device, uint16_t pin, vec2_t *pin_position);
+
+void dev_GetDeviceLocalBoxPosition(struct dev_t *device, vec2_t *min, vec2_t *max);
 
 struct dev_pin_block_t *dev_GetDevicePinBlock(struct dev_t *device, uint16_t pin);
 

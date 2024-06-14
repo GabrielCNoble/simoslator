@@ -4,7 +4,7 @@
 #include <stdint.h>
 #include "dev.h"
 #include "wire.h"
-#include "obj.h"
+#include "elem.h"
 #include "file.h"
 
 // enum M_OBJECT_TYPES
@@ -87,9 +87,9 @@ struct m_explorer_state_t
 };
 
 
-struct m_picked_object_t
+struct m_picked_element_t
 {
-    struct obj_t *          object;
+    struct elem_t *         element;
     uint32_t                index;
 };
 
@@ -193,7 +193,7 @@ struct m_seg_junc_record_t
 
 // void m_UpdateObject(struct m_object_t *object);
 
-void m_SelectObject(struct obj_t *object, uint32_t multiple);
+void m_SelectElement(struct elem_t *element, uint32_t multiple);
 
 void m_ClearSelections();
 
@@ -203,7 +203,11 @@ void m_TranslateSelections(int32_t dx, int32_t dy);
 
 void m_RotateSelections(int32_t ccw_rotation);
 
-struct wire_t *m_CreateWire(struct m_picked_object_t *first_contact, struct m_picked_object_t *second_contact, struct list_t *segments);
+void m_FlipSelectionsH();
+
+void m_FlipSelectionsV();
+
+struct wire_t *m_CreateWire(struct m_picked_element_t *first_contact, struct m_picked_element_t *second_contact, struct list_t *segments);
 
 void m_SerializeCircuit(void **file_buffer, size_t *file_buffer_size);
 

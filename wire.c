@@ -3,7 +3,7 @@
 #include "list.h"
 #include "dev.h"
 #include "sim.h"
-#include "obj.h"
+#include "elem.h"
 
 uint8_t w_wire_value_resolution[WIRE_VALUE_LAST][WIRE_VALUE_LAST] = {
     [WIRE_VALUE_0S] = {
@@ -239,7 +239,7 @@ struct wire_seg_t *w_AllocWireSegment(struct wire_t *wire)
     segment->wire_prev = NULL;
     segment->traversal_id = 0;
 
-    segment->object = obj_CreateObject(OBJECT_TYPE_SEGMENT, segment);
+    segment->element = elem_CreateElement(ELEM_TYPE_SEGMENT, segment);
     w_LinkSegmentToWire(wire, segment);    
 
     return segment;
@@ -248,7 +248,7 @@ struct wire_seg_t *w_AllocWireSegment(struct wire_t *wire)
 void w_FreeWireSegment(struct wire_seg_t *segment)
 {
     struct wire_t *wire = segment->base.wire;
-    obj_FreeObject(segment->object);
+    elem_FreeElement(segment->element);
     w_UnlinkSegmentFromWire(segment);
     pool_RemoveElement(&w_wire_segs, segment->base.element_index);
 }
@@ -495,8 +495,8 @@ struct wire_junc_t *w_AddJunctionAtMiddle(struct wire_seg_t *segment, int32_t *p
     segment->ends[WIRE_SEG_END_INDEX][1] = position[1];
 
     split->segments[WIRE_SEG_END_INDEX] = segment->segments[WIRE_SEG_END_INDEX];
-    obj_UpdateObject(split->object);
-    obj_UpdateObject(segment->object);
+    elem_UpdateElement(split->element);
+    elem_UpdateElement(segment->element);
 
     // list_AddElement(&w_created_segments, &split);
     // obj_CreateObject(OBJECT_TYPE_SEGMENT, split);
@@ -585,7 +585,7 @@ struct wire_seg_t *w_RemoveJunction(struct wire_junc_t *junction)
                 /* segments are collinear, so merge them */
                 first_segment->ends[first_link_index][0] = second_segment->ends[!second_link_index][0];
                 first_segment->ends[first_link_index][1] = second_segment->ends[!second_link_index][1];
-                obj_UpdateObject(first_segment->object);
+                elem_UpdateElement(first_segment->element);
 
                 if(second_segment->junctions[!second_link_index].junction != NULL)
                 {
@@ -603,7 +603,7 @@ struct wire_seg_t *w_RemoveJunction(struct wire_junc_t *junction)
                 }
 
                 // list_AddElement(&w_deleted_segments, &second_segment->object);
-                struct obj_t *object = second_segment->object;
+                struct elem_t *element = second_segment->element;
                 w_FreeWireSegment(second_segment);
                 // obj_DestroyObject(object);
             }

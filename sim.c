@@ -211,7 +211,7 @@ void sim_BeginSimulation()
                         sim_pin = list_GetElement(&sim_wire_pins, cur_input);
                         cur_input++;
 
-                        if((device->type == DEV_DEVICE_TYPE_NMOS || device->type == DEV_DEVICE_TYPE_PMOS) && junction->pin.pin == DEV_MOS_PIN_SOURCE)
+                        if((device->type == DEV_DEVICE_NMOS || device->type == DEV_DEVICE_PMOS) && junction->pin.pin == DEV_MOS_PIN_SOURCE)
                         {
                             wire_data->source_count++;
                         }
