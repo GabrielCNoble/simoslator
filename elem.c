@@ -143,10 +143,10 @@ void elem_UpdateElement(struct elem_t *element)
             for(uint32_t index = 0; index < 2; index++)
             {
                 float length;
-                if(segment->ends[WIRE_SEG_END_INDEX][index] > segment->ends[WIRE_SEG_START_INDEX][index])
+                if(segment->ends[WIRE_SEG_END_INDEX].comps[index] > segment->ends[WIRE_SEG_START_INDEX].comps[index])
                 {
-                    node->max.comps[index] = (float)segment->ends[WIRE_SEG_END_INDEX][index];
-                    node->min.comps[index] = (float)segment->ends[WIRE_SEG_START_INDEX][index];
+                    node->max.comps[index] = (float)segment->ends[WIRE_SEG_END_INDEX].comps[index];
+                    node->min.comps[index] = (float)segment->ends[WIRE_SEG_START_INDEX].comps[index];
                     // element->size[index] = segment->ends[WIRE_SEG_END_INDEX][index] - segment->ends[WIRE_SEG_START_INDEX][index];
                     // length = (float)segment->ends[WIRE_SEG_END_INDEX][index] - (float)segment->ends[WIRE_SEG_START_INDEX][index];
                 }
@@ -154,8 +154,8 @@ void elem_UpdateElement(struct elem_t *element)
                 {
                     // element->size[index] = segment->ends[WIRE_SEG_START_INDEX][index] - segment->ends[WIRE_SEG_END_INDEX][index];
                     // length = (float)segment->ends[WIRE_SEG_START_INDEX][index] - (float)segment->ends[WIRE_SEG_END_INDEX][index]; 
-                    node->min.comps[index] = (float)segment->ends[WIRE_SEG_END_INDEX][index];
-                    node->max.comps[index] = (float)segment->ends[WIRE_SEG_START_INDEX][index];
+                    node->min.comps[index] = (float)segment->ends[WIRE_SEG_END_INDEX].comps[index];
+                    node->max.comps[index] = (float)segment->ends[WIRE_SEG_START_INDEX].comps[index];
                 }
 
                 // length = length / 2.0f + ELEM_WIRE_PIXEL_WIDTH;

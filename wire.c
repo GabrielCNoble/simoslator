@@ -225,7 +225,7 @@ void w_UnlinkSegmentFromWire(struct wire_seg_t *segment)
         printf("wire %p now has %d segments\n", wire, wire->segment_count);
     }
 }
-
+ 
 struct wire_seg_t *w_AllocWireSegment(struct wire_t *wire)
 {
     struct wire_seg_t *segment = pool_AddElement(&w_wire_segs, NULL);
@@ -380,7 +380,7 @@ void w_LinkSegmentToJunction(struct wire_seg_t *segment, struct wire_junc_t *jun
     if(junction->first_segment == NULL)
     {
         junction->first_segment = segment;
-        junction->pos = segment->ends[link_index];
+        junction->pos = segment->ends + link_index;
     }
     else
     { 
@@ -419,7 +419,7 @@ void w_UnlinkSegmentFromJunctionLinkIndex(struct wire_seg_t *segment, uint32_t l
         {
             struct wire_seg_t *first_segment = junction->first_segment;
             first_segment->junctions[first_segment->junctions[WIRE_SEG_END_INDEX].junction == junction].prev = NULL;
-            junction->pos = first_segment->ends[(first_segment->junctions[WIRE_SEG_END_INDEX].junction == junction)];
+            junction->pos = first_segment->ends + (first_segment->junctions[WIRE_SEG_END_INDEX].junction == junction);
         }
     }
     else
@@ -452,25 +452,25 @@ void w_UnlinkSegmentFromJunctionLinkIndex(struct wire_seg_t *segment, uint32_t l
     w_seg_junc_count--;
 }
 
-struct wire_junc_t *w_AddJunction(struct wire_seg_t *segment, int32_t *position)
+struct wire_junc_t *w_AddJunction(struct wire_seg_t *segment, ivec2_t *position)
 {
     struct wire_t *wire = segment->base.wire;
     struct wire_junc_t *junction = NULL;
     uint32_t coord0;
     uint32_t coord1;
 
-    coord0 = segment->ends[WIRE_SEG_START_INDEX][0] != segment->ends[WIRE_SEG_END_INDEX][0];
+    coord0 = segment->ends[WIRE_SEG_START_INDEX].x != segment->ends[WIRE_SEG_END_INDEX].x;
     coord1 = !coord0;
 
-    if(position[coord0] == segment->ends[WIRE_SEG_START_INDEX][coord0])
+    if(position->comps[coord0] == segment->ends[WIRE_SEG_START_INDEX].comps[coord0])
     {
         uint32_t link_index;
         
-        if(position[coord1] == segment->ends[WIRE_SEG_START_INDEX][coord1])
+        if(position->comps[coord1] == segment->ends[WIRE_SEG_START_INDEX].comps[coord1])
         {
             junction = w_AddJunctionAtTip(segment, WIRE_SEG_START_INDEX);
         }
-        else if(position[coord1] == segment->ends[WIRE_SEG_END_INDEX][coord1])
+        else if(position->comps[coord1] == segment->ends[WIRE_SEG_END_INDEX].comps[coord1])
         {
             junction = w_AddJunctionAtTip(segment, WIRE_SEG_END_INDEX);
         }
@@ -483,16 +483,19 @@ struct wire_junc_t *w_AddJunction(struct wire_seg_t *segment, int32_t *position)
     return junction;
 }
 
-struct wire_junc_t *w_AddJunctionAtMiddle(struct wire_seg_t *segment, int32_t *position)
+struct wire_junc_t *w_AddJunctionAtMiddle(struct wire_seg_t *segment, ivec2_t *position)
 {
     struct wire_junc_t *junction = w_AllocWireJunction(segment->base.wire);
     struct wire_seg_t *split = w_AllocWireSegment(segment->base.wire);
-    split->ends[WIRE_SEG_START_INDEX][0] = position[0];
-    split->ends[WIRE_SEG_START_INDEX][1] = position[1];
-    split->ends[WIRE_SEG_END_INDEX][0] = segment->ends[WIRE_SEG_END_INDEX][0];
-    split->ends[WIRE_SEG_END_INDEX][1] = segment->ends[WIRE_SEG_END_INDEX][1];
-    segment->ends[WIRE_SEG_END_INDEX][0] = position[0];
-    segment->ends[WIRE_SEG_END_INDEX][1] = position[1];
+    // split->ends[WIRE_SEG_START_INDEX].x = position[0];
+    // split->ends[WIRE_SEG_START_INDEX].y = position[1];
+    // split->ends[WIRE_SEG_END_INDEX].x = segment->ends[WIRE_SEG_END_INDEX].x;
+    // split->ends[WIRE_SEG_END_INDEX].y = segment->ends[WIRE_SEG_END_INDEX].y;
+    split->ends[WIRE_SEG_START_INDEX] = *position;
+    split->ends[WIRE_SEG_END_INDEX] = segment->ends[WIRE_SEG_END_INDEX];
+    segment->ends[WIRE_SEG_END_INDEX] = *position;
+    // segment->ends[WIRE_SEG_END_INDEX].x = position[0];
+    // segment->ends[WIRE_SEG_END_INDEX].y = position[1];
 
     split->segments[WIRE_SEG_END_INDEX] = segment->segments[WIRE_SEG_END_INDEX];
     elem_UpdateElement(split->element);
@@ -577,14 +580,15 @@ struct wire_seg_t *w_RemoveJunction(struct wire_junc_t *junction)
             uint32_t second_link_index = second_segment->junctions[WIRE_SEG_END_INDEX].junction == junction;
             w_UnlinkSegmentFromJunctionLinkIndex(second_segment, second_link_index);
 
-            uint32_t coord0 = first_segment->ends[WIRE_SEG_START_INDEX][1] == first_segment->ends[WIRE_SEG_END_INDEX][1];
-            uint32_t coord1 = second_segment->ends[WIRE_SEG_START_INDEX][1] == second_segment->ends[WIRE_SEG_END_INDEX][1];
+            uint32_t coord0 = first_segment->ends[WIRE_SEG_START_INDEX].y == first_segment->ends[WIRE_SEG_END_INDEX].y;
+            uint32_t coord1 = second_segment->ends[WIRE_SEG_START_INDEX].y == second_segment->ends[WIRE_SEG_END_INDEX].y;
 
             if(coord0 == coord1)
             {
                 /* segments are collinear, so merge them */
-                first_segment->ends[first_link_index][0] = second_segment->ends[!second_link_index][0];
-                first_segment->ends[first_link_index][1] = second_segment->ends[!second_link_index][1];
+                // first_segment->ends[first_link_index].x = second_segment->ends[!second_link_index][0];
+                // first_segment->ends[first_link_index].y = second_segment->ends[!second_link_index][1];
+                first_segment->ends[first_link_index] = second_segment->ends[!second_link_index];
                 elem_UpdateElement(first_segment->element);
 
                 if(second_segment->junctions[!second_link_index].junction != NULL)
@@ -865,9 +869,9 @@ uint32_t w_ConnectSegments(struct wire_seg_t *to_connect, struct wire_seg_t *con
 {
     /* this duplicates a bit the logic in w_AddJunction, but it's necessary. We only want to add a junction
     at the tips of a segment if there's another segment after it. */
-    uint32_t coord0 = connect_to->ends[WIRE_SEG_START_INDEX][0] != connect_to->ends[WIRE_SEG_END_INDEX][0];
+    uint32_t coord0 = connect_to->ends[WIRE_SEG_START_INDEX].x != connect_to->ends[WIRE_SEG_END_INDEX].x;
     uint32_t coord1 = !coord0;    
-    if(to_connect->ends[tip_index][coord0] == connect_to->ends[WIRE_SEG_START_INDEX][coord0])
+    if(to_connect->ends[tip_index].comps[coord0] == connect_to->ends[WIRE_SEG_START_INDEX].comps[coord0])
     {   
         if(to_connect->base.wire != connect_to->base.wire)
         {
@@ -886,7 +890,7 @@ uint32_t w_ConnectSegments(struct wire_seg_t *to_connect, struct wire_seg_t *con
         }
 
         /* check if we're trying to connect the segment to one of the endpoints of the other */
-        if(to_connect->ends[tip_index][coord1] == connect_to->ends[WIRE_SEG_START_INDEX][coord1])
+        if(to_connect->ends[tip_index].comps[coord1] == connect_to->ends[WIRE_SEG_START_INDEX].comps[coord1])
         {
             /* we're trying to connect [to_connect] to the end of [connect_to] */
             if(connect_to->junctions[WIRE_SEG_START_INDEX].junction != NULL)
@@ -911,7 +915,7 @@ uint32_t w_ConnectSegments(struct wire_seg_t *to_connect, struct wire_seg_t *con
                 }
             }
         }
-        else if(to_connect->ends[tip_index][coord1] == connect_to->ends[WIRE_SEG_END_INDEX][coord1])
+        else if(to_connect->ends[tip_index].comps[coord1] == connect_to->ends[WIRE_SEG_END_INDEX].comps[coord1])
         {
             /* we're trying to connect [to_connect] to the end of [connect_to] */
             if(connect_to->junctions[WIRE_SEG_END_INDEX].junction != NULL)
@@ -939,7 +943,7 @@ uint32_t w_ConnectSegments(struct wire_seg_t *to_connect, struct wire_seg_t *con
         else
         {
             /* we'll be connecting the segment to somewhere in the middle of the other segment */
-            struct wire_junc_t *junction = w_AddJunctionAtMiddle(connect_to, to_connect->ends[tip_index]);
+            struct wire_junc_t *junction = w_AddJunctionAtMiddle(connect_to, &to_connect->ends[tip_index]);
             w_LinkSegmentToJunction(to_connect, junction, tip_index);
         }
 

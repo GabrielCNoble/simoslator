@@ -37,8 +37,8 @@
 #define D_DEVICE_TYPE_DATA_BUFFER                                                       \
     "struct d_device_type_data_t\n"                                                     \
     "{\n"                                                                               \
-        "float       tex_size[2];\n"                                                    \
-        "float       tex_coords[2];\n"                                                  \
+        "vec2       tex_size;\n"                                                        \
+        "vec2       tex_coords;\n"                                                      \
     "};\n"                                                                              \
     "layout (std430) buffer d_device_type_data_buffer\n"                                \
     "{\n"                                                                               \
@@ -81,20 +81,9 @@ const char *d_device_vertex_shader =
     "{\n"
         "d_device_data_t data = d_device_data[gl_InstanceID];\n"
         "d_device_type_data_t type_data = d_device_type_data[data.type];\n"
-        // "d_device_tex_coords_t device_tex_coords = d_device_tex_coords[data.tex_coord_set];\n"
-        // "vec2 texture_size = textureSize(d_texture, 0);\n"
-        // "mat2 rotation = mat2(data.rotation[0], data.rotation[1], -data.rotation[1], data.rotation[0]);\n"
-        // "mat2 orientation = mat2(data.orientation[0], data.orientation[1], data.orientation[2], data.orientation[3]);\n"
-        // "vec2 device_size = vec2(data.device_quad_size[0], data.device_quad_size[1]);\n"
-        // "vec2 coord_offset = vec2(data.tex_coord_offset[0], data.tex_coord_offset[1]);\n"
-        // "vec2 device_size = vec2(type_data.quad_size[0], type_data.quad_size[1]);\n"
-        // "vec2 coord_offset = vec2(type_data.tex_coords[0], type_data.tex_coords[1]);\n"
-        "vec2 tex_size = vec2(type_data.tex_size[0], type_data.tex_size[1]);\n"
-        "tex_coords = vec2(type_data.tex_coords[0], type_data.tex_coords[1]) + vec2(d_tex_coords.x * tex_size.x, d_tex_coords.y * tex_size.y);\n"
+        "vec2 tex_size = vec2(type_data.tex_size.x, type_data.tex_size.y);\n"
+        "tex_coords = vec2(type_data.tex_coords.x, type_data.tex_coords.y) + vec2(d_tex_coords.x * tex_size.x, d_tex_coords.y * tex_size.y);\n"
         "vec2 position = data.position + data.orientation * d_position.xy;\n"
-        // "tex_coords = vec2(device_tex_coords.tex_coords[gl_VertexID][0], device_tex_coords.tex_coords[gl_VertexID][1]);\n"
-        // "tex_coords = coord_offset + vec2(device_tex_size.x * tex_coords.x, device_tex_size.y * tex_coords.y);\n"
-        // "vec4 position = vec4(d_position.x * device_size[data.flip_size], d_position.y * device_size[data.flip_size ^ 1], 0.1f, 1);\n"
         "gl_Position = d_model_view_projection_matrix * vec4(position, 0, 1);\n"
         "selected = data.selected;\n"
     "}\n";
@@ -265,6 +254,38 @@ const char *d_selection_box_fragment_shader =
     "{\n"
         "gl_FragColor = color;\n"
     "}\n";
+
+const char *d_grid_vertex_shader = 
+    D_VERSION_EXTS
+    "layout (location = 0) in vec4 d_position;\n"
+    "layout (location = 1) in vec2 d_tex_coords;\n"
+
+    "out vec2 tex_coords;\n"
+
+    "void main()\n"
+    "{\n"
+        "gl_Position = d_position;\n"
+        "tex_coords = d_tex_coords * 2.0f - vec2(1);\n"
+    "}\n";
+
+const char *d_grid_fragment_shader = 
+    D_VERSION_EXTS
+    "uniform mat4 d_model_view_projection_matrix;\n"
+    "in vec2 tex_coords;\n"
+    "void main()\n"
+    "{\n"
+        "vec4 color = vec4(0);\n"
+        "vec2 grid0_tex_coords = vec2(tex_coords.x / d_model_view_projection_matrix[0].x + d_model_view_projection_matrix[3].x, \n"
+                                     "tex_coords.y / d_model_view_projection_matrix[1].y + d_model_view_projection_matrix[3].y) * 0.01f;\n"
+        // "vec2 grid1_tex_coords = grid0_tex_coords * 0.1f;\n"
+        "vec2 derivative0 = fwidth(grid0_tex_coords);\n"
+        // "vec2 derivative1 = fwidth(grid1_tex_coords);\n"
+        "grid0_tex_coords = abs(fract(grid0_tex_coords - 0.5f) - 0.5f) / derivative0;\n"
+        // "grid1_tex_coords = abs(fract(grid1_tex_coords - 0.5f) - 0.5f) / derivative1;\n"
+        "color = vec4(0.25f, 0.25f, 0.25f, 1.0f);"
+        "if(grid0_tex_coords.y > 1.0f || grid0_tex_coords.x > 1.0f) discard;\n"
+        "gl_FragColor = color;\n"
+    "}\n";
  
 #define D_DEVICE_VERTEX_BUFFER_SIZE     6
 #define D_DEVICE_INDEX_BUFFER_SIZE      8
@@ -323,6 +344,9 @@ uint32_t *                  d_output_data;
 GLuint                      d_selection_box_shader;
 GLuint                      d_selection_box_vertex_buffer;
 uint32_t                    d_selection_box_shader_model_view_projection_matrix;
+
+GLuint                      d_grid_shader;
+GLuint                      d_grid_shader_model_view_projection_matrix;
 
 // float                       d_device_rotations[][2] = {
 //     [DEV_DEVICE_ROTATION_0]     = { 1.0f,  0.0f},
@@ -476,6 +500,10 @@ void d_Init()
     d_selection_box_shader_model_view_projection_matrix = glGetUniformLocation(d_selection_box_shader, "d_model_view_projection_matrix");
 
 
+    d_grid_shader = d_CreateShader(d_grid_vertex_shader, d_grid_fragment_shader, "d_grid_shader");
+    d_grid_shader_model_view_projection_matrix = glGetUniformLocation(d_grid_shader, "d_model_view_projection_matrix");
+
+
     float wire_colors[][4] = {
         [WIRE_VALUE_0S]     = {0,       0.5,    0,      1},
         [WIRE_VALUE_1S]     = {0,       1.0,    0,      1},
@@ -523,8 +551,8 @@ void d_Init()
     struct d_device_type_data_t device_type_data[DEV_DEVICE_LAST] = {
         [DEV_DEVICE_PMOS] = {
             .tex_coords = {
-                (float)dev_device_descs[DEV_DEVICE_PMOS].tex_coords[0] / (float)d_devices_texture_width,
-                (float)dev_device_descs[DEV_DEVICE_PMOS].tex_coords[1] / (float)d_devices_texture_height,
+                (float)dev_device_descs[DEV_DEVICE_PMOS].tex_coords.x / (float)d_devices_texture_width,
+                (float)dev_device_descs[DEV_DEVICE_PMOS].tex_coords.y / (float)d_devices_texture_height,
             }, 
             .tex_size = {
                 (float)dev_device_descs[DEV_DEVICE_PMOS].width / (float)d_devices_texture_width,
@@ -533,8 +561,8 @@ void d_Init()
         },
         [DEV_DEVICE_NMOS] = {
             .tex_coords = {
-                (float)dev_device_descs[DEV_DEVICE_NMOS].tex_coords[0] / (float)d_devices_texture_width,
-                (float)dev_device_descs[DEV_DEVICE_NMOS].tex_coords[1] / (float)d_devices_texture_height,
+                (float)dev_device_descs[DEV_DEVICE_NMOS].tex_coords.x / (float)d_devices_texture_width,
+                (float)dev_device_descs[DEV_DEVICE_NMOS].tex_coords.y / (float)d_devices_texture_height,
             }, 
             .tex_size = {
                 (float)dev_device_descs[DEV_DEVICE_NMOS].width / (float)d_devices_texture_width,
@@ -681,6 +709,13 @@ int32_t d_CompareDataHandles(const void *a, const void *b)
     return 0;
 }
 
+vec2_t d_device_axes[] = {
+    [DEV_DEVICE_AXIS_POS_X] = {1, 0},
+    [DEV_DEVICE_AXIS_POS_Y] = {0, 1},
+    [DEV_DEVICE_AXIS_NEG_X] = {-1, 0},
+    [DEV_DEVICE_AXIS_NEG_Y] = {0, -1},
+};
+
 void d_UpdateDevicesData()
 {
     if(d_device_data_update_queue.cursor > 0)
@@ -699,12 +734,21 @@ void d_UpdateDevicesData()
             struct dev_desc_t *desc = dev_device_descs + device->type;
             float width = (float)(desc->width / 2);
             float height = (float)(desc->height / 2);
-            vec2_t_sub(&data->position, &device->position, &device->origin);
+            vec2_t_sub(&data->position, &(vec2_t){device->position.x, device->position.y}, &(vec2_t){device->origin.x, device->origin.y});
 
-            data->orientation.rows[0].x = width * device->orientation.rows[0].x;
-            data->orientation.rows[0].y = width * device->orientation.rows[0].y;
-            data->orientation.rows[1].x = height * device->orientation.rows[1].x;
-            data->orientation.rows[1].y = height * device->orientation.rows[1].y;
+            mat2_t orientation = {
+                .rows[0] = d_device_axes[device->x_axis],
+                .rows[1] = d_device_axes[device->y_axis],
+            };
+
+            // data->orientation.rows[0].x = width * device->orientation.rows[0].x;
+            // data->orientation.rows[0].y = width * device->orientation.rows[0].y;
+            // data->orientation.rows[1].x = height * device->orientation.rows[1].x;
+            // data->orientation.rows[1].y = height * device->orientation.rows[1].y;
+            data->orientation.rows[0].x = width * orientation.rows[0].x;
+            data->orientation.rows[0].y = width * orientation.rows[0].y;
+            data->orientation.rows[1].x = height * orientation.rows[1].x;
+            data->orientation.rows[1].y = height * orientation.rows[1].y;
             data->type = device->type;
             data->selected = device->selection_index != INVALID_LIST_INDEX;
 
@@ -736,6 +780,7 @@ void d_Draw()
 
     d_DrawWires();
     d_DrawDevices();
+    d_DrawGrid();
     
     if(m_draw_selection_box)
     {
@@ -758,6 +803,22 @@ void d_Draw()
         glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(box_verts), box_verts);
         glDrawArrays(GL_LINE_LOOP, 0, 4);
     }
+}
+
+void d_DrawGrid()
+{
+    glBindBuffer(GL_ARRAY_BUFFER, d_device_vertex_buffer);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, d_device_index_buffer);
+    glUseProgram(d_grid_shader);
+    glEnableVertexAttribArray(0);
+    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, sizeof(struct d_device_vert_t), (void *)(offsetof(struct d_device_vert_t, position)));
+    glEnableVertexAttribArray(1);
+    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, sizeof(struct d_device_vert_t), (void *)(offsetof(struct d_device_vert_t, tex_coords)));
+    glDisableVertexAttribArray(2);
+
+    glUniformMatrix4fv(d_grid_shader_model_view_projection_matrix, 1, GL_FALSE, d_model_view_projection_matrix);
+
+    glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, (void *)(sizeof(uint32_t) * 2));
 }
 
 void d_DrawDevices()
@@ -1058,13 +1119,13 @@ void d_DrawWires()
                     // for(uint32_t segment_index = 0; segment_index < segment_count; segment_index++)
                     // {
                     // struct wire_seg_pos_t *segment = segment_block->segments + segment_index;
-                    d_wire_vertices[buffer_offset].position[0] = segment->ends[WIRE_SEG_START_INDEX][0];
-                    d_wire_vertices[buffer_offset].position[1] = segment->ends[WIRE_SEG_START_INDEX][1];
+                    d_wire_vertices[buffer_offset].position[0] = segment->ends[WIRE_SEG_START_INDEX].x;
+                    d_wire_vertices[buffer_offset].position[1] = segment->ends[WIRE_SEG_START_INDEX].y;
                     d_wire_vertices[buffer_offset].value_sel = wire_value | ((segment->selection_index != 0xffffffff) << 16);
                     buffer_offset++;
 
-                    d_wire_vertices[buffer_offset].position[0] = segment->ends[WIRE_SEG_END_INDEX][0];
-                    d_wire_vertices[buffer_offset].position[1] = segment->ends[WIRE_SEG_END_INDEX][1];
+                    d_wire_vertices[buffer_offset].position[0] = segment->ends[WIRE_SEG_END_INDEX].x;
+                    d_wire_vertices[buffer_offset].position[1] = segment->ends[WIRE_SEG_END_INDEX].y;
                     d_wire_vertices[buffer_offset].value_sel = wire_value | ((segment->selection_index != 0xffffffff) << 16);
                     buffer_offset++;
                     // }
@@ -1121,8 +1182,8 @@ void d_DrawWires()
                     // for(uint32_t junction_index = 0; junction_index < junction_count; junction_index++)
                     // {
                     //     struct wire_junc_pos_t *junction = junction_block->junctions + junction_index;
-                    d_wire_vertices[buffer_offset].position[0] = junction->pos[0];
-                    d_wire_vertices[buffer_offset].position[1] = junction->pos[1];
+                    d_wire_vertices[buffer_offset].position[0] = junction->pos->x;
+                    d_wire_vertices[buffer_offset].position[1] = junction->pos->y;
                     d_wire_vertices[buffer_offset].value_sel = wire_value;
                     buffer_offset++;
                     // }
@@ -1141,13 +1202,13 @@ void d_DrawWires()
         for(uint32_t index = 0; index < m_wire_seg_pos.cursor; index++)
         {
             union m_wire_seg_t *segment = list_GetElement(&m_wire_seg_pos, index);
-            d_wire_vertices[buffer_offset].position[0] = segment->seg_pos.ends[WIRE_SEG_START_INDEX][0];
-            d_wire_vertices[buffer_offset].position[1] = segment->seg_pos.ends[WIRE_SEG_START_INDEX][1];
+            d_wire_vertices[buffer_offset].position[0] = segment->seg_pos.ends[WIRE_SEG_START_INDEX].x;
+            d_wire_vertices[buffer_offset].position[1] = segment->seg_pos.ends[WIRE_SEG_START_INDEX].y;
             d_wire_vertices[buffer_offset].value_sel = WIRE_VALUE_Z;
             buffer_offset++;
 
-            d_wire_vertices[buffer_offset].position[0] = segment->seg_pos.ends[WIRE_SEG_END_INDEX][0];
-            d_wire_vertices[buffer_offset].position[1] = segment->seg_pos.ends[WIRE_SEG_END_INDEX][1];
+            d_wire_vertices[buffer_offset].position[0] = segment->seg_pos.ends[WIRE_SEG_END_INDEX].x;
+            d_wire_vertices[buffer_offset].position[1] = segment->seg_pos.ends[WIRE_SEG_END_INDEX].y;
             d_wire_vertices[buffer_offset].value_sel = WIRE_VALUE_Z;
             buffer_offset++;
         }

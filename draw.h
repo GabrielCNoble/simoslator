@@ -49,8 +49,10 @@ struct d_device_tex_coords_t
 struct d_device_type_data_t
 {
     // float       quad_size[2];
-    float       tex_size[2];
-    float       tex_coords[2];
+    // float       tex_size[2];
+    // float       tex_coords[2];
+    vec2_t  tex_size;
+    vec2_t  tex_coords;
 };
 
 #define D_DEVICE_DATA_HANDLE_INVALID_INDEX 0xffffffff
@@ -94,6 +96,8 @@ void d_QueueDeviceDataUpdate(struct d_device_data_handle_t *handle);
 void d_UpdateDevicesData();
 
 void d_Draw();
+
+void d_DrawGrid();
 
 void d_DrawDevices();
 

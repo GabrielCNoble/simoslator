@@ -1,3 +1,4 @@
+#include <stdio.h>
 #include <stdlib.h>
 #include "dev.h"
 #include "GL/glew.h"
@@ -263,7 +264,7 @@ struct dev_desc_t dev_device_descs[DEV_DEVICE_LAST] = {
     [DEV_DEVICE_PMOS] = {
         .width = 80,
         .height = 144,
-        .tex_coords = {670, 269},
+        .tex_coords = {676, 269},
         .origin = {0, 0},
         .pin_count = 3,
         .pins = (struct dev_pin_desc_t []) {
@@ -276,7 +277,7 @@ struct dev_desc_t dev_device_descs[DEV_DEVICE_LAST] = {
     [DEV_DEVICE_NMOS] = {
         .width = 80,
         .height = 144,
-        .tex_coords = {670, 80},
+        .tex_coords = {676, 80},
         .origin = {0, 0},
         .pin_count = 3,
         .pins = (struct dev_pin_desc_t []) {
@@ -398,10 +399,14 @@ struct dev_t *dev_CreateDevice(uint32_t type)
     struct dev_t *device = pool_AddElement(&dev_devices, NULL);
     device->type = type;
     device->pin_blocks = NULL;
-    device->orientation.rows[0].x = 1.0f;
-    device->orientation.rows[0].y = 0.0f;
-    device->orientation.rows[1].x = 0.0f;
-    device->orientation.rows[1].y = 1.0f;
+    device->x_axis = DEV_DEVICE_AXIS_POS_X;
+    device->y_axis = DEV_DEVICE_AXIS_POS_Y;
+    // device->rotation = 0;
+    // device->flip = 0;
+    // device->orientation.rows[0].x = 1.0f;
+    // device->orientation.rows[0].y = 0.0f;
+    // device->orientation.rows[1].x = 0.0f;
+    // device->orientation.rows[1].y = 1.0f;
     // device->selection_index = INVALID_LIST_INDEX;
     // device->rotation = DEV_DEVICE_ROTATION_0;
     // device->tex_coords[0] = 0.0f;
@@ -588,37 +593,47 @@ void dev_DestroyDevice(struct dev_t *device)
 //     }
 // }
 
+const char *dev_axis_names[] = {
+    [DEV_DEVICE_AXIS_POS_X] = "+X",
+    [DEV_DEVICE_AXIS_POS_Y] = "+Y",
+    [DEV_DEVICE_AXIS_NEG_X] = "-X",
+    [DEV_DEVICE_AXIS_NEG_Y] = "-Y",
+};
+
+// uint32_t dev_ccw_axis[] = {
+//     [DEV_DEVICE_AXIS_POS_X] = DEV_DEVICE_AXIS_POS_Y,
+//     [DEV_DEVICE_AXIS_POS_X] = DEV_DEVICE_AXIS_POS_Y,
+//     [DEV_DEVICE_AXIS_POS_X] = DEV_DEVICE_AXIS_POS_Y,
+//     [DEV_DEVICE_AXIS_POS_X] = DEV_DEVICE_AXIS_POS_Y,
+// };
+
 void dev_RotateDevice(struct dev_t *device, uint32_t ccw)
 {
     if(device != NULL)
     {
-        // float rotation_matrix[2][2];
-        mat2_t rotation_matrix;
+        // mat2_t rotation_matrix;
+
+        // if(ccw)
+        // {
+        //     rotation_matrix = (mat2_t){0.0f, 1.0f, -1.0f, 0.0f};
+        // }
+        // else
+        // {
+        //     rotation_matrix = (mat2_t){0.0f, -1.0f, 1.0f, 0.0f};
+        // }
+
+        // mat2_t_mul(&device->orientation, &device->orientation, &rotation_matrix);
 
         if(ccw)
         {
-            rotation_matrix = (mat2_t){0.0f, 1.0f, -1.0f, 0.0f};
+            device->x_axis++;
+            device->y_axis++;
         }
         else
         {
-            rotation_matrix = (mat2_t){0.0f, -1.0f, 1.0f, 0.0f};
+            device->x_axis--;
+            device->y_axis--;
         }
-
-        // float row[2];
-
-        // row[0] = device->orientation[0][0] * rotation_matrix[0][0] + device->orientation[0][1] * rotation_matrix[1][0];
-        // row[1] = device->orientation[0][0] * rotation_matrix[0][1] + device->orientation[0][1] * rotation_matrix[1][1];
-
-        // device->orientation[0][0] = row[0];
-        // device->orientation[0][1] = row[1];
-
-        // row[0] = device->orientation[1][0] * rotation_matrix[0][0] + device->orientation[1][1] * rotation_matrix[1][0];
-        // row[1] = device->orientation[1][0] * rotation_matrix[0][1] + device->orientation[1][1] * rotation_matrix[1][1];
-
-        // device->orientation[1][0] = row[0];
-        // device->orientation[1][1] = row[1];
-
-        mat2_t_mul(&device->orientation, &device->orientation, &rotation_matrix);
 
         dev_UpdateDevice(device);
     }
@@ -628,23 +643,17 @@ void dev_FlipDeviceH(struct dev_t *device)
 {
     if(device != NULL)
     {
-        // float flip_matrix[2][2] = {-1, 0, 0, 1};
-        // float row[2];
+        // mat2_t flip_matrix = {-1.0f, 0.0f, 0.0f, 1.0f};
+        // mat2_t_mul(&device->orientation, &device->orientation, &flip_matrix);
 
-        // row[0] = device->orientation[0][0] * flip_matrix[0][0] + device->orientation[0][1] * flip_matrix[1][0];
-        // row[1] = device->orientation[0][0] * flip_matrix[0][1] + device->orientation[0][1] * flip_matrix[1][1];
-
-        // device->orientation[0][0] = row[0];
-        // device->orientation[0][1] = row[1];
-
-        // row[0] = device->orientation[1][0] * flip_matrix[0][0] + device->orientation[1][1] * flip_matrix[1][0];
-        // row[1] = device->orientation[1][0] * flip_matrix[0][1] + device->orientation[1][1] * flip_matrix[1][1];
-
-        // device->orientation[1][0] = row[0];
-        // device->orientation[1][1] = row[1];
-
-        mat2_t flip_matrix = {-1.0f, 0.0f, 0.0f, 1.0f};
-        mat2_t_mul(&device->orientation, &device->orientation, &flip_matrix);
+        if(!(device->x_axis & DEV_DEVICE_AXIS_POS_Y))
+        {
+            device->x_axis ^= DEV_DEVICE_AXIS_NEG_MASK;    
+        }
+        else
+        {
+            device->y_axis ^= DEV_DEVICE_AXIS_NEG_MASK;    
+        }
 
         dev_UpdateDevice(device);
     }
@@ -654,23 +663,19 @@ void dev_FlipDeviceV(struct dev_t *device)
 {
     if(device != NULL)
     {
-        // float flip_matrix[2][2] = {1, 0, 0, -1};
-        // float row[2];
+        // mat2_t flip_matrix = {1.0f, 0.0f, 0.0f, -1.0f};
+        // mat2_t_mul(&device->orientation, &device->orientation, &flip_matrix);
+        // device->y_axis ^= DEV_DEVICE_AXIS_NEG_MASK;
 
-        // row[0] = device->orientation[0][0] * flip_matrix[0][0] + device->orientation[0][1] * flip_matrix[1][0];
-        // row[1] = device->orientation[0][0] * flip_matrix[0][1] + device->orientation[0][1] * flip_matrix[1][1];
+        if(device->x_axis & DEV_DEVICE_AXIS_POS_Y)
+        {
+            device->x_axis ^= DEV_DEVICE_AXIS_NEG_MASK;    
+        }
+        else
+        {
+            device->y_axis ^= DEV_DEVICE_AXIS_NEG_MASK;    
+        }
 
-        // device->orientation[0][0] = row[0];
-        // device->orientation[0][1] = row[1];
-
-        // row[0] = device->orientation[1][0] * flip_matrix[0][0] + device->orientation[1][1] * flip_matrix[1][0];
-        // row[1] = device->orientation[1][0] * flip_matrix[0][1] + device->orientation[1][1] * flip_matrix[1][1];
-
-        // device->orientation[1][0] = row[0];
-        // device->orientation[1][1] = row[1];
-
-        mat2_t flip_matrix = {1.0f, 0.0f, 0.0f, -1.0f};
-        mat2_t_mul(&device->orientation, &device->orientation, &flip_matrix);
         dev_UpdateDevice(device);
     }
 }
@@ -678,7 +683,10 @@ void dev_FlipDeviceV(struct dev_t *device)
 void dev_UpdateDevice(struct dev_t *device)
 {
     struct dev_desc_t *desc = dev_device_descs + device->type;
-    mat2_t_vec2_t_mul(&device->origin, &desc->origin, &device->orientation);
+    // mat2_t_vec2_t_mul(&device->origin, &desc->origin, &device->orientation);
+    // device->origin = desc->origin;
+    device->origin.x = desc->origin.comps[device->x_axis & DEV_DEVICE_AXIS_POS_Y];
+    device->origin.y = desc->origin.comps[!(device->x_axis & DEV_DEVICE_AXIS_POS_Y)];
     d_QueueDeviceDataUpdate(device->draw_data);
 }
 
@@ -696,19 +704,19 @@ struct dev_t *dev_GetDevice(uint64_t device_index)
     return pool_GetValidElement(&dev_devices, device_index);
 }
  
-void dev_UpdateDeviceOrigin(struct dev_t *device) 
-{
-    struct dev_desc_t *desc = dev_device_descs + device->type;
-    mat2_t_vec2_t_mul(&device->origin, &desc->origin, &device->orientation);
-    // device->origin.x = desc->origin.x * device->orientation[0][0] + desc->origin.y * device->orientation[1][0];
-    // device->origin.y = desc->origin.y * device->orientation[0][1] + desc->origin.y * device->orientation[1][1];
-}
+// void dev_UpdateDeviceOrigin(struct dev_t *device) 
+// {
+//     struct dev_desc_t *desc = dev_device_descs + device->type;
+//     mat2_t_vec2_t_mul(&device->origin, &desc->origin, &device->orientation);
+//     // device->origin.x = desc->origin.x * device->orientation[0][0] + desc->origin.y * device->orientation[1][0];
+//     // device->origin.y = desc->origin.y * device->orientation[0][1] + desc->origin.y * device->orientation[1][1];
+// }
 
 void dev_GetDeviceLocalPinPosition(struct dev_t *device, uint16_t pin, vec2_t *pin_position)
 {
-    struct dev_desc_t *dev_desc = dev_device_descs + device->type;
-    struct dev_pin_desc_t *pin_desc = dev_desc->pins + pin;
-    mat2_t_vec2_t_mul(pin_position, &pin_desc->offset, &device->orientation);
+    // struct dev_desc_t *dev_desc = dev_device_descs + device->type;
+    // struct dev_pin_desc_t *pin_desc = dev_desc->pins + pin;
+    // mat2_t_vec2_t_mul(pin_position, &pin_desc->offset, &device->orientation);
 }
 
 void dev_GetDeviceLocalBoxPosition(struct dev_t *device, vec2_t *min, vec2_t *max)
@@ -718,9 +726,12 @@ void dev_GetDeviceLocalBoxPosition(struct dev_t *device, vec2_t *min, vec2_t *ma
     // float width = (float)(dev_desc->width >> 1);
     // float height = (float)(dev_desc->height >> 1);
 
-    mat2_t_vec2_t_mul(max, &scale, &device->orientation);
-    max->x = fabsf(max->x);
-    max->y = fabsf(max->y);
+    // mat2_t_vec2_t_mul(max, &scale, &device->orientation);
+    // max->x = fabsf(max->x);
+    // max->y = fabsf(max->y);
+
+    max->x = scale.comps[device->x_axis & DEV_DEVICE_AXIS_POS_Y];
+    max->y = scale.comps[!(device->x_axis & DEV_DEVICE_AXIS_POS_Y)];
 
     // max->x = fabsf(width * device->orientation[0][0] + height * device->orientation[1][0]);
     // max->y = fabsf(width * device->orientation[0][1] + height * device->orientation[1][1]);

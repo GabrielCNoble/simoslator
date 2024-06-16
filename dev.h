@@ -32,6 +32,13 @@ enum DEV_DEVICE
     DEV_DEVICE_INPUT,
     DEV_DEVICE_7SEG,
     DEV_DEVICE_OUTPUT,
+    // DEV_DEVICE_NOT,
+    // DEV_DEVICE_AND,
+    // DEV_DEVICE_NAND,
+    // DEV_DEVICE_OR,
+    // DEV_DEVICE_NOR,
+    // DEV_DEVICE_XOR,
+    // DEV_DEVICE_XNOR,
     DEV_DEVICE_LAST,
 };
 
@@ -44,17 +51,19 @@ enum DEV_PIN_TYPES
 
 struct dev_pin_desc_t
 {
-    vec2_t  offset;
-    uint8_t type;
+    ivec2_t  offset;
+    uint8_t  orientation;
+    uint8_t  type;
 };
 
 struct dev_desc_t
 {
     uint16_t                    width;
     uint16_t                    height;
-    vec2_t                      origin;
+    ivec2_t                     origin;
+    ivec2_t                     tex_coords;
     float                       angle;
-    int32_t                     tex_coords[2];
+    // int32_t                     tex_coords[2];
     uint32_t                    pin_count;
     struct dev_pin_desc_t *     pins;
 };
@@ -77,11 +86,11 @@ struct dev_mos_table_t
 //     DEV_DEVICE_ROTATION_270,
 // };
 
-enum DEV_DEVICE_FLIP
-{
-    DEV_DEVICE_FLIP_X = 1,
-    DEV_DEVICE_FLIP_Y = 1 << 1,
-};
+// enum DEV_DEVICE_FLIP
+// {
+//     DEV_DEVICE_FLIP_X = 1,
+//     DEV_DEVICE_FLIP_Y = 1 << 1,
+// };
 
 struct dev_pin_t
 {
@@ -98,6 +107,16 @@ struct dev_pin_block_t
     struct dev_pin_t            pins[DEV_PIN_BLOCK_PIN_COUNT];
 };
 
+#define DEV_DEVICE_AXIS_NEG_MASK 0x2
+
+enum DEV_DEVICE_AXIS
+{
+    DEV_DEVICE_AXIS_POS_X,
+    DEV_DEVICE_AXIS_POS_Y,
+    DEV_DEVICE_AXIS_NEG_X = DEV_DEVICE_AXIS_POS_X | DEV_DEVICE_AXIS_NEG_MASK,
+    DEV_DEVICE_AXIS_NEG_Y = DEV_DEVICE_AXIS_POS_Y | DEV_DEVICE_AXIS_NEG_MASK
+};
+
 struct dev_t
 {
     POOL_ELEMENT;
@@ -109,17 +128,21 @@ struct dev_t
     /* TODO: those two could probably be put inside an union */
     uint64_t                        sim_data;
     uintptr_t                       serialized_index;
-
-
-    vec2_t                          position;
-    vec2_t                          origin;
+    // vec2_t                          position;
+    // vec2_t                          origin;
     // float                       origin[2];
     // int32_t                     origin[2];
     // float                       orientation[2][2];
-    mat2_t                          orientation;
+    // mat2_t                          orientation;
     uint32_t                        type;
     struct d_device_data_handle_t * draw_data;
     struct dev_pin_block_t *        pin_blocks;
+    ivec2_t                         position;
+    ivec2_t                         origin;
+    uint32_t                        x_axis : 2;
+    uint32_t                        y_axis : 2;
+    // uint8_t                         rotation;
+    // uint8_t                         flip;
     // uint8_t                     tex_coords;
     
     // uint8_t                     rotation;

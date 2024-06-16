@@ -27,6 +27,18 @@ extern uint32_t vec3_t_clear_w[];
 
 uint32_t bitscan_forward64(uint64_t value);
 
+/*================== ivec2_t ================== */
+
+typedef union
+{
+    struct { int32_t x, y; };
+    int32_t  comps[2];
+} ivec2_t;
+
+void ivec2_t_add(ivec2_t *r, ivec2_t *a, ivec2_t *b);
+
+void ivec2_t_sub(ivec2_t *r, ivec2_t *a, ivec2_t *b);
+
 /*================== vec2_t ================== */
 typedef union
 {

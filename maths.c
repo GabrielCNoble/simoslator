@@ -39,7 +39,21 @@ uint32_t bitscan_forward64(uint64_t value)
     return index;
 }
 
-/*================== vec3_t ================== */
+/*================== ivec2_t ================== */
+
+
+void ivec2_t_add(ivec2_t *r, ivec2_t *a, ivec2_t *b)
+{
+    *r = (ivec2_t){a->x + b->x, a->y + b->y};
+}
+
+void ivec2_t_sub(ivec2_t *r, ivec2_t *a, ivec2_t *b)
+{
+    *r = (ivec2_t){a->x - b->x, a->y - b->y};
+}
+
+
+/*================== vec2_t ================== */
 
 void vec2_t_add(vec2_t *r, vec2_t *a, vec2_t *b)
 {

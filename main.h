@@ -169,7 +169,7 @@ struct m_segment_record_t
 {
     uintptr_t deserialized_index;
     uintptr_t segments[2];
-    int32_t   ends[2][2];
+    ivec2_t   ends[2];
 };
 
 struct m_junction_record_t 

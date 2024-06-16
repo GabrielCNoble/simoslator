@@ -5,6 +5,7 @@
 #include "pool.h"
 #include "list.h"
 #include "dev.h"
+#include "maths.h"
 
 #define WIRE_MAX_WIRES 0xffffffffffff
 #define WIRE_INVALID_WIRE WIRE_MAX_WIRES
@@ -68,7 +69,7 @@ struct wire_junc_pins_t
 struct wire_seg_pos_t 
 {
     struct wire_seg_t *         segment;
-    int32_t                     ends[2][2];
+    ivec2_t                     ends[2];
 };
 
 #define WIRE_SEGMENT_POS_BLOCK_SIZE 16
@@ -107,7 +108,8 @@ struct wire_elem_t
 struct wire_junc_t
 {
     struct wire_elem_t              base;
-    int32_t *                       pos;
+    // int32_t *                       pos;
+    ivec2_t *                       pos;
     struct wire_seg_t *             first_segment;
     struct wire_seg_t *             last_segment;
     struct wire_pin_t               pin;
@@ -125,7 +127,7 @@ struct wire_seg_t
     /* this is here to simplify handling segments created during junction addition/removal */
     void *                          element;
 
-    int32_t                         ends[2][2];
+    ivec2_t                         ends[2];
     struct wire_seg_junc_t          junctions[2];
 
     /* segments may be linked to one another in whatever orientation */
@@ -195,9 +197,9 @@ void w_UnlinkSegmentFromJunction(struct wire_seg_t *segment, struct wire_junc_t 
 
 void w_UnlinkSegmentFromJunctionLinkIndex(struct wire_seg_t *segment, uint32_t link_index);
 
-struct wire_junc_t *w_AddJunction(struct wire_seg_t *segment, int32_t *position);
+struct wire_junc_t *w_AddJunction(struct wire_seg_t *segment, ivec2_t *position);
 
-struct wire_junc_t *w_AddJunctionAtMiddle(struct wire_seg_t *segment, int32_t *position);
+struct wire_junc_t *w_AddJunctionAtMiddle(struct wire_seg_t *segment, ivec2_t *position);
 
 struct wire_junc_t *w_AddJunctionAtTip(struct wire_seg_t *segment, uint32_t tip_index);
 

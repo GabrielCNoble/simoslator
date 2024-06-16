@@ -189,10 +189,10 @@ void m_TranslateSelections(int32_t dx, int32_t dy)
             case ELEM_TYPE_SEGMENT:
             {
                 struct wire_seg_t *segment = element->base_object;
-                segment->ends[WIRE_SEG_START_INDEX][0] += dx;
-                segment->ends[WIRE_SEG_START_INDEX][1] += dy;
-                segment->ends[WIRE_SEG_END_INDEX][0] += dx;
-                segment->ends[WIRE_SEG_END_INDEX][1] += dy;
+                segment->ends[WIRE_SEG_START_INDEX].x += dx;
+                segment->ends[WIRE_SEG_START_INDEX].y += dy;
+                segment->ends[WIRE_SEG_END_INDEX].x += dx;
+                segment->ends[WIRE_SEG_END_INDEX].y += dy;
             }
             break;
         }
@@ -227,13 +227,13 @@ void m_RotateSelections(int32_t ccw_rotation)
             {
                 struct dev_t *device = element->base_object;
                 dev_RotateDevice(device, ccw_rotation);
-                vec2_t relative_position;
-                vec2_t rotated_position;
-                vec2_t_sub(&relative_position, &device->position, &rotation_pivot);
-                mat2_t_vec2_t_mul(&rotated_position, &relative_position, &rotation_matrix);
-                vec2_t translation;
-                vec2_t_sub(&translation, &rotated_position, &relative_position);
-                vec2_t_add(&device->position, &device->position, &translation);
+                // vec2_t relative_position;
+                // vec2_t rotated_position;
+                // ivec2_t_sub(&relative_position, &device->position, &rotation_pivot);
+                // mat2_t_vec2_t_mul(&rotated_position, &relative_position, &rotation_matrix);
+                // vec2_t translation;
+                // vec2_t_sub(&translation, &rotated_position, &relative_position);
+                // vec2_t_add(&device->position, &device->position, &translation);
             }
             break;
 
@@ -241,7 +241,7 @@ void m_RotateSelections(int32_t ccw_rotation)
             {
                 struct wire_seg_t *segment = element->base_object;
 
-                vec2_t original_endpoints[2] = {segment->ends[0][0], segment->ends[0][1], segment->ends[1][0], segment->ends[1][1]};
+                vec2_t original_endpoints[2] = {segment->ends[0].x, segment->ends[0].y, segment->ends[1].x, segment->ends[1].y};
                 vec2_t relative_endpoints[2] = {original_endpoints[0], original_endpoints[1]};
                 vec2_t_sub(&relative_endpoints[0], &relative_endpoints[0], &rotation_pivot);
                 vec2_t_sub(&relative_endpoints[1], &relative_endpoints[1], &rotation_pivot);
@@ -255,20 +255,20 @@ void m_RotateSelections(int32_t ccw_rotation)
                 vec2_t rotated_endpoint;
                 // vec2_t_sub(&rotated_endpoint, &relative_endpoints[0], &rotation_pivot);
                 mat2_t_vec2_t_mul(&rotated_endpoint, &relative_endpoints[0], &rotation_matrix);
-                segment->ends[0][0] = rotated_endpoint.x;
-                segment->ends[0][1] = rotated_endpoint.y;
+                segment->ends[0].x = rotated_endpoint.x;
+                segment->ends[0].y = rotated_endpoint.y;
                 // vec2_t_sub(&rotated_endpoint, &relative_endpoints[1], &rotation_pivot);
                 mat2_t_vec2_t_mul(&rotated_endpoint, &relative_endpoints[1], &rotation_matrix);
-                segment->ends[1][0] = rotated_endpoint.x;
-                segment->ends[1][1] = rotated_endpoint.y;
+                segment->ends[1].x = rotated_endpoint.x;
+                segment->ends[1].y = rotated_endpoint.y;
 
                 vec2_t endpoint_translation;
-                vec2_t_sub(&endpoint_translation, &(vec2_t){segment->ends[0][0], segment->ends[0][1]}, &original_endpoints[0]);
-                segment->ends[0][0] += endpoint_translation.x; 
-                segment->ends[0][1] += endpoint_translation.y; 
-                vec2_t_sub(&endpoint_translation, &(vec2_t){segment->ends[1][0], segment->ends[1][1]}, &original_endpoints[1]);
-                segment->ends[1][0] += endpoint_translation.x; 
-                segment->ends[1][1] += endpoint_translation.y;
+                vec2_t_sub(&endpoint_translation, &(vec2_t){segment->ends[0].x, segment->ends[0].y}, &original_endpoints[0]);
+                segment->ends[0].x += endpoint_translation.x; 
+                segment->ends[0].y += endpoint_translation.y; 
+                vec2_t_sub(&endpoint_translation, &(vec2_t){segment->ends[1].x, segment->ends[1].y}, &original_endpoints[1]);
+                segment->ends[1].x += endpoint_translation.x; 
+                segment->ends[1].y += endpoint_translation.y;
             }
             break;
         }
@@ -439,10 +439,10 @@ struct wire_t *m_CreateWire(struct m_picked_element_t *first_contact, struct m_p
     {
         union m_wire_seg_t *segment_pos = list_GetElement(segments, index);
         struct wire_seg_t *segment = w_AllocWireSegment(NULL);
-        segment->ends[WIRE_SEG_START_INDEX][0] = segment_pos->seg_pos.ends[WIRE_SEG_START_INDEX][0];
-        segment->ends[WIRE_SEG_START_INDEX][1] = segment_pos->seg_pos.ends[WIRE_SEG_START_INDEX][1];
-        segment->ends[WIRE_SEG_END_INDEX][0] = segment_pos->seg_pos.ends[WIRE_SEG_END_INDEX][0];
-        segment->ends[WIRE_SEG_END_INDEX][1] = segment_pos->seg_pos.ends[WIRE_SEG_END_INDEX][1];
+        segment->ends[WIRE_SEG_START_INDEX].x = segment_pos->seg_pos.ends[WIRE_SEG_START_INDEX].x;
+        segment->ends[WIRE_SEG_START_INDEX].y = segment_pos->seg_pos.ends[WIRE_SEG_START_INDEX].y;
+        segment->ends[WIRE_SEG_END_INDEX].x = segment_pos->seg_pos.ends[WIRE_SEG_END_INDEX].x;
+        segment->ends[WIRE_SEG_END_INDEX].y = segment_pos->seg_pos.ends[WIRE_SEG_END_INDEX].y;
 
         segment->segments[WIRE_SEG_START_INDEX] = prev_segment;
         if(prev_segment != NULL)
@@ -591,15 +591,15 @@ void m_SerializeCircuit(void **file_buffer, size_t *file_buffer_size)
 
             struct wire_seg_t *segment = wire->first_segment;
             while(segment != NULL)
-            {   
+            {    
                 segment->serialized_index = header->segment_count;
                 struct m_segment_record_t *segment_record = segment_records + header->segment_count;
                 header->segment_count++;
 
                 for(uint32_t tip_index = WIRE_SEG_START_INDEX; tip_index <= WIRE_SEG_END_INDEX; tip_index++)
                 {
-                    segment_record->ends[tip_index][0] = segment->ends[tip_index][0];
-                    segment_record->ends[tip_index][1] = segment->ends[tip_index][1];    
+                    segment_record->ends[tip_index].x = segment->ends[tip_index].x;
+                    segment_record->ends[tip_index].y = segment->ends[tip_index].y;    
                 }
 
                 segment = segment->wire_next;
@@ -716,8 +716,8 @@ void m_DeserializeCircuit(void *file_buffer, size_t file_buffer_size)
                 segment_record->deserialized_index = segment->base.element_index;
                 for(uint32_t tip_index = WIRE_SEG_START_INDEX; tip_index <= WIRE_SEG_END_INDEX; tip_index++)
                 {
-                    segment->ends[tip_index][0] = segment_record->ends[tip_index][0];
-                    segment->ends[tip_index][1] = segment_record->ends[tip_index][1];
+                    segment->ends[tip_index].x = segment_record->ends[tip_index].x;
+                    segment->ends[tip_index].y = segment_record->ends[tip_index].y;
                 }
                 // struct obj_t *object = obj_CreateObject(OBJECT_TYPE_SEGMENT, segment);
                 elem_UpdateElement(segment->element);
@@ -1140,17 +1140,17 @@ void m_EditState()
 
             if(m_cur_wire_segment != NULL)
             {
-                int32_t dx = m_cur_wire_segment->seg_pos.ends[WIRE_SEG_START_INDEX][0] - m_snapped_mouse_pos[0];
-                int32_t dy = m_cur_wire_segment->seg_pos.ends[WIRE_SEG_START_INDEX][1] - m_snapped_mouse_pos[1];
+                int32_t dx = m_cur_wire_segment->seg_pos.ends[WIRE_SEG_START_INDEX].x - m_snapped_mouse_pos[0];
+                int32_t dy = m_cur_wire_segment->seg_pos.ends[WIRE_SEG_START_INDEX].y - m_snapped_mouse_pos[1];
                 if(abs(dx) > abs(dy))
                 {
-                    m_cur_wire_segment->seg_pos.ends[WIRE_SEG_END_INDEX][0] = m_snapped_mouse_pos[0];
-                    m_cur_wire_segment->seg_pos.ends[WIRE_SEG_END_INDEX][1] = m_cur_wire_segment->seg_pos.ends[WIRE_SEG_START_INDEX][1];
+                    m_cur_wire_segment->seg_pos.ends[WIRE_SEG_END_INDEX].x = m_snapped_mouse_pos[0];
+                    m_cur_wire_segment->seg_pos.ends[WIRE_SEG_END_INDEX].y = m_cur_wire_segment->seg_pos.ends[WIRE_SEG_START_INDEX].y;
                 }
                 else
                 {
-                    m_cur_wire_segment->seg_pos.ends[WIRE_SEG_END_INDEX][0] = m_cur_wire_segment->seg_pos.ends[WIRE_SEG_START_INDEX][0];
-                    m_cur_wire_segment->seg_pos.ends[WIRE_SEG_END_INDEX][1] = m_snapped_mouse_pos[1];
+                    m_cur_wire_segment->seg_pos.ends[WIRE_SEG_END_INDEX].x = m_cur_wire_segment->seg_pos.ends[WIRE_SEG_START_INDEX].x;
+                    m_cur_wire_segment->seg_pos.ends[WIRE_SEG_END_INDEX].y = m_snapped_mouse_pos[1];
                 }
             }
 
@@ -1205,7 +1205,7 @@ void m_EditState()
                             // union m_wire_seg_t *segment = m_AppendSegment(pin_position);
                             // next_segment_pos[0] += device->position.x;
                             // next_segment_pos[1] += device->position.y;
-                            vec2_t_add(&next_segment_pos, &next_segment_pos, &device->position);
+                            vec2_t_add(&next_segment_pos, &next_segment_pos, &(vec2_t){device->position.x, device->position.y});
                             m_SnapCoords(next_segment_pos.comps, next_segment_pos.comps);
 
                             // next_segment.seg_pos.ends[WIRE_SEG_END_INDEX][0] = next_segment.seg_pos.ends[WIRE_SEG_START_INDEX][0];
@@ -1242,8 +1242,8 @@ void m_EditState()
                     /* get rid of the last segment created */
                     // m_wire_seg_pos.cursor--;
 
-                    m_cur_wire_segment->seg_pos.ends[WIRE_SEG_END_INDEX][0] = next_segment_pos.x;
-                    m_cur_wire_segment->seg_pos.ends[WIRE_SEG_END_INDEX][1] = next_segment_pos.y;
+                    m_cur_wire_segment->seg_pos.ends[WIRE_SEG_END_INDEX].x = next_segment_pos.x;
+                    m_cur_wire_segment->seg_pos.ends[WIRE_SEG_END_INDEX].y = next_segment_pos.y;
 
                     if(m_picked_elements[0].element != m_picked_elements[1].element || m_picked_elements[0].index != m_picked_elements[1].index)
                     {
@@ -1258,10 +1258,10 @@ void m_EditState()
                 }
                 else
                 {
-                    if(m_cur_wire_segment == NULL || m_cur_wire_segment->seg_pos.ends[WIRE_SEG_START_INDEX][0] != 
-                                                     m_cur_wire_segment->seg_pos.ends[WIRE_SEG_END_INDEX][0] ||
-                                                     m_cur_wire_segment->seg_pos.ends[WIRE_SEG_START_INDEX][1] != 
-                                                     m_cur_wire_segment->seg_pos.ends[WIRE_SEG_END_INDEX][1])
+                    if(m_cur_wire_segment == NULL || m_cur_wire_segment->seg_pos.ends[WIRE_SEG_START_INDEX].x != 
+                                                     m_cur_wire_segment->seg_pos.ends[WIRE_SEG_END_INDEX].x ||
+                                                     m_cur_wire_segment->seg_pos.ends[WIRE_SEG_START_INDEX].y != 
+                                                     m_cur_wire_segment->seg_pos.ends[WIRE_SEG_END_INDEX].y)
                     {
                         union m_wire_seg_t *prev_segment = m_cur_wire_segment;
                         uint64_t segment_index = list_AddElement(&m_wire_seg_pos, NULL);
@@ -1269,17 +1269,17 @@ void m_EditState()
 
                         if(prev_segment != NULL)
                         {
-                            m_cur_wire_segment->seg_pos.ends[WIRE_SEG_START_INDEX][0] = prev_segment->seg_pos.ends[WIRE_SEG_END_INDEX][0];
-                            m_cur_wire_segment->seg_pos.ends[WIRE_SEG_START_INDEX][1] = prev_segment->seg_pos.ends[WIRE_SEG_END_INDEX][1];
+                            m_cur_wire_segment->seg_pos.ends[WIRE_SEG_START_INDEX].x = prev_segment->seg_pos.ends[WIRE_SEG_END_INDEX].x;
+                            m_cur_wire_segment->seg_pos.ends[WIRE_SEG_START_INDEX].y = prev_segment->seg_pos.ends[WIRE_SEG_END_INDEX].y;
                         }
                         else
                         {
-                            m_cur_wire_segment->seg_pos.ends[WIRE_SEG_START_INDEX][0] = next_segment_pos.x;
-                            m_cur_wire_segment->seg_pos.ends[WIRE_SEG_START_INDEX][1] = next_segment_pos.y;
+                            m_cur_wire_segment->seg_pos.ends[WIRE_SEG_START_INDEX].x = next_segment_pos.x;
+                            m_cur_wire_segment->seg_pos.ends[WIRE_SEG_START_INDEX].y = next_segment_pos.y;
                         }
 
-                        m_cur_wire_segment->seg_pos.ends[WIRE_SEG_END_INDEX][0] = next_segment_pos.x;
-                        m_cur_wire_segment->seg_pos.ends[WIRE_SEG_END_INDEX][1] = next_segment_pos.y;
+                        m_cur_wire_segment->seg_pos.ends[WIRE_SEG_END_INDEX].x = next_segment_pos.x;
+                        m_cur_wire_segment->seg_pos.ends[WIRE_SEG_END_INDEX].y = next_segment_pos.y;
                     }
                 }
 
@@ -2013,11 +2013,11 @@ int main(int argc, char *argv[])
                 ImVec2 second_cursor_pos;
                 ImVec2 button_size;
                 struct dev_desc_t *desc = dev_device_descs + device_type;
-                ImVec2 uv0 = (ImVec2){((float)desc->tex_coords[0]) / (float)d_devices_texture_width,
-                                      ((float)desc->tex_coords[1]) / (float)d_devices_texture_height};
+                ImVec2 uv0 = (ImVec2){((float)desc->tex_coords.x) / (float)d_devices_texture_width,
+                                      ((float)desc->tex_coords.y) / (float)d_devices_texture_height};
                 
-                ImVec2 uv1 = (ImVec2){((float)(desc->tex_coords[0] + desc->width)) / (float)d_devices_texture_width,
-                                      ((float)(desc->tex_coords[1] + desc->height)) / (float)d_devices_texture_height};
+                ImVec2 uv1 = (ImVec2){((float)(desc->tex_coords.x + desc->width)) / (float)d_devices_texture_width,
+                                      ((float)(desc->tex_coords.y + desc->height)) / (float)d_devices_texture_height};
                 igSameLine(0, -1);
                 igPushID_Int(device_type);
                 igGetCursorScreenPos(&first_cursor_pos);
