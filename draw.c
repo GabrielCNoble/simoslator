@@ -94,7 +94,7 @@ const char *d_device_vertex_shader =
         "vec2 tex_size = type_def.tex_size;\n"
         "tex_coords = vec2(type_def.tex_coords.x, type_def.tex_coords.y) + vec2(d_tex_coords.x * tex_size.x, d_tex_coords.y * tex_size.y);\n"
         "vec2 position = data.position + data.orientation * d_position.xy;\n"
-        "gl_Position = d_model_view_projection_matrix * vec4(position, 0, 1);\n"
+        "gl_Position = d_model_view_projection_matrix * vec4(position, 0.1f, 1);\n"
         "selected = data.selected;\n"
     "}\n";
 
@@ -145,7 +145,8 @@ const char *d_pin_vertex_shader =
         "vec2 pin_position = d_device_pin_defs[type_def.first_pin.x + pin_data.pin_index].offset.xy;\n"
         "pin_position = d_device_data[pin_data.device_index].orientation * pin_position;\n"
         "pin_position += d_device_data[pin_data.device_index].position;\n"
-        "gl_Position = d_model_view_projection_matrix * vec4(pin_position, 0, 1);\n"
+        "gl_Position = d_model_view_projection_matrix * vec4(pin_position, 0.1f, 1);\n"
+        "gl_PointSize = (d_model_view_projection_matrix[0].x + d_model_view_projection_matrix[1].y) * 5000.0f;\n"
     "}\n";
 
 const char *d_pin_fragment_shader = 
@@ -153,7 +154,10 @@ const char *d_pin_fragment_shader =
 
     "void main()\n"
     "{\n"
-        "gl_FragColor = vec4(0, 0, 0.6, 1);\n"
+        "vec2 point_coords = gl_PointCoord.xy * 2.0f - vec2(1, 1);\n"
+        "float center_dist = length(point_coords);\n"
+        "float alpha = max(1.0f - max(pow(center_dist, 10.0f) - 0.1f, 0.0f), 0.0f);\n"
+        "gl_FragColor = vec4(0.0f, 0.0f, 0.6 * alpha, alpha);\n"
     "}\n";
 
 const char *d_7seg_mask_vertex_shader = 
@@ -301,7 +305,7 @@ const char *d_grid_vertex_shader =
 
     "void main()\n"
     "{\n"
-        "gl_Position = d_position * vec4(2, 2, 2, 1);\n"
+        "gl_Position = d_position * vec4(2, 2, 2, 1) + vec4(0, 0, 0.1f, 0.0f);\n"
         "tex_coords = d_tex_coords * 2.0f - vec2(1);\n"
     "}\n";
 
@@ -1350,11 +1354,12 @@ void d_DrawPins()
     glBindBuffer(GL_ARRAY_BUFFER, d_wire_vertex_buffer);
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
 
+    glEnable(GL_PROGRAM_POINT_SIZE);
     glUseProgram(d_pin_shader);
     glEnableVertexAttribArray(0);
     glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, sizeof(struct d_device_vert_t), (void *)(offsetof(struct d_device_vert_t, position)));
-    glPointSize(8.0f);
-
+    // glPointSize(1.0f);
     glUniformMatrix4fv(d_pin_shader_model_view_projection_matrix, 1, GL_FALSE, d_model_view_projection_matrix);
     glDrawArrays(GL_POINTS, 0, d_pin_count);
+    glDisable(GL_PROGRAM_POINT_SIZE);
 }

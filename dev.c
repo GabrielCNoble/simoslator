@@ -271,25 +271,25 @@ vec2_t dev_device_axes[] = {
 struct dev_desc_t dev_device_descs[DEV_DEVICE_LAST] = {
     [DEV_DEVICE_PMOS] = {
         .size           = {75, 140},
-        .tex_coords     = {415, 352},
+        .tex_coords     = {415, 353},
         .origin         = {0, 0},
         .pin_count      = 3,
         .pins = (struct dev_pin_desc_t []) {
-            [DEV_MOS_PIN_SOURCE]    = {.type = DEV_PIN_TYPE_IN,  .offset = {-0.3f, -0.5f}, .direction = DEV_DEVICE_AXIS_NEG_Y},
+            [DEV_MOS_PIN_SOURCE]    = {.type = DEV_PIN_TYPE_IN,  .offset = {-0.4f, -0.5f}, .direction = DEV_DEVICE_AXIS_NEG_Y},
             [DEV_MOS_PIN_GATE]      = {.type = DEV_PIN_TYPE_IN,  .offset = { 0.5f,  0.0f}, .direction = DEV_DEVICE_AXIS_POS_X},
-            [DEV_MOS_PIN_DRAIN]     = {.type = DEV_PIN_TYPE_OUT, .offset = {-0.3f,  0.5f}, .direction = DEV_DEVICE_AXIS_POS_Y},
+            [DEV_MOS_PIN_DRAIN]     = {.type = DEV_PIN_TYPE_OUT, .offset = {-0.4f,  0.5f}, .direction = DEV_DEVICE_AXIS_POS_Y},
         },
     },
 
     [DEV_DEVICE_NMOS] = {
         .size           = {75, 140},
-        .tex_coords     = {415, 190},
+        .tex_coords     = {415, 193},
         .origin         = {0, 0},
         .pin_count      = 3,
         .pins = (struct dev_pin_desc_t []) {
-            [DEV_MOS_PIN_SOURCE]    = {.type = DEV_PIN_TYPE_IN,  .offset = {-0.3f, -0.5f}},
+            [DEV_MOS_PIN_SOURCE]    = {.type = DEV_PIN_TYPE_IN,  .offset = {-0.4f, -0.5f}},
             [DEV_MOS_PIN_GATE]      = {.type = DEV_PIN_TYPE_IN,  .offset = { 0.5f,  0.0f}},
-            [DEV_MOS_PIN_DRAIN]     = {.type = DEV_PIN_TYPE_OUT, .offset = {-0.3f, -0.5f}},
+            [DEV_MOS_PIN_DRAIN]     = {.type = DEV_PIN_TYPE_OUT, .offset = {-0.4f,  0.5f}},
         },
     },
 
