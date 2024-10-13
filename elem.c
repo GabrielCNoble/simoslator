@@ -9,10 +9,21 @@ struct list_t                   elem_elements_in_box;
 extern struct dev_desc_t        dev_device_descs[];
 extern struct pool_t            dev_devices;
 
-// void (*elem_UpdateFuncs[])(struct elem_t *element) = {
-//     [ELEM_TYPE_DEVICE] = dev_UpdateDeviceElement,
-//     [ELEM_TYPE_SEGMENT] = w_UpdateSegmentElement
-// };
+struct elem_funcs_t e_elem_funcs[] = {
+    [ELEM_TYPE_DEVICE] = {
+        .Translate      = dev_TranslateDevice,
+        .Rotate         = dev_RotateDevice,
+        .FlipVertical   = dev_FlipDeviceV,
+        .FlipHorizontal = dev_FlipDeviceH
+    },
+
+    [ELEM_TYPE_SEGMENT] = {
+        .Translate      = w_TranslateWire,
+        .Rotate         = w_RotateWire,
+        .FlipVertical   = w_FlipWireV,
+        .FlipHorizontal = w_FlipWireH
+    }
+};
 
 struct elem_t *elem_CreateElement(uint32_t type, void *base_object)
 {
@@ -198,4 +209,24 @@ void elem_GetTypedElementsInsideBox(uint32_t type, vec2_t *box_min, vec2_t *box_
     //         }
     //     }
     // }
+}
+
+void elem_Translate(struct elem_t *element, ivec2_t *translation)
+{
+    e_elem_funcs[element->type].Translate(element->base_object, translation);
+}
+
+void elem_Rotate(struct elem_t *element, ivec2_t *pivot, uint32_t ccw)
+{
+    e_elem_funcs[element->type].Rotate(element->base_object, pivot, ccw);
+}
+
+void elem_FlipVertically(struct elem_t *element, ivec2_t *pivot)
+{
+    e_elem_funcs[element->type].FlipVertical(element->base_object, pivot);
+}
+
+void elem_FlipHorizontally(struct elem_t *element, ivec2_t *pivot)
+{
+    e_elem_funcs[element->type].FlipHorizontal(element->base_object, pivot);
 }

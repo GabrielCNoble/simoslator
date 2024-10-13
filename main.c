@@ -35,14 +35,20 @@ GLuint                              m_fliph_texture;
 GLuint                              m_flipv_texture;
 // int32_t                             m_mouse_x;
 // int32_t                             m_mouse_y;
-float                               m_mouse_pos[2];
-int32_t                             m_clicked_mouse_pos[2];
+// float                               m_mouse_pos[2];
+ivec2_t                             m_mouse_pos;
+ivec2_t                             m_snapped_mouse_pos;
+// int32_t                             m_clicked_mouse_pos[2];
 uint32_t                            m_draw_selection_box;
-int32_t                             m_selection_box_min[2];
-int32_t                             m_selection_box_max[2];
-float                               m_snapped_mouse_pos[2];
-int32_t                             m_place_device_x;
-int32_t                             m_place_device_y;
+ivec2_t                             m_clicked_mouse_pos;
+ivec2_t                             m_selection_box_max;
+ivec2_t                             m_selection_box_min;
+// int32_t                             m_selection_box_min[2];
+// int32_t                             m_selection_box_max[2];
+// float                               m_snapped_mouse_pos[2];
+// int32_t                             m_place_device_x;
+// int32_t                             m_place_device_y;
+ivec2_t                             m_place_device_pos;
 // int32_t                             m_snapped_mouse_x;
 // int32_t                             m_snapped_mouse_y;
 uint32_t                            m_run_simulation;
@@ -52,7 +58,7 @@ uint32_t                            m_cur_edit_func;
 uint32_t                            m_wire_func_stage;
 uint32_t                            m_selected_device_type;
 // struct dev_t *                  m_selected_device;
-vec2_t                              m_selections_center = {};
+ivec2_t                             m_selections_center = {};
 struct m_picked_element_t           m_picked_elements[2] = {};
 struct list_t                       m_selections;
 struct list_t                       m_wire_seg_pos;
@@ -107,11 +113,27 @@ extern GLuint                       d_devices_texture;
 extern uint32_t                     d_devices_texture_width;
 extern uint32_t                     d_devices_texture_height;
 
+struct m_editor_state_t m_CreateEditorState()
+{
+    return (struct m_editor_state_t){
+        .selections         = list_Create(sizeof(struct elem_t *), 512),
+        .elements_in_box    = list_Create(sizeof(struct elem_t *), 512),
+        .cur_state          = M_STATE_EDIT,
+    };
+}
+
+void m_DestroyEditorState(struct m_editor_state_t *editor_state)
+{
+    list_Destroy(&editor_state->selections);
+    list_Destroy(&editor_state->elements_in_box);
+}
+
 void m_SelectElement(struct elem_t *element, uint32_t multiple)
 {
-    vec2_t element_position;
-    vec2_t_add(&element_position, &element->node->max.xy, &element->node->min.xy);
-    vec2_t_scale(&element_position, &element_position, 0.5f);
+    vec2_t bounding_box_center;
+    vec2_t_add(&bounding_box_center, &element->node->max.xy, &element->node->min.xy);
+    vec2_t_scale(&bounding_box_center, &bounding_box_center, 0.5f);
+    ivec2_t element_position = cvt_vec2_t_ivec2_t(bounding_box_center);
 
     if(element->selection_index != INVALID_LIST_INDEX)
     {
@@ -128,7 +150,7 @@ void m_SelectElement(struct elem_t *element, uint32_t multiple)
                 elem_UpdateElement(moved_element);
             }
 
-            vec2_t_sub(&m_selections_center, &m_selections_center, &element_position);
+            ivec2_t_sub(&m_selections_center, &m_selections_center, &element_position);
             return;
         }
     }
@@ -140,11 +162,7 @@ void m_SelectElement(struct elem_t *element, uint32_t multiple)
 
     element->selection_index = list_AddElement(&m_selections, &element);
     elem_UpdateElement(element);
-
-    vec2_t_add(&m_selections_center, &m_selections_center, &element_position);
-    
-    // m_selections_center[0] += object->position[0];
-    // m_selections_center[1] += object->position[1];
+    ivec2_t_add(&m_selections_center, &m_selections_center, &element_position);
 }
 
 void m_ClearSelections()
@@ -157,7 +175,7 @@ void m_ClearSelections()
     }
 
     m_selections.cursor = 0;
-    m_selections_center = (vec2_t){};
+    m_selections_center = (ivec2_t){};
 }
 
 void m_DeleteSelections()
@@ -171,31 +189,32 @@ void m_DeleteSelections()
     m_selections.cursor = 0;
 }
 
-void m_TranslateSelections(int32_t dx, int32_t dy) 
+void m_TranslateSelections(ivec2_t *translation) 
 {
     for(uint32_t index = 0; index < m_selections.cursor; index++)
     {
         struct elem_t *element = *(struct elem_t **)list_GetElement(&m_selections, index);
-        switch(element->type)
-        {
-            case ELEM_TYPE_DEVICE:
-            {
-                struct dev_t *device = element->base_object; 
-                device->position.x += dx;
-                device->position.y += dy;
-            }
-            break;
+        elem_Translate(element, translation);
+        // switch(element->type)
+        // {
+        //     case ELEM_TYPE_DEVICE:
+        //     {
+        //         struct dev_t *device = element->base_object; 
+        //         device->position.x += dx;
+        //         device->position.y += dy;
+        //     }
+        //     break;
 
-            case ELEM_TYPE_SEGMENT:
-            {
-                struct wire_seg_t *segment = element->base_object;
-                segment->ends[WIRE_SEG_START_INDEX].x += dx;
-                segment->ends[WIRE_SEG_START_INDEX].y += dy;
-                segment->ends[WIRE_SEG_END_INDEX].x += dx;
-                segment->ends[WIRE_SEG_END_INDEX].y += dy;
-            }
-            break;
-        }
+        //     case ELEM_TYPE_SEGMENT:
+        //     {
+        //         struct wire_seg_t *segment = element->base_object;
+        //         segment->ends[WIRE_SEG_START_INDEX].x += dx;
+        //         segment->ends[WIRE_SEG_START_INDEX].y += dy;
+        //         segment->ends[WIRE_SEG_END_INDEX].x += dx;
+        //         segment->ends[WIRE_SEG_END_INDEX].y += dy;
+        //     }
+        //     break;
+        // }
 
         elem_UpdateElement(element);
     }
@@ -203,93 +222,41 @@ void m_TranslateSelections(int32_t dx, int32_t dy)
 
 void m_RotateSelections(int32_t ccw_rotation)
 {
-    vec2_t rotation_pivot;
-    vec2_t_scale(&rotation_pivot, &m_selections_center, 1.0f / (float)m_selections.cursor);
-
-    mat2_t rotation_matrix;
-
-    if(ccw_rotation)
-    {
-        rotation_matrix = (mat2_t){0.0f, 1.0f, -1.0f, 0.0f};
-    }
-    else
-    {
-        rotation_matrix = (mat2_t){0.0f, -1.0f, 1.0f, 0.0f};
-    }
+    ivec2_t rotation_pivot = {.x = m_selections_center.x / (int32_t)m_selections.cursor, .y = m_selections_center.y / (int32_t)m_selections.cursor};
 
     for(uint32_t index = 0; index < m_selections.cursor; index++)
     {
         struct elem_t *element = *(struct elem_t **)list_GetElement(&m_selections, index);
-
-        switch(element->type)
-        {
-            case ELEM_TYPE_DEVICE:
-            {
-                struct dev_t *device = element->base_object;
-                dev_RotateDevice(device, ccw_rotation);
-                // vec2_t relative_position;
-                // vec2_t rotated_position;
-                // ivec2_t_sub(&relative_position, &device->position, &rotation_pivot);
-                // mat2_t_vec2_t_mul(&rotated_position, &relative_position, &rotation_matrix);
-                // vec2_t translation;
-                // vec2_t_sub(&translation, &rotated_position, &relative_position);
-                // vec2_t_add(&device->position, &device->position, &translation);
-            }
-            break;
-
-            case ELEM_TYPE_SEGMENT:
-            {
-                struct wire_seg_t *segment = element->base_object;
-
-                vec2_t original_endpoints[2] = {segment->ends[0].x, segment->ends[0].y, segment->ends[1].x, segment->ends[1].y};
-                vec2_t relative_endpoints[2] = {original_endpoints[0], original_endpoints[1]};
-                vec2_t_sub(&relative_endpoints[0], &relative_endpoints[0], &rotation_pivot);
-                vec2_t_sub(&relative_endpoints[1], &relative_endpoints[1], &rotation_pivot);
-
-                // vec2_t midpoint;
-                // vec2_t_add(&midpoint, &relative_endpoints[1], &relative_endpoints[0]);
-                // vec2_t_scale(&midpoint, &midpoint, 0.5f);
-                // vec2_t_sub(&relative_endpoints[0], &relative_endpoints[0], &midpoint);
-                // vec2_t_sub(&relative_endpoints[1], &relative_endpoints[1], &midpoint);
-
-                vec2_t rotated_endpoint;
-                // vec2_t_sub(&rotated_endpoint, &relative_endpoints[0], &rotation_pivot);
-                mat2_t_vec2_t_mul(&rotated_endpoint, &relative_endpoints[0], &rotation_matrix);
-                segment->ends[0].x = rotated_endpoint.x;
-                segment->ends[0].y = rotated_endpoint.y;
-                // vec2_t_sub(&rotated_endpoint, &relative_endpoints[1], &rotation_pivot);
-                mat2_t_vec2_t_mul(&rotated_endpoint, &relative_endpoints[1], &rotation_matrix);
-                segment->ends[1].x = rotated_endpoint.x;
-                segment->ends[1].y = rotated_endpoint.y;
-
-                vec2_t endpoint_translation;
-                vec2_t_sub(&endpoint_translation, &(vec2_t){segment->ends[0].x, segment->ends[0].y}, &original_endpoints[0]);
-                segment->ends[0].x += endpoint_translation.x; 
-                segment->ends[0].y += endpoint_translation.y; 
-                vec2_t_sub(&endpoint_translation, &(vec2_t){segment->ends[1].x, segment->ends[1].y}, &original_endpoints[1]);
-                segment->ends[1].x += endpoint_translation.x; 
-                segment->ends[1].y += endpoint_translation.y;
-            }
-            break;
-        }
-
+        elem_Rotate(element, &rotation_pivot, ccw_rotation);
         elem_UpdateElement(element);
     }
 }
 
 void m_FlipSelectionsH()
 {
+    ivec2_t flip_pivot = {.x = m_selections_center.x / (int32_t)m_selections.cursor, .y = m_selections_center.y / (int32_t)m_selections.cursor};
 
+    for(uint32_t index = 0; index < m_selections.cursor; index++)
+    {
+        struct elem_t *element = *(struct elem_t **)list_GetElement(&m_selections, index);
+        elem_FlipHorizontally(element, &flip_pivot);
+    }
 }
 
 void m_FlipSelectionsV()
 {
+    ivec2_t flip_pivot = {.x = m_selections_center.x / (int32_t)m_selections.cursor, .y = m_selections_center.y / (int32_t)m_selections.cursor};
 
+    for(uint32_t index = 0; index < m_selections.cursor; index++)
+    {
+        struct elem_t *element = *(struct elem_t **)list_GetElement(&m_selections, index);
+        elem_FlipVertically(element, &flip_pivot);
+    }
 }
 
 void m_GetTypedElementsUnderMouse(uint32_t type, struct list_t *elements)
 {
-    elem_GetTypedElementsInsideBox(type, &(vec2_t){m_mouse_pos[0], m_mouse_pos[1]}, &(vec2_t){m_mouse_pos[0], m_mouse_pos[1]}, elements);
+    elem_GetTypedElementsInsideBox(type, &(vec2_t){m_mouse_pos.x, m_mouse_pos.y}, &(vec2_t){m_mouse_pos.x, m_mouse_pos.y}, elements);
 }
 
 // struct m_object_t *m_GetObjectUnderMouse()
@@ -315,23 +282,21 @@ struct m_picked_element_t m_GetPinUnderMouse()
             for(uint32_t pin_index = 0; pin_index < desc->pin_count; pin_index++)
             {
                 struct dev_pin_desc_t *pin_desc = desc->pins + pin_index;
-                vec2_t pin_position;
+                ivec2_t pin_position;
 
                 dev_GetDeviceLocalPinPosition(device, pin_index, &pin_position);
-                vec2_t_add(&pin_position, &pin_position, &device->position);
-                // pin_position[0] += device->position.x;
-                // pin_position[1] += device->position.y;
+                ivec2_t_add(&pin_position, &pin_position, &device->position);
 
-                if(m_mouse_pos[0] >= pin_position.x - ELEM_DEVICE_PIN_PIXEL_WIDTH && 
-                    m_mouse_pos[0] <= pin_position.x + ELEM_DEVICE_PIN_PIXEL_WIDTH)
+                if(m_mouse_pos.x >= pin_position.x - ELEM_DEVICE_PIN_PIXEL_WIDTH && 
+                    m_mouse_pos.x <= pin_position.x + ELEM_DEVICE_PIN_PIXEL_WIDTH)
                 {
-                    if(m_mouse_pos[1] >= pin_position.y - ELEM_DEVICE_PIN_PIXEL_WIDTH && 
-                       m_mouse_pos[1] <= pin_position.y + ELEM_DEVICE_PIN_PIXEL_WIDTH)
+                    if(m_mouse_pos.y >= pin_position.y - ELEM_DEVICE_PIN_PIXEL_WIDTH && 
+                       m_mouse_pos.y <= pin_position.y + ELEM_DEVICE_PIN_PIXEL_WIDTH)
                     {
                         selected_pin.element = element;
                         selected_pin.index = pin_index;
                         device_index = dev_devices.cursor;
-                        printf("piss\n");
+                        printf("pin index: %d\n", pin_index);
                         break;
                     }    
                 }
@@ -439,10 +404,12 @@ struct wire_t *m_CreateWire(struct m_picked_element_t *first_contact, struct m_p
     {
         union m_wire_seg_t *segment_pos = list_GetElement(segments, index);
         struct wire_seg_t *segment = w_AllocWireSegment(NULL);
-        segment->ends[WIRE_SEG_START_INDEX].x = segment_pos->seg_pos.ends[WIRE_SEG_START_INDEX].x;
-        segment->ends[WIRE_SEG_START_INDEX].y = segment_pos->seg_pos.ends[WIRE_SEG_START_INDEX].y;
-        segment->ends[WIRE_SEG_END_INDEX].x = segment_pos->seg_pos.ends[WIRE_SEG_END_INDEX].x;
-        segment->ends[WIRE_SEG_END_INDEX].y = segment_pos->seg_pos.ends[WIRE_SEG_END_INDEX].y;
+        segment->ends[WIRE_SEG_START_INDEX] = segment_pos->seg_pos.ends[WIRE_SEG_START_INDEX];
+        segment->ends[WIRE_SEG_END_INDEX] = segment_pos->seg_pos.ends[WIRE_SEG_END_INDEX];
+        // segment->ends[WIRE_SEG_START_INDEX].x = segment_pos->seg_pos.ends[WIRE_SEG_START_INDEX].x;
+        // segment->ends[WIRE_SEG_START_INDEX].y = segment_pos->seg_pos.ends[WIRE_SEG_START_INDEX].y;
+        // segment->ends[WIRE_SEG_END_INDEX].x = segment_pos->seg_pos.ends[WIRE_SEG_END_INDEX].x;
+        // segment->ends[WIRE_SEG_END_INDEX].y = segment_pos->seg_pos.ends[WIRE_SEG_END_INDEX].y;
 
         segment->segments[WIRE_SEG_START_INDEX] = prev_segment;
         if(prev_segment != NULL)
@@ -839,54 +806,54 @@ uint32_t m_LoadCircuitExplorerCallback(struct m_explorer_state_t *explorer, void
     return 1;
 }
 
-void m_SnapCoords(float *coords, float *snapped_coords)
+void m_SnapCoords(ivec2_t *coords, ivec2_t *snapped_coords)
 {
-    for(uint32_t index = 0; index < 2; index++)
+    // for(uint32_t index = 0; index < 2; index++)
+    // {
+    //     snapped_coords[index] = coords[index] / M_SNAP_VALUE;
+
+    //     if(coords[index] > 0.0f)
+    //     {
+    //         if(fmodf(coords[index], M_SNAP_VALUE) > M_SNAP_VALUE / 2.0f)
+    //         {
+    //             snapped_coords[index] = ceilf(snapped_coords[index]);
+    //         }
+    //         else
+    //         {
+    //             snapped_coords[index] = floorf(snapped_coords[index]);
+    //         }
+    //     }
+    //     else
+    //     {
+    //         if(fmodf(coords[index], M_SNAP_VALUE) > -M_SNAP_VALUE / 2.0f)
+    //         {
+    //             snapped_coords[index] = ceilf(snapped_coords[index]);
+    //         }
+    //         else
+    //         {
+    //             snapped_coords[index] = floorf(snapped_coords[index]);
+    //         }
+    //     }
+
+    //     snapped_coords[index] *= M_SNAP_VALUE;
+    // }
+    if(coords->x > 0)
     {
-        snapped_coords[index] = coords[index] / M_SNAP_VALUE;
-
-        if(coords[index] > 0.0f)
-        {
-            if(fmodf(coords[index], M_SNAP_VALUE) > M_SNAP_VALUE / 2.0f)
-            {
-                snapped_coords[index] = ceilf(snapped_coords[index]);
-            }
-            else
-            {
-                snapped_coords[index] = floorf(snapped_coords[index]);
-            }
-        }
-        else
-        {
-            if(fmodf(coords[index], M_SNAP_VALUE) > -M_SNAP_VALUE / 2.0f)
-            {
-                snapped_coords[index] = ceilf(snapped_coords[index]);
-            }
-            else
-            {
-                snapped_coords[index] = floorf(snapped_coords[index]);
-            }
-        }
-
-        snapped_coords[index] *= M_SNAP_VALUE;
+        snapped_coords->x = M_SNAP_VALUE * ((coords->x / M_SNAP_VALUE) + ((coords->x % M_SNAP_VALUE) > M_SNAP_VALUE / 2));    
     }
-    // if(coords[0] > 0)
-    // {
-    //     snapped_coords[0] = M_SNAP_VALUE * ((coords[0] / M_SNAP_VALUE) + ((coords[0] % M_SNAP_VALUE) > M_SNAP_VALUE / 2));    
-    // }
-    // else
-    // {
-    //     snapped_coords[0] = M_SNAP_VALUE * ((coords[0] / M_SNAP_VALUE) - ((abs(coords[0]) % M_SNAP_VALUE) > M_SNAP_VALUE / 2));    
-    // }
+    else
+    {
+        snapped_coords->x = M_SNAP_VALUE * ((coords->x / M_SNAP_VALUE) - ((abs(coords->x) % M_SNAP_VALUE) > M_SNAP_VALUE / 2));    
+    }
 
-    // if(coords[1] > 0)
-    // {
-    //     snapped_coords[1] = M_SNAP_VALUE * ((coords[1] / M_SNAP_VALUE) + ((coords[1] % M_SNAP_VALUE) > M_SNAP_VALUE / 2));
-    // }
-    // else
-    // {
-    //     snapped_coords[1] = M_SNAP_VALUE * ((coords[1] / M_SNAP_VALUE) - ((abs(coords[1]) % M_SNAP_VALUE) > M_SNAP_VALUE / 2));    
-    // }
+    if(coords->y > 0)
+    {
+        snapped_coords->y = M_SNAP_VALUE * ((coords->y / M_SNAP_VALUE) + ((coords->y % M_SNAP_VALUE) > M_SNAP_VALUE / 2));
+    }
+    else
+    {
+        snapped_coords->y = M_SNAP_VALUE * ((coords->y / M_SNAP_VALUE) - ((abs(coords->y) % M_SNAP_VALUE) > M_SNAP_VALUE / 2));    
+    }
 }
 
 void m_SimulationState()
@@ -907,23 +874,23 @@ void m_SelectionBoxState()
 
     for(uint32_t index = 0; index < 2; index++)
     {
-        if(m_clicked_mouse_pos[index] > m_mouse_pos[index])
+        if(m_clicked_mouse_pos.comps[index] > m_mouse_pos.comps[index])
         {
-            m_selection_box_min[index] = m_mouse_pos[index];
-            m_selection_box_max[index] = m_clicked_mouse_pos[index];
+            m_selection_box_min.comps[index] = m_mouse_pos.comps[index];
+            m_selection_box_max.comps[index] = m_clicked_mouse_pos.comps[index];
         }
         else
         {
-            m_selection_box_max[index] = m_mouse_pos[index];
-            m_selection_box_min[index] = m_clicked_mouse_pos[index];
+            m_selection_box_max.comps[index] = m_mouse_pos.comps[index];
+            m_selection_box_min.comps[index] = m_clicked_mouse_pos.comps[index];
         }
     }
 
     m_ClearSelections();
 
     m_elements_in_box.cursor = 0;
-    elem_GetTypedElementsInsideBox(ELEM_TYPE_SEGMENT, &(vec2_t){m_selection_box_min[0], m_selection_box_min[1]}, 
-                                                      &(vec2_t){m_selection_box_max[0], m_selection_box_max[1]}, 
+    elem_GetTypedElementsInsideBox(ELEM_TYPE_SEGMENT, &(vec2_t){m_selection_box_min.x, m_selection_box_min.y}, 
+                                                      &(vec2_t){m_selection_box_max.x, m_selection_box_max.y}, 
                                                       &m_elements_in_box);
 
     for(uint32_t index = 0; index < m_elements_in_box.cursor; index++)
@@ -933,8 +900,8 @@ void m_SelectionBoxState()
     }
 
     m_elements_in_box.cursor = 0;
-    elem_GetTypedElementsInsideBox(ELEM_TYPE_DEVICE, &(vec2_t){m_selection_box_min[0], m_selection_box_min[1]}, 
-                                                      &(vec2_t){m_selection_box_max[0], m_selection_box_max[1]}, 
+    elem_GetTypedElementsInsideBox(ELEM_TYPE_DEVICE, &(vec2_t){m_selection_box_min.x, m_selection_box_min.y}, 
+                                                      &(vec2_t){m_selection_box_max.x, m_selection_box_max.y}, 
                                                       &m_elements_in_box);
 
     for(uint32_t index = 0; index < m_elements_in_box.cursor; index++)
@@ -985,15 +952,17 @@ void m_EditState()
     switch(m_cur_edit_func)
     { 
         case M_EDIT_FUNC_PLACE:
-            m_place_device_x = m_snapped_mouse_pos[0];
-            m_place_device_y = m_snapped_mouse_pos[1];
+            // m_place_device_x = m_snapped_mouse_pos.x;
+            // m_place_device_y = m_snapped_mouse_pos.y;
+            m_place_device_pos = m_snapped_mouse_pos;
             if(igIsMouseClicked_Bool(ImGuiMouseButton_Left, 0) && ui_IsMouseAvailable() && !m_run_simulation)
             {
                 if(m_selected_device_type != DEV_DEVICE_LAST)
                 {
                     struct dev_t *device = dev_CreateDevice(m_selected_device_type);
-                    device->position.x = m_place_device_x;
-                    device->position.y = m_place_device_y;
+                    // device->position.x = m_place_device_x;
+                    // device->position.y = m_place_device_y;
+                    device->position = m_place_device_pos;
                     elem_UpdateElement(device->element);
                 }
             }
@@ -1009,19 +978,20 @@ void m_EditState()
                     {
                         if(igIsMouseClicked_Bool(ImGuiMouseButton_Left, 0))
                         {
-                            m_clicked_mouse_pos[0] = m_mouse_pos[0];
-                            m_clicked_mouse_pos[1] = m_mouse_pos[1];
+                            // m_clicked_mouse_pos.x = m_mouse_pos.x;
+                            // m_clicked_mouse_pos.y = m_mouse_pos.y;
+                            m_clicked_mouse_pos = m_mouse_pos;
                         }
 
-                        int32_t box_width = abs(m_mouse_pos[0] - m_clicked_mouse_pos[0]);
-                        int32_t box_height = abs(m_mouse_pos[1] - m_clicked_mouse_pos[1]);
+                        int32_t box_width = abs(m_mouse_pos.x - m_clicked_mouse_pos.x);
+                        int32_t box_height = abs(m_mouse_pos.y - m_clicked_mouse_pos.y);
 
-                        if(abs(m_mouse_pos[0] - m_clicked_mouse_pos[0]) == 0 || abs(m_mouse_pos[1] - m_clicked_mouse_pos[1]) == 0)
+                        if(abs(m_mouse_pos.x - m_clicked_mouse_pos.x) == 0 || abs(m_mouse_pos.y - m_clicked_mouse_pos.y) == 0)
                         {
-                            m_selection_box_min[0] = m_clicked_mouse_pos[0];
-                            m_selection_box_min[1] = m_clicked_mouse_pos[1];
-                            m_selection_box_max[0] = m_mouse_pos[0];
-                            m_selection_box_max[1] = m_mouse_pos[1];
+                            m_selection_box_min.x = m_clicked_mouse_pos.x;
+                            m_selection_box_min.y = m_clicked_mouse_pos.y;
+                            m_selection_box_max.x = m_mouse_pos.x;
+                            m_selection_box_max.y = m_mouse_pos.y;
                         }
                         else
                         {
@@ -1050,8 +1020,8 @@ void m_EditState()
                         uint32_t multiple = igIsKeyDown_Nil(ImGuiKey_LeftShift) || m_draw_selection_box;
 
                         m_elements_in_box.cursor = 0;
-                        elem_GetTypedElementsInsideBox(ELEM_TYPE_SEGMENT, &(vec2_t){m_selection_box_min[0], m_selection_box_min[1]}, 
-                                                                          &(vec2_t){m_selection_box_max[0], m_selection_box_max[1]}, 
+                        elem_GetTypedElementsInsideBox(ELEM_TYPE_SEGMENT, &(vec2_t){m_selection_box_min.x, m_selection_box_min.y}, 
+                                                                          &(vec2_t){m_selection_box_max.x, m_selection_box_max.y}, 
                                                                           &m_elements_in_box);
                         if(m_elements_in_box.cursor != 0)
                         {
@@ -1061,9 +1031,9 @@ void m_EditState()
                         else
                         {
                             m_elements_in_box.cursor = 0;
-                            elem_GetTypedElementsInsideBox(ELEM_TYPE_DEVICE, &(vec2_t){m_selection_box_min[0], m_selection_box_min[1]}, 
-                                                                          &(vec2_t){m_selection_box_max[0], m_selection_box_max[1]}, 
-                                                                          &m_elements_in_box);
+                            elem_GetTypedElementsInsideBox(ELEM_TYPE_DEVICE, &(vec2_t){m_selection_box_min.x, m_selection_box_min.y}, 
+                                                                             &(vec2_t){m_selection_box_max.x, m_selection_box_max.y}, 
+                                                                             &m_elements_in_box);
 
                             if(m_elements_in_box.cursor != 0)
                             {
@@ -1107,26 +1077,28 @@ void m_EditState()
                 // }
                 if(!m_run_simulation && igIsMouseDown_Nil(ImGuiMouseButton_Right))
                 {
-                    int32_t dx = m_snapped_mouse_pos[0] - m_place_device_x;
-                    int32_t dy = m_snapped_mouse_pos[1] - m_place_device_y;
+                    // int32_t dx = m_snapped_mouse_pos.x - m_place_device_pos.x;
+                    // int32_t dy = m_snapped_mouse_pos.y - m_place_device_pos.y;
+                    ivec2_t translation;
+                    ivec2_t_sub(&translation, &m_snapped_mouse_pos, &m_place_device_pos);
                     
-                    if(dx != 0)
+                    if(translation.x != 0)
                     {
-                        m_place_device_x = m_snapped_mouse_pos[0];
+                        m_place_device_pos.x = m_snapped_mouse_pos.x;
                     }
 
-                    if(dy != 0)
+                    if(translation.y != 0)
                     {
-                        m_place_device_y = m_snapped_mouse_pos[1];
+                        m_place_device_pos.y = m_snapped_mouse_pos.y;
                     }
 
                     if(igIsMouseClicked_Bool(ImGuiMouseButton_Right, 0))
                     {
-                        dx = 0;
-                        dy = 0;
+                        translation.x = 0;
+                        translation.y = 0;
                     }
 
-                    m_TranslateSelections(dx, dy);
+                    m_TranslateSelections(&translation);
                 }
             }
 
@@ -1140,17 +1112,17 @@ void m_EditState()
 
             if(m_cur_wire_segment != NULL)
             {
-                int32_t dx = m_cur_wire_segment->seg_pos.ends[WIRE_SEG_START_INDEX].x - m_snapped_mouse_pos[0];
-                int32_t dy = m_cur_wire_segment->seg_pos.ends[WIRE_SEG_START_INDEX].y - m_snapped_mouse_pos[1];
+                int32_t dx = m_cur_wire_segment->seg_pos.ends[WIRE_SEG_START_INDEX].x - m_snapped_mouse_pos.x;
+                int32_t dy = m_cur_wire_segment->seg_pos.ends[WIRE_SEG_START_INDEX].y - m_snapped_mouse_pos.y;
                 if(abs(dx) > abs(dy))
                 {
-                    m_cur_wire_segment->seg_pos.ends[WIRE_SEG_END_INDEX].x = m_snapped_mouse_pos[0];
+                    m_cur_wire_segment->seg_pos.ends[WIRE_SEG_END_INDEX].x = m_snapped_mouse_pos.x;
                     m_cur_wire_segment->seg_pos.ends[WIRE_SEG_END_INDEX].y = m_cur_wire_segment->seg_pos.ends[WIRE_SEG_START_INDEX].y;
                 }
                 else
                 {
                     m_cur_wire_segment->seg_pos.ends[WIRE_SEG_END_INDEX].x = m_cur_wire_segment->seg_pos.ends[WIRE_SEG_START_INDEX].x;
-                    m_cur_wire_segment->seg_pos.ends[WIRE_SEG_END_INDEX].y = m_snapped_mouse_pos[1];
+                    m_cur_wire_segment->seg_pos.ends[WIRE_SEG_END_INDEX].y = m_snapped_mouse_pos.y;
                 }
             }
 
@@ -1180,7 +1152,7 @@ void m_EditState()
                 // }
 
                 // union m_wire_seg_t next_segment = {};
-                vec2_t next_segment_pos = {};
+                ivec2_t next_segment_pos = {};
 
                 m_picked_elements[m_wire_func_stage] = m_GetSegmentUnderMouse();
 
@@ -1205,8 +1177,8 @@ void m_EditState()
                             // union m_wire_seg_t *segment = m_AppendSegment(pin_position);
                             // next_segment_pos[0] += device->position.x;
                             // next_segment_pos[1] += device->position.y;
-                            vec2_t_add(&next_segment_pos, &next_segment_pos, &(vec2_t){device->position.x, device->position.y});
-                            m_SnapCoords(next_segment_pos.comps, next_segment_pos.comps);
+                            ivec2_t_add(&next_segment_pos, &next_segment_pos, &device->position);
+                            m_SnapCoords(&next_segment_pos, &next_segment_pos);
 
                             // next_segment.seg_pos.ends[WIRE_SEG_END_INDEX][0] = next_segment.seg_pos.ends[WIRE_SEG_START_INDEX][0];
                             // next_segment.seg_pos.ends[WIRE_SEG_END_INDEX][1] = next_segment.seg_pos.ends[WIRE_SEG_START_INDEX][1];
@@ -1222,8 +1194,8 @@ void m_EditState()
                         case ELEM_TYPE_SEGMENT:
                         {
                             struct wire_seg_t *segment = m_picked_elements[m_wire_func_stage].element->base_object;
-                            next_segment_pos.x = m_snapped_mouse_pos[0];
-                            next_segment_pos.y = m_snapped_mouse_pos[1];
+                            next_segment_pos.x = m_snapped_mouse_pos.x;
+                            next_segment_pos.y = m_snapped_mouse_pos.y;
                         }
                         break;
                     }
@@ -1233,8 +1205,8 @@ void m_EditState()
                 else
                 {
                     // m_AppendSegment(m_snapped_mouse_pos);
-                    next_segment_pos.x = m_snapped_mouse_pos[0];
-                    next_segment_pos.y = m_snapped_mouse_pos[1];
+                    next_segment_pos.x = m_snapped_mouse_pos.x;
+                    next_segment_pos.y = m_snapped_mouse_pos.y;
                 }
 
                 if(m_wire_func_stage == 2)
@@ -1787,10 +1759,10 @@ int main(int argc, char *argv[])
             }
         }
 
-        m_mouse_pos[0] = (in_mouse_x - d_model_view_projection_matrix[12]) / d_model_view_projection_matrix[0];
-        m_mouse_pos[1] = (in_mouse_y - d_model_view_projection_matrix[13]) / d_model_view_projection_matrix[5];
+        m_mouse_pos.x = (in_mouse_x - d_model_view_projection_matrix[12]) / d_model_view_projection_matrix[0];
+        m_mouse_pos.y = (in_mouse_y - d_model_view_projection_matrix[13]) / d_model_view_projection_matrix[5];
 
-        m_SnapCoords(m_mouse_pos, m_snapped_mouse_pos);
+        m_SnapCoords(&m_mouse_pos, &m_snapped_mouse_pos);
 
         // if(m_mouse_pos[0] > 0)
         // {
@@ -1947,15 +1919,16 @@ int main(int argc, char *argv[])
             igSameLine(0, -1);
             if(igImageButton("##flip_v", (void *)(uintptr_t)m_fliph_texture, (ImVec2){24, 24}, (ImVec2){0, 0}, (ImVec2){1, 1}, (ImVec4){1, 1, 1, 1}, (ImVec4){1, 1, 1, 1}))
             {
-                for(uint32_t index = 0; index < m_selections.cursor; index++)
-                {
-                    struct elem_t *element = *(struct elem_t **)list_GetElement(&m_selections, index);
-                    struct dev_t *device = element->base_object;
+                // for(uint32_t index = 0; index < m_selections.cursor; index++)
+                // {
+                //     struct elem_t *element = *(struct elem_t **)list_GetElement(&m_selections, index);
+                //     struct dev_t *device = element->base_object;
 
-                    // device->flip ^= DEV_DEVICE_FLIP_Y;
-                    // dev_UpdateDeviceRotation(device);
-                    dev_FlipDeviceV(device);
-                }
+                //     // device->flip ^= DEV_DEVICE_FLIP_Y;
+                //     // dev_UpdateDeviceRotation(device);
+                //     dev_FlipDeviceV(device);
+                // }
+                m_FlipSelectionsV();
                 m_SetEditFunc(M_EDIT_FUNC_SELECT);
             }
             if(igIsItemHovered(0))
@@ -1971,13 +1944,14 @@ int main(int argc, char *argv[])
             igSameLine(0, -1);
             if(igImageButton("##flip_h", (void *)(uintptr_t)m_flipv_texture, (ImVec2){24, 24}, (ImVec2){0, 0}, (ImVec2){1, 1}, (ImVec4){1, 1, 1, 1}, (ImVec4){1, 1, 1, 1}))
             {
-                for(uint32_t index = 0; index < m_selections.cursor; index++)
-                {
-                    struct elem_t *element = *(struct elem_t **)list_GetElement(&m_selections, index);
-                    struct dev_t *device = element->base_object;
+                // for(uint32_t index = 0; index < m_selections.cursor; index++)
+                // {
+                //     struct elem_t *element = *(struct elem_t **)list_GetElement(&m_selections, index);
+                //     struct dev_t *device = element->base_object;
 
-                    dev_FlipDeviceH(device);
-                }
+                //     dev_FlipDeviceH(device);
+                // }
+                m_FlipSelectionsH();
                 m_SetEditFunc(M_EDIT_FUNC_SELECT);
             }
             if(igIsItemHovered(0))
@@ -2016,8 +1990,8 @@ int main(int argc, char *argv[])
                 ImVec2 uv0 = (ImVec2){((float)desc->tex_coords.x) / (float)d_devices_texture_width,
                                       ((float)desc->tex_coords.y) / (float)d_devices_texture_height};
                 
-                ImVec2 uv1 = (ImVec2){((float)(desc->tex_coords.x + desc->width)) / (float)d_devices_texture_width,
-                                      ((float)(desc->tex_coords.y + desc->height)) / (float)d_devices_texture_height};
+                ImVec2 uv1 = (ImVec2){((float)(desc->tex_coords.x + desc->size.x)) / (float)d_devices_texture_width,
+                                      ((float)(desc->tex_coords.y + desc->size.y)) / (float)d_devices_texture_height};
                 igSameLine(0, -1);
                 igPushID_Int(device_type);
                 igGetCursorScreenPos(&first_cursor_pos);
@@ -2031,16 +2005,16 @@ int main(int argc, char *argv[])
             
                 ImVec2 image_size;
                 
-                if(desc->width > desc->height)
+                if(desc->size.x > desc->size.y)
                 {
-                    float ratio = 24.0f / (float)desc->width;
+                    float ratio = 24.0f / (float)desc->size.x;
                     image_size.x = 24.0f;
-                    image_size.y = (float)desc->height * ratio;
+                    image_size.y = (float)desc->size.y * ratio;
                 }
                 else
                 {
-                    float ratio = 24.0f / (float)desc->height;
-                    image_size.x = (float)desc->width * ratio;
+                    float ratio = 24.0f / (float)desc->size.y;
+                    image_size.x = (float)desc->size.x * ratio;
                     image_size.y = 24.0f;
                 }
 

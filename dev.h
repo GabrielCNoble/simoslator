@@ -51,17 +51,20 @@ enum DEV_PIN_TYPES
 
 struct dev_pin_desc_t
 {
-    ivec2_t  offset;
-    uint8_t  orientation;
+    // ivec2_t  offset;
+    vec2_t   offset;
+    uint8_t  direction;
     uint8_t  type;
 };
 
 struct dev_desc_t
 {
-    uint16_t                    width;
-    uint16_t                    height;
+    // uint16_t                    width;
+    // uint16_t                    height;
+    ivec2_t                     size;
     ivec2_t                     origin;
     ivec2_t                     tex_coords;
+    // ivec2_t                     tex_size;
     float                       angle;
     // int32_t                     tex_coords[2];
     uint32_t                    pin_count;
@@ -108,6 +111,7 @@ struct dev_pin_block_t
 };
 
 #define DEV_DEVICE_AXIS_NEG_MASK 0x2
+#define DEV_POSITION_GRANULARITY 10
 
 enum DEV_DEVICE_AXIS
 {
@@ -134,13 +138,15 @@ struct dev_t
     // int32_t                     origin[2];
     // float                       orientation[2][2];
     // mat2_t                          orientation;
-    uint32_t                        type;
-    struct d_device_data_handle_t * draw_data;
+    struct d_device_data_slot_t *   draw_data;
     struct dev_pin_block_t *        pin_blocks;
-    ivec2_t                         position;
-    ivec2_t                         origin;
+    uint32_t                        type : 28;
     uint32_t                        x_axis : 2;
     uint32_t                        y_axis : 2;
+
+    ivec2_t                         position;
+    ivec2_t                         origin;
+    
     // uint8_t                         rotation;
     // uint8_t                         flip;
     // uint8_t                     tex_coords;
@@ -196,11 +202,13 @@ void dev_DestroyDevice(struct dev_t *device);
 
 // void dev_UpdateDeviceRotation(struct dev_t *device);
 
-void dev_RotateDevice(struct dev_t *device, uint32_t ccw);
+void dev_TranslateDevice(void *element, ivec2_t *translation);
 
-void dev_FlipDeviceH(struct dev_t *device);
+void dev_RotateDevice(void *element, ivec2_t *pivot, uint32_t ccw);
 
-void dev_FlipDeviceV(struct dev_t *device);
+void dev_FlipDeviceV(void *element, ivec2_t *pivot);
+
+void dev_FlipDeviceH(void *element, ivec2_t *pivot);
 
 void dev_UpdateDevice(struct dev_t *device);
 
@@ -210,7 +218,7 @@ struct dev_t *dev_GetDevice(uint64_t device_index);
 
 void dev_UpdateDeviceOrigin(struct dev_t *device);
 
-void dev_GetDeviceLocalPinPosition(struct dev_t *device, uint16_t pin, vec2_t *pin_position);
+void dev_GetDeviceLocalPinPosition(struct dev_t *device, uint16_t pin, ivec2_t *pin_position);
 
 void dev_GetDeviceLocalBoxPosition(struct dev_t *device, vec2_t *min, vec2_t *max);
 

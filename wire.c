@@ -1093,3 +1093,51 @@ void w_DisconnectPin(struct wire_t *wire, struct dev_t *device, uint16_t pin)
         junction = junction->wire_next;
     }
 }
+
+
+void w_TranslateWire(void *element, ivec2_t *translation)
+{
+    struct wire_seg_t *segment = element;
+    ivec2_t_add(&segment->ends[0], &segment->ends[0], translation);
+    ivec2_t_add(&segment->ends[1], &segment->ends[1], translation);
+}
+
+void w_RotateWire(void *element, ivec2_t *pivot, uint32_t ccw)
+{
+    struct wire_seg_t *segment = element;
+
+    for(uint32_t index = 0; index < 2; index++)
+    {
+        ivec2_t pivot_wire_vec;
+        ivec2_t_sub(&pivot_wire_vec, &segment->ends[index], pivot);
+        ivec2_t rotated_pivot_wire_vec;
+
+        if(ccw)
+        {
+            rotated_pivot_wire_vec.x = -pivot_wire_vec.y;
+            rotated_pivot_wire_vec.y = pivot_wire_vec.x;
+        }
+        else
+        {
+            rotated_pivot_wire_vec.x = pivot_wire_vec.y;
+            rotated_pivot_wire_vec.y = -pivot_wire_vec.x;
+        }
+
+        if(pivot->x != segment->ends[index].x || pivot->y != segment->ends[index].y)
+        {
+            ivec2_t position_adjust;
+            ivec2_t_sub(&position_adjust, &rotated_pivot_wire_vec, &pivot_wire_vec);
+            ivec2_t_add(&segment->ends[index], &segment->ends[index], &position_adjust);
+        }
+    }
+}
+
+void w_FlipWireV(void *element, ivec2_t *pivot)
+{
+
+}
+
+void w_FlipWireH(void *element, ivec2_t *pivot)
+{
+
+}

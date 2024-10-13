@@ -105,6 +105,15 @@ union m_wire_seg_t
 // #define M_WIRE_PIXEL_WIDTH          4
 
 
+struct m_editor_state_t
+{
+    struct list_t   selections;
+    struct list_t   elements_in_box;
+    ivec2_t         device_place_pos;
+    ivec2_t         selection_center;
+    uint32_t        cur_state;
+};
+
 enum M_MODES
 {
     M_STATE_EDIT = 0,
@@ -193,13 +202,17 @@ struct m_seg_junc_record_t
 
 // void m_UpdateObject(struct m_object_t *object);
 
+struct m_editor_state_t m_CreateEditorState();
+
+void m_DestroyEditorState(struct m_editor_state_t *editor_state);
+
 void m_SelectElement(struct elem_t *element, uint32_t multiple);
 
 void m_ClearSelections();
 
 void m_DeleteSelections();
 
-void m_TranslateSelections(int32_t dx, int32_t dy);
+void m_TranslateSelections(ivec2_t *translation);
 
 void m_RotateSelections(int32_t ccw_rotation);
 

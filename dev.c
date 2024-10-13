@@ -260,83 +260,94 @@ void (*dev_DeviceFuncs[DEV_DEVICE_LAST])(struct sim_dev_data_t *device) = {
     [DEV_DEVICE_OUTPUT]    = dev_OutputStep
 };
 
+
+vec2_t dev_device_axes[] = {
+    [DEV_DEVICE_AXIS_POS_X] = {1, 0},
+    [DEV_DEVICE_AXIS_POS_Y] = {0, 1},
+    [DEV_DEVICE_AXIS_NEG_X] = {-1, 0},
+    [DEV_DEVICE_AXIS_NEG_Y] = {0, -1},
+}; 
+
 struct dev_desc_t dev_device_descs[DEV_DEVICE_LAST] = {
     [DEV_DEVICE_PMOS] = {
-        .width = 80,
-        .height = 144,
-        .tex_coords = {676, 269},
-        .origin = {0, 0},
-        .pin_count = 3,
+        .size           = {75, 140},
+        .tex_coords     = {415, 352},
+        .origin         = {0, 0},
+        .pin_count      = 3,
         .pins = (struct dev_pin_desc_t []) {
-            [DEV_MOS_PIN_SOURCE]    = {.type = DEV_PIN_TYPE_IN,  .offset = {-20, -40}},
-            [DEV_MOS_PIN_GATE]      = {.type = DEV_PIN_TYPE_IN,  .offset = {20, 0}},
-            [DEV_MOS_PIN_DRAIN]     = {.type = DEV_PIN_TYPE_OUT, .offset = {-20,  40}},
+            [DEV_MOS_PIN_SOURCE]    = {.type = DEV_PIN_TYPE_IN,  .offset = {-0.3f, -0.5f}, .direction = DEV_DEVICE_AXIS_NEG_Y},
+            [DEV_MOS_PIN_GATE]      = {.type = DEV_PIN_TYPE_IN,  .offset = { 0.5f,  0.0f}, .direction = DEV_DEVICE_AXIS_POS_X},
+            [DEV_MOS_PIN_DRAIN]     = {.type = DEV_PIN_TYPE_OUT, .offset = {-0.3f,  0.5f}, .direction = DEV_DEVICE_AXIS_POS_Y},
         },
     },
 
     [DEV_DEVICE_NMOS] = {
-        .width = 80,
-        .height = 144,
-        .tex_coords = {676, 80},
-        .origin = {0, 0},
-        .pin_count = 3,
+        .size           = {75, 140},
+        .tex_coords     = {415, 190},
+        .origin         = {0, 0},
+        .pin_count      = 3,
         .pins = (struct dev_pin_desc_t []) {
-            [DEV_MOS_PIN_SOURCE]    = {.type = DEV_PIN_TYPE_IN,  .offset = {-20, -40}},
-            [DEV_MOS_PIN_GATE]      = {.type = DEV_PIN_TYPE_IN,  .offset = {20, 0}},
-            [DEV_MOS_PIN_DRAIN]     = {.type = DEV_PIN_TYPE_OUT, .offset = {-20,  40}},
+            [DEV_MOS_PIN_SOURCE]    = {.type = DEV_PIN_TYPE_IN,  .offset = {-0.3f, -0.5f}},
+            [DEV_MOS_PIN_GATE]      = {.type = DEV_PIN_TYPE_IN,  .offset = { 0.5f,  0.0f}},
+            [DEV_MOS_PIN_DRAIN]     = {.type = DEV_PIN_TYPE_OUT, .offset = {-0.3f, -0.5f}},
         },
     },
 
-    [DEV_DEVICE_GND] = {
-        .pin_count = 1,
-        .width = 20,
-        .height = 29,
+    [DEV_DEVICE_GND] = {        
+        // .width = 20,
+        // .height = 29,
+        .size = {20, 29},
         .tex_coords = {41, 92}, 
         .origin = {0, 15},
+        .pin_count = 1,
         .pins = (struct dev_pin_desc_t []) {
             {.type = DEV_PIN_TYPE_OUT, .offset = {0, 0}},
         },
     },
     
     [DEV_DEVICE_POW] = {
-        .pin_count = 1,
-        .width = 22,
-        .height = 32,
+        // .width = 22,
+        // .height = 32,
+        .size = {22, 32},
         .tex_coords = {10, 88}, 
         .origin = {0, -16},
+        .pin_count = 1,
         .pins = (struct dev_pin_desc_t []) {
             {.type = DEV_PIN_TYPE_OUT, .offset = {0, 0}},
         },
     },
 
     [DEV_DEVICE_CLOCK] = {
-        .pin_count = 1,
-        .width = 70,
-        .height = 57,
+        // .width = 70,
+        // .height = 57,
+        .size = {70, 57},
         .tex_coords = {104, 71}, 
         .origin = {15, 0},
+        .pin_count = 1,
         .pins = (struct dev_pin_desc_t []) {
             {.type = DEV_PIN_TYPE_OUT, .offset = {20, 0}},
         },
     },
 
     [DEV_DEVICE_INPUT] = {
-        .pin_count = 1,
-        .width = 38,
-        .height = 22,
+        // .width = 38,
+        // .height = 22,
+        .size = {38, 22},
         .tex_coords = {104, 30}, 
         .origin = {18, 0},
+        .pin_count = 1,
         .pins = (struct dev_pin_desc_t []) {
             {.type = DEV_PIN_TYPE_OUT, .offset = {0, 0}},
         },
     },
 
     [DEV_DEVICE_7SEG] = {
-        .pin_count = 8,
-        .width = 94,
-        .height = 160,
+        // .width = 94,
+        // .height = 160,
+        .size = {94, 160},
         .tex_coords = {196, 0},
         .origin = {-2, 0},
+        .pin_count = 8,
         .pins = (struct dev_pin_desc_t []) {
             {.type = DEV_PIN_TYPE_IN, .offset = {  0,  80}},
 
@@ -351,11 +362,12 @@ struct dev_desc_t dev_device_descs[DEV_DEVICE_LAST] = {
     },
 
     [DEV_DEVICE_OUTPUT] = {
-        .pin_count = 1,
-        .width = 38,
-        .height = 22,
+        // .width = 38,
+        // .height = 22,
+        .size = {38, 22},
         .tex_coords = {114, 150}, 
         .origin = {18, 0},
+        .pin_count = 1,
         .pins = (struct dev_pin_desc_t []) {
             {.type = DEV_PIN_TYPE_IN, .offset = {0, 0}},
         },
@@ -607,60 +619,54 @@ const char *dev_axis_names[] = {
 //     [DEV_DEVICE_AXIS_POS_X] = DEV_DEVICE_AXIS_POS_Y,
 // };
 
-void dev_RotateDevice(struct dev_t *device, uint32_t ccw)
+void dev_TranslateDevice(void *element, ivec2_t *translation)
 {
+    struct dev_t *device = element;
+    ivec2_t_add(&device->position, &device->position, translation);
+    dev_UpdateDevice(device);
+}
+
+void dev_RotateDevice(void *element, ivec2_t *pivot, uint32_t ccw)
+{
+    struct dev_t *device = element;
+
     if(device != NULL)
     {
-        // mat2_t rotation_matrix;
-
-        // if(ccw)
-        // {
-        //     rotation_matrix = (mat2_t){0.0f, 1.0f, -1.0f, 0.0f};
-        // }
-        // else
-        // {
-        //     rotation_matrix = (mat2_t){0.0f, -1.0f, 1.0f, 0.0f};
-        // }
-
-        // mat2_t_mul(&device->orientation, &device->orientation, &rotation_matrix);
+        ivec2_t pivot_device_vec;
+        ivec2_t_sub(&pivot_device_vec, &device->position, pivot);
+        ivec2_t rotated_pivot_device_vec;
 
         if(ccw)
         {
             device->x_axis++;
             device->y_axis++;
+
+            rotated_pivot_device_vec.x = -pivot_device_vec.y;
+            rotated_pivot_device_vec.y = pivot_device_vec.x;
         }
         else
         {
             device->x_axis--;
             device->y_axis--;
+
+            rotated_pivot_device_vec.x = pivot_device_vec.y;
+            rotated_pivot_device_vec.y = -pivot_device_vec.x;
+        }
+
+        if(pivot->x != device->position.x || pivot->y != device->position.y)
+        {
+            ivec2_t position_adjust;
+            ivec2_t_sub(&position_adjust, &rotated_pivot_device_vec, &pivot_device_vec);
+            ivec2_t_add(&device->position, &device->position, &position_adjust);
         }
 
         dev_UpdateDevice(device);
     }
 }
 
-void dev_FlipDeviceH(struct dev_t *device)
+void dev_FlipDeviceV(void *element, ivec2_t *pivot)
 {
-    if(device != NULL)
-    {
-        // mat2_t flip_matrix = {-1.0f, 0.0f, 0.0f, 1.0f};
-        // mat2_t_mul(&device->orientation, &device->orientation, &flip_matrix);
-
-        if(!(device->x_axis & DEV_DEVICE_AXIS_POS_Y))
-        {
-            device->x_axis ^= DEV_DEVICE_AXIS_NEG_MASK;    
-        }
-        else
-        {
-            device->y_axis ^= DEV_DEVICE_AXIS_NEG_MASK;    
-        }
-
-        dev_UpdateDevice(device);
-    }
-}
-
-void dev_FlipDeviceV(struct dev_t *device)
-{
+    struct dev_t *device = element;
     if(device != NULL)
     {
         // mat2_t flip_matrix = {1.0f, 0.0f, 0.0f, -1.0f};
@@ -676,6 +682,35 @@ void dev_FlipDeviceV(struct dev_t *device)
             device->y_axis ^= DEV_DEVICE_AXIS_NEG_MASK;    
         }
 
+        // ivec2_t pivot_device_vec;
+        // ivec2_t_sub(&pivot_device_vec, &device->position, pivot);
+        int32_t pivot_distance = pivot->y - device->position.y;
+        device->position.y += pivot_distance * 2;
+
+        dev_UpdateDevice(device);
+    }
+}
+
+void dev_FlipDeviceH(void *element, ivec2_t *pivot)
+{
+    struct dev_t *device = element;
+    if(device != NULL)
+    {
+        // mat2_t flip_matrix = {-1.0f, 0.0f, 0.0f, 1.0f};
+        // mat2_t_mul(&device->orientation, &device->orientation, &flip_matrix);
+
+        if(!(device->x_axis & DEV_DEVICE_AXIS_POS_Y))
+        {
+            device->x_axis ^= DEV_DEVICE_AXIS_NEG_MASK;    
+        }
+        else
+        {
+            device->y_axis ^= DEV_DEVICE_AXIS_NEG_MASK;    
+        }
+
+        int32_t pivot_distance = pivot->x - device->position.x;
+        device->position.x += pivot_distance * 2;
+
         dev_UpdateDevice(device);
     }
 }
@@ -683,8 +718,6 @@ void dev_FlipDeviceV(struct dev_t *device)
 void dev_UpdateDevice(struct dev_t *device)
 {
     struct dev_desc_t *desc = dev_device_descs + device->type;
-    // mat2_t_vec2_t_mul(&device->origin, &desc->origin, &device->orientation);
-    // device->origin = desc->origin;
     device->origin.x = desc->origin.comps[device->x_axis & DEV_DEVICE_AXIS_POS_Y];
     device->origin.y = desc->origin.comps[!(device->x_axis & DEV_DEVICE_AXIS_POS_Y)];
     d_QueueDeviceDataUpdate(device->draw_data);
@@ -712,17 +745,42 @@ struct dev_t *dev_GetDevice(uint64_t device_index)
 //     // device->origin.y = desc->origin.y * device->orientation[0][1] + desc->origin.y * device->orientation[1][1];
 // }
 
-void dev_GetDeviceLocalPinPosition(struct dev_t *device, uint16_t pin, vec2_t *pin_position)
+void dev_GetDeviceLocalPinPosition(struct dev_t *device, uint16_t pin, ivec2_t *pin_position)
 {
-    // struct dev_desc_t *dev_desc = dev_device_descs + device->type;
-    // struct dev_pin_desc_t *pin_desc = dev_desc->pins + pin;
-    // mat2_t_vec2_t_mul(pin_position, &pin_desc->offset, &device->orientation);
+    struct dev_desc_t *dev_desc = dev_device_descs + device->type;
+    struct dev_pin_desc_t *pin_desc = dev_desc->pins + pin;
+
+    // pin_position->x = pin_desc->offset.comps[device->x_axis & DEV_DEVICE_AXIS_POS_Y];
+    // pin_position->y = pin_desc->offset.comps[device->y_axis & DEV_DEVICE_AXIS_POS_Y];
+    uint32_t x_axis = device->x_axis;
+    uint32_t y_axis = device->y_axis;
+    pin_position->x = dev_desc->size.comps[x_axis & DEV_DEVICE_AXIS_POS_Y] * pin_desc->offset.comps[x_axis & DEV_DEVICE_AXIS_POS_Y];
+    pin_position->y = dev_desc->size.comps[y_axis & DEV_DEVICE_AXIS_POS_Y] * pin_desc->offset.comps[y_axis & DEV_DEVICE_AXIS_POS_Y];
+
+    if(x_axis & DEV_DEVICE_AXIS_NEG_MASK)
+    {
+        pin_position->x = -pin_position->x;
+    }
+
+    if(y_axis & DEV_DEVICE_AXIS_NEG_MASK)
+    {
+        pin_position->y = -pin_position->y;
+    }
+
+    // if()
+    // vec2_t position = cvt_ivec2_t_vec2_t(pin_desc->offset);
+    // mat2_t pin_rotation = {.rows[0] = dev_device_axes[pin_desc->orientation], .rows[1] = dev_device_axes[(pin_desc->orientation + 1) & 0x3]};
+    // mat2_t device_orientation = {.rows[0] = dev_device_axes[device->x_axis], .rows[1] = dev_device_axes[device->y_axis]};
+    // mat2_t_mul(&pin_rotation, &pin_rotation, &device_orientation);
+    // mat2_t_vec2_t_mul(&position, &position, &pin_rotation);
+    // *pin_position = cvt_vec2_t_ivec2_t(position);
 }
 
 void dev_GetDeviceLocalBoxPosition(struct dev_t *device, vec2_t *min, vec2_t *max)
 {
     struct dev_desc_t *dev_desc = dev_device_descs + device->type;
-    vec2_t scale = {(float)(dev_desc->width >> 1), (float)(dev_desc->height >> 1)}; 
+    vec2_t scale = cvt_ivec2_t_vec2_t(dev_desc->size);
+    // vec2_t scale = {(float)(dev_desc->width >> 1), (float)(dev_desc->height >> 1)}; 
     // float width = (float)(dev_desc->width >> 1);
     // float height = (float)(dev_desc->height >> 1);
 

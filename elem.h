@@ -18,6 +18,14 @@ enum ELEM_TYPES
     ELEM_TYPE_LAST
 };
 
+struct elem_funcs_t
+{
+    void (*Translate)(void *base_elem, ivec2_t *translation);
+    void (*Rotate)(void *base_elem, ivec2_t *pivot, uint32_t ccw);
+    void (*FlipVertical)(void *base_elem, ivec2_t *pivot);
+    void (*FlipHorizontal)(void *base_elem, ivec2_t *pivot);
+};
+
 /* forward declaration */
 struct elem_t;
 
@@ -50,5 +58,13 @@ void elem_DestroyElement(struct elem_t *element);
 void elem_UpdateElement(struct elem_t *element);
 
 void elem_GetTypedElementsInsideBox(uint32_t type, vec2_t *box_min, vec2_t *box_max, struct list_t *elements);
+
+void elem_Translate(struct elem_t *element, ivec2_t *translation);
+
+void elem_Rotate(struct elem_t *element, ivec2_t *pivot, uint32_t ccw);
+
+void elem_FlipVertically(struct elem_t *element, ivec2_t *pivot);
+
+void elem_FlipHorizontally(struct elem_t *element, ivec2_t *pivot);
 
 #endif

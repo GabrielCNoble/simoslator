@@ -34,16 +34,26 @@
         "d_device_data_t d_device_data[];\n"                                            \
     "};\n"                                                                              \
 
-#define D_DEVICE_TYPE_DATA_BUFFER                                                       \
-    "struct d_device_type_data_t\n"                                                     \
+#define D_DEVICE_TYPE_DEF_BUFFER                                                        \
+    "struct d_device_type_def_t\n"                                                      \
     "{\n"                                                                               \
-        "vec2       tex_size;\n"                                                        \
-        "vec2       tex_coords;\n"                                                      \
+        "vec2   tex_size;\n"                                                            \
+        "vec2   tex_coords;\n"                                                          \
+        "ivec4  first_pin;\n"                                                           \
     "};\n"                                                                              \
-    "layout (std430) buffer d_device_type_data_buffer\n"                                \
+    "struct d_device_pin_def_t\n"                                                       \
     "{\n"                                                                               \
-        "d_device_type_data_t d_device_type_data[]\n;"                                  \
+        "vec4   offset;\n"                                                              \
     "};\n"                                                                              \
+    "layout (std430) buffer d_device_type_def_buffer\n"                                 \
+    "{\n"                                                                               \
+        "d_device_type_def_t d_device_type_defs[];\n"                                   \
+    "};\n"                                                                              \
+    "layout (std430) buffer d_device_pin_def_buffer\n"                                  \
+    "{\n"                                                                               \
+        "d_device_pin_def_t d_device_pin_defs[];\n"                                     \
+    "};\n"                                                                              \
+
 
 #define D_WIRE_COLOR_BUFFER                                                             \
     "layout (std430) buffer d_wire_colors\n"                                            \
@@ -54,8 +64,8 @@
 #define D_PIN_DATA_BUFFER                                                               \
     "struct d_pin_data_t\n"                                                             \
     "{\n"                                                                               \
-        "vec2       position;\n"                                                        \
-        "vec2       direction;\n"                                                       \
+        "uint device_index;\n"                                                          \
+        "uint pin_index;\n"                                                             \
     "};\n"                                                                              \
     "layout (std430) buffer d_pin_data_buffer\n"                                        \
     "{\n"                                                                               \
@@ -68,7 +78,7 @@ const char *d_device_vertex_shader =
     "layout (location = 0) in vec4 d_position;\n"
     "layout (location = 1) in vec2 d_tex_coords;\n"
 
-    D_DEVICE_TYPE_DATA_BUFFER
+    D_DEVICE_TYPE_DEF_BUFFER
 
     D_DEVICE_DATA_BUFFER
 
@@ -80,9 +90,9 @@ const char *d_device_vertex_shader =
     "void main()\n"
     "{\n"
         "d_device_data_t data = d_device_data[gl_InstanceID];\n"
-        "d_device_type_data_t type_data = d_device_type_data[data.type];\n"
-        "vec2 tex_size = vec2(type_data.tex_size.x, type_data.tex_size.y);\n"
-        "tex_coords = vec2(type_data.tex_coords.x, type_data.tex_coords.y) + vec2(d_tex_coords.x * tex_size.x, d_tex_coords.y * tex_size.y);\n"
+        "d_device_type_def_t type_def = d_device_type_defs[data.type];\n"
+        "vec2 tex_size = type_def.tex_size;\n"
+        "tex_coords = vec2(type_def.tex_coords.x, type_def.tex_coords.y) + vec2(d_tex_coords.x * tex_size.x, d_tex_coords.y * tex_size.y);\n"
         "vec2 position = data.position + data.orientation * d_position.xy;\n"
         "gl_Position = d_model_view_projection_matrix * vec4(position, 0, 1);\n"
         "selected = data.selected;\n"
@@ -92,8 +102,6 @@ const char *d_device_fragment_shader =
     D_VERSION_EXTS
 
     "in vec2 tex_coords;\n"
-    // "flat in ivec2 device_size;\n"
-    // "flat in ivec2 coord_offset;\n"
     "flat in int selected;\n"
     "uniform sampler2D d_texture;\n"
     "void main()\n"
@@ -114,10 +122,39 @@ const char *d_device_fragment_shader =
         "{\n"
             "color = vec4(0.0f, 0.5f, 0.8f, color.a);\n"
         "}\n"
-        "gl_FragColor = color;\n"
+        "gl_FragColor = vec4(color.rgb * color.a, color.a);\n"
     "}\n";
 
+const char *d_pin_vertex_shader = 
+    D_VERSION_EXTS
+    "layout (location = 0)in vec4 d_position;\n"
 
+    D_DEVICE_TYPE_DEF_BUFFER
+
+    D_DEVICE_DATA_BUFFER
+
+    D_PIN_DATA_BUFFER
+
+    "uniform mat4 d_model_view_projection_matrix;\n"
+
+    "void main()\n"
+    "{\n"
+        "d_pin_data_t pin_data = d_pin_data[gl_VertexID];\n"
+        "d_device_data_t device_data = d_device_data[pin_data.device_index];\n"
+        "d_device_type_def_t type_def = d_device_type_defs[device_data.type];\n"
+        "vec2 pin_position = d_device_pin_defs[type_def.first_pin.x + pin_data.pin_index].offset.xy;\n"
+        "pin_position = d_device_data[pin_data.device_index].orientation * pin_position;\n"
+        "pin_position += d_device_data[pin_data.device_index].position;\n"
+        "gl_Position = d_model_view_projection_matrix * vec4(pin_position, 0, 1);\n"
+    "}\n";
+
+const char *d_pin_fragment_shader = 
+    D_VERSION_EXTS
+
+    "void main()\n"
+    "{\n"
+        "gl_FragColor = vec4(0, 0, 0.6, 1);\n"
+    "}\n";
 
 const char *d_7seg_mask_vertex_shader = 
     D_VERSION_EXTS
@@ -264,19 +301,21 @@ const char *d_grid_vertex_shader =
 
     "void main()\n"
     "{\n"
-        "gl_Position = d_position;\n"
+        "gl_Position = d_position * vec4(2, 2, 2, 1);\n"
         "tex_coords = d_tex_coords * 2.0f - vec2(1);\n"
     "}\n";
 
 const char *d_grid_fragment_shader = 
     D_VERSION_EXTS
     "uniform mat4 d_model_view_projection_matrix;\n"
+    "uniform vec2 d_screen_size;\n"
     "in vec2 tex_coords;\n"
     "void main()\n"
     "{\n"
         "vec4 color = vec4(0);\n"
-        "vec2 grid0_tex_coords = vec2(tex_coords.x / d_model_view_projection_matrix[0].x + d_model_view_projection_matrix[3].x, \n"
-                                     "tex_coords.y / d_model_view_projection_matrix[1].y + d_model_view_projection_matrix[3].y) * 0.01f;\n"
+        "vec2 grid0_tex_coords = vec2((tex_coords.x - d_model_view_projection_matrix[3].x) / d_model_view_projection_matrix[0].x, \n"
+                                     "(tex_coords.y - d_model_view_projection_matrix[3].y) / d_model_view_projection_matrix[1].y) * 0.01f;\n"
+        // "grid0_tex_coords = d_model_view_projection_matrix[3].xy * 10.f;\n"
         // "vec2 grid1_tex_coords = grid0_tex_coords * 0.1f;\n"
         "vec2 derivative0 = fwidth(grid0_tex_coords);\n"
         // "vec2 derivative1 = fwidth(grid1_tex_coords);\n"
@@ -287,11 +326,7 @@ const char *d_grid_fragment_shader =
         "gl_FragColor = color;\n"
     "}\n";
  
-#define D_DEVICE_VERTEX_BUFFER_SIZE     6
-#define D_DEVICE_INDEX_BUFFER_SIZE      8
-#define D_DEVICE_DATA_BUFFER_SIZE       0x800000
-// #define D_DEVICE_DATA_BUFFER_COUNT      8
-#define D_PIN_DATA_BUFFER_SIZE          0x800000
+
 
 #define D_DEVICE_TYPE_DATA_BUFFER_SIZE  DEV_DEVICE_TYPE_LAST
 
@@ -310,14 +345,23 @@ uint32_t                    d_device_shader_texture;
 uint32_t                    d_device_data_buffer_index;
 GLuint                      d_device_vertex_buffer;
 GLuint                      d_device_index_buffer;
+
+GLuint                      d_pin_shader;
+uint32_t                    d_pin_shader_model_view_projection_matrix;
+
 GLuint                      d_device_data_buffer;
-struct d_device_data_t *    d_device_data;
-uint32_t                    d_pin_data_cursor = 0;
-struct d_pin_data_t *       d_pin_data;
 GLuint                      d_pin_data_buffer;
-GLuint                      d_device_type_data_buffer;
+uint32_t                    d_pin_count;
+
+// uint32_t                    d_pin_data_cursor = 0;
+// struct d_pin_data_t *       d_pin_data;
+
+
+GLuint                      d_device_type_def_buffer;
+GLuint                      d_device_pin_def_buffer;
+
 struct list_t               d_device_data_update_queue;
-struct list_t               d_device_data_handles;
+struct list_t               d_device_data_update_slots;
 GLuint                      d_devices_texture;
 uint32_t                    d_devices_texture_width;
 uint32_t                    d_devices_texture_height;
@@ -347,6 +391,7 @@ uint32_t                    d_selection_box_shader_model_view_projection_matrix;
 
 GLuint                      d_grid_shader;
 GLuint                      d_grid_shader_model_view_projection_matrix;
+GLuint                      d_grid_shader_screen_size;
 
 // float                       d_device_rotations[][2] = {
 //     [DEV_DEVICE_ROTATION_0]     = { 1.0f,  0.0f},
@@ -370,6 +415,7 @@ extern struct pool_t        dev_devices;
 extern struct pool_t        dev_outputs;
 extern struct pool_t        dev_7seg_disps;
 extern struct dev_desc_t    dev_device_descs[];
+extern vec2_t               dev_device_axes[];
 
 /* from wire.c */
 extern struct pool_t        w_wires;
@@ -405,15 +451,18 @@ extern struct list_t        sim_wire_data;
 void d_Init()
 {
     glGenVertexArrays(1, &d_vao);
-    glBindVertexArray(d_vao);
+    glBindVertexArray(d_vao);   
 
     struct d_device_vert_t vertices[] = {
+        /* pin/wire */
         {.position = { 0.0, 0.0}, .tex_coords = {1.0, 0.0}},
         {.position = { 0.0, 0.0}, .tex_coords = {1.0, 0.0}},
-        {.position = {-1.0, 1.0}, .tex_coords = {0.0, 0.0}},
-        {.position = {-1.0,-1.0}, .tex_coords = {0.0, 1.0}},
-        {.position = { 1.0,-1.0}, .tex_coords = {1.0, 1.0}},
-        {.position = { 1.0, 1.0}, .tex_coords = {1.0, 0.0}},
+
+        /* device quad */
+        {.position = {-0.5, 0.5}, .tex_coords = {0.0, 1.0}},
+        {.position = {-0.5,-0.5}, .tex_coords = {0.0, 0.0}},
+        {.position = { 0.5,-0.5}, .tex_coords = {1.0, 0.0}},
+        {.position = { 0.5, 0.5}, .tex_coords = {1.0, 1.0}},
     };
 
     glGenBuffers(1, &d_device_vertex_buffer);
@@ -421,7 +470,10 @@ void d_Init()
     glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
 
     uint32_t indices[] = {
-        0, 1, 2, 3, 4, 4, 5, 2,
+        /* pin/wire */
+        0, 1, 
+        /* device */
+        2, 3, 4, 4, 5, 2
     };
 
     glGenBuffers(1, &d_device_index_buffer);
@@ -431,14 +483,12 @@ void d_Init()
     glGenBuffers(1, &d_device_data_buffer);
     glBindBuffer(GL_SHADER_STORAGE_BUFFER, d_device_data_buffer);
     glBufferData(GL_SHADER_STORAGE_BUFFER, D_DEVICE_DATA_BUFFER_SIZE * sizeof(struct d_device_data_t), NULL, GL_DYNAMIC_DRAW);
-    // d_device_data = calloc(D_DEVICE_DATA_BUFFER_SIZE, sizeof(struct d_device_data_t));
-    d_device_data_handles = list_Create(sizeof(struct d_device_data_handle_t), 16384);
+    d_device_data_update_slots = list_Create(sizeof(struct d_device_data_slot_t), 16384);
     d_device_data_update_queue = list_Create(sizeof(struct dev_t *), 16384);
 
     glGenBuffers(1, &d_pin_data_buffer);
     glBindBuffer(GL_SHADER_STORAGE_BUFFER, d_pin_data_buffer);
     glBufferData(GL_SHADER_STORAGE_BUFFER, D_PIN_DATA_BUFFER_SIZE * sizeof(struct d_pin_data_t), NULL, GL_DYNAMIC_DRAW);
-    d_pin_data = calloc(D_PIN_DATA_BUFFER_SIZE, sizeof(struct d_pin_data_t));
 
     glGenBuffers(1, &d_7seg_display_data_buffer);
     glBindBuffer(GL_SHADER_STORAGE_BUFFER, d_7seg_display_data_buffer);
@@ -458,7 +508,7 @@ void d_Init()
     glGenBuffers(1, &d_selection_box_vertex_buffer);
     glBindBuffer(GL_ARRAY_BUFFER, d_selection_box_vertex_buffer);
     glBufferData(GL_ARRAY_BUFFER, sizeof(struct d_color_vert_t) * 4, NULL, GL_STATIC_DRAW);
-
+    /**************************************/
     d_device_shader = d_CreateShader(d_device_vertex_shader, d_device_fragment_shader, "device_shader");
     d_device_shader_model_view_projection_matrix = glGetUniformLocation(d_device_shader, "d_model_view_projection_matrix");
     d_device_shader_texture = glGetUniformLocation(d_device_shader, "d_texture");
@@ -466,14 +516,25 @@ void d_Init()
     glShaderStorageBlockBinding(d_device_shader, device_data_block, D_DEVICE_DATA_BINDING);
     GLuint device_tex_coords_block = glGetProgramResourceIndex(d_device_shader, GL_SHADER_STORAGE_BLOCK, "d_device_tex_coords_buffer");
     glShaderStorageBlockBinding(d_device_shader, device_tex_coords_block, D_DEVICE_TEX_COORDS_BINDING);
-    GLuint device_type_data_block = glGetProgramResourceIndex(d_device_shader, GL_SHADER_STORAGE_BLOCK, "d_device_type_data_buffer");
-    glShaderStorageBlockBinding(d_device_shader, device_type_data_block, D_DEVICE_TYPE_DATA_BINDING);
-    
+    GLuint device_type_def_block = glGetProgramResourceIndex(d_device_shader, GL_SHADER_STORAGE_BLOCK, "d_device_type_def_buffer");
+    glShaderStorageBlockBinding(d_device_shader, device_type_def_block, D_DEVICE_TYPE_DEF_BINDING);
+    /**************************************/
+    d_pin_shader = d_CreateShader(d_pin_vertex_shader, d_pin_fragment_shader, "pin_shader");
+    d_pin_shader_model_view_projection_matrix = glGetUniformLocation(d_device_shader, "d_model_view_projection_matrix");
+    device_data_block = glGetProgramResourceIndex(d_pin_shader, GL_SHADER_STORAGE_BLOCK, "d_device_data_buffer");
+    glShaderStorageBlockBinding(d_pin_shader, device_data_block, D_DEVICE_DATA_BINDING);
+    device_type_def_block = glGetProgramResourceIndex(d_pin_shader, GL_SHADER_STORAGE_BLOCK, "d_device_type_def_buffer");
+    glShaderStorageBlockBinding(d_pin_shader, device_type_def_block, D_DEVICE_TYPE_DEF_BINDING);
+    GLuint pin_def_block = glGetProgramResourceIndex(d_pin_shader, GL_SHADER_STORAGE_BLOCK, "d_device_pin_def_buffer");
+    glShaderStorageBlockBinding(d_pin_shader, pin_def_block, D_DEVICE_PIN_DEF_BINDING);
+    GLuint pin_data_block = glGetProgramResourceIndex(d_pin_shader, GL_SHADER_STORAGE_BLOCK, "d_pin_data_buffer");
+    glShaderStorageBlockBinding(d_pin_shader, pin_data_block, D_PIN_DATA_BINDING);
+    /**************************************/
     d_wire_shader = d_CreateShader(d_wire_vertex_shader, d_wire_fragment_shader, "wire_shader");
     d_wire_shader_model_view_projection_matrix = glGetUniformLocation(d_wire_shader, "d_model_view_projection_matrix");
     uint32_t wire_colors_block = glGetProgramResourceIndex(d_wire_shader, GL_SHADER_STORAGE_BLOCK, "d_wire_colors");
     glShaderStorageBlockBinding(d_wire_shader, wire_colors_block, D_WIRE_COLOR_BINDING);
-
+    /**************************************/
     d_7seg_mask_shader = d_CreateShader(d_7seg_mask_vertex_shader, d_7seg_mask_fragment_shader, "7seg_mask_shader");
     d_7seg_mask_shader_model_view_projection_matrix = glGetUniformLocation(d_7seg_mask_shader, "d_model_view_projection_matrix");
     d_7seg_mask_shader_texture = glGetUniformLocation(d_7seg_mask_shader, "d_texture");
@@ -483,7 +544,7 @@ void d_Init()
     glShaderStorageBlockBinding(d_7seg_mask_shader, device_tex_coords_block, D_DEVICE_TEX_COORDS_BINDING);
     uint32_t display_data_block = glGetProgramResourceIndex(d_7seg_mask_shader, GL_SHADER_STORAGE_BLOCK, "d_7seg_data_buffer");
     glShaderStorageBlockBinding(d_7seg_mask_shader, display_data_block, D_7SEG_DATA_BINDING);
-
+    /**************************************/
     d_output_mask_shader = d_CreateShader(d_7seg_mask_vertex_shader, d_output_mask_fragment_shader, "output_mask_shader");
     d_output_mask_shader_model_view_projection_matrix = glGetUniformLocation(d_output_mask_shader, "d_model_view_projection_matrix");
     d_output_mask_shader_texture = glGetUniformLocation(d_output_mask_shader, "d_texture");
@@ -502,6 +563,7 @@ void d_Init()
 
     d_grid_shader = d_CreateShader(d_grid_vertex_shader, d_grid_fragment_shader, "d_grid_shader");
     d_grid_shader_model_view_projection_matrix = glGetUniformLocation(d_grid_shader, "d_model_view_projection_matrix");
+    d_grid_shader_screen_size = glGetUniformLocation(d_grid_shader, "d_screen_size");
 
 
     float wire_colors[][4] = {
@@ -531,6 +593,7 @@ void d_Init()
     //     [DEV_DEVICE_ROTATION_360 + DEV_DEVICE_ROTATION_270]     = {.tex_coords[0] = {1, 1}, .tex_coords[1] = {0, 1}, .tex_coords[2] = {0, 0}, .tex_coords[3] = {1, 0}},        
     // };
 
+    stbi_set_flip_vertically_on_load(true);
 
     int channels;
     stbi_uc *pixels = stbi_load("res/devices2.png", &d_devices_texture_width, &d_devices_texture_height, &channels, STBI_rgb_alpha);
@@ -547,37 +610,53 @@ void d_Init()
     d_output_mask_texture = d_CreateTexture(width, height, GL_RGBA8UI, GL_NEAREST, GL_NEAREST, 0, GL_RGBA_INTEGER, pixels);
     free(pixels);
 
+    struct d_device_type_def_t device_type_defs[DEV_DEVICE_LAST];
+    struct d_device_pin_def_t *device_pin_defs = NULL;
 
-    struct d_device_type_data_t device_type_data[DEV_DEVICE_LAST] = {
-        [DEV_DEVICE_PMOS] = {
+    uint32_t pin_count = 0;
+
+    for(uint32_t index = 0; index < DEV_DEVICE_LAST; index++)
+    {
+        device_type_defs[index] = (struct d_device_type_def_t){
             .tex_coords = {
-                (float)dev_device_descs[DEV_DEVICE_PMOS].tex_coords.x / (float)d_devices_texture_width,
-                (float)dev_device_descs[DEV_DEVICE_PMOS].tex_coords.y / (float)d_devices_texture_height,
+                (float)dev_device_descs[index].tex_coords.x / (float)d_devices_texture_width,
+                (float)dev_device_descs[index].tex_coords.y / (float)d_devices_texture_height,
             }, 
             .tex_size = {
-                (float)dev_device_descs[DEV_DEVICE_PMOS].width / (float)d_devices_texture_width,
-                (float)dev_device_descs[DEV_DEVICE_PMOS].height / (float)d_devices_texture_height,
-            }
-        },
-        [DEV_DEVICE_NMOS] = {
-            .tex_coords = {
-                (float)dev_device_descs[DEV_DEVICE_NMOS].tex_coords.x / (float)d_devices_texture_width,
-                (float)dev_device_descs[DEV_DEVICE_NMOS].tex_coords.y / (float)d_devices_texture_height,
-            }, 
-            .tex_size = {
-                (float)dev_device_descs[DEV_DEVICE_NMOS].width / (float)d_devices_texture_width,
-                (float)dev_device_descs[DEV_DEVICE_NMOS].height / (float)d_devices_texture_height,
-            }
+                (float)dev_device_descs[index].size.x / (float)d_devices_texture_width,
+                (float)dev_device_descs[index].size.y / (float)d_devices_texture_height,
+            },
+            .first_pin = pin_count,
+        };
+
+        pin_count += dev_device_descs[index].pin_count;
+    } 
+
+    glGenBuffers(1, &d_device_type_def_buffer);
+    glBindBuffer(GL_UNIFORM_BUFFER, d_device_type_def_buffer);
+    glBufferData(GL_UNIFORM_BUFFER, sizeof(device_type_defs), device_type_defs, GL_STATIC_DRAW);
+
+    glGenBuffers(1, &d_device_pin_def_buffer);
+    glBindBuffer(GL_SHADER_STORAGE_BUFFER, d_device_pin_def_buffer);
+    glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(struct d_device_pin_def_t) * pin_count, NULL, GL_STATIC_DRAW);
+
+    device_pin_defs = glMapBuffer(GL_SHADER_STORAGE_BUFFER, GL_WRITE_ONLY);
+    pin_count = 0;
+    for(uint32_t index = 0; index < DEV_DEVICE_LAST; index++)
+    {
+        struct dev_desc_t *device_desc = dev_device_descs + index;
+        struct d_device_pin_def_t *pin_def = device_pin_defs + pin_count;
+
+        for(uint32_t pin_index = 0; pin_index < device_desc->pin_count; pin_index++)
+        {
+            pin_def[pin_index].offset.x = device_desc->pins[pin_index].offset.x;
+            pin_def[pin_index].offset.y = device_desc->pins[pin_index].offset.y;
+            pin_def[pin_index].offset.z = 0.0f;
+            pin_def[pin_index].offset.w = 0.0f;
         }
-    };
-
-    glGenBuffers(1, &d_device_type_data_buffer);
-    glBindBuffer(GL_UNIFORM_BUFFER, d_device_type_data_buffer);
-    glBufferData(GL_UNIFORM_BUFFER, sizeof(device_type_data), device_type_data, GL_STATIC_DRAW);
-
-    // glGenBuffers(1, &d_device_tex_coords_buffer);
-    // glBindBuffer(GL_SHADER_STORAGE_BUFFER, d_device_tex_coords_buffer);
-    // glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(device_tex_coords), device_tex_coords, GL_STATIC_DRAW);
+        pin_count += device_desc->pin_count;
+    }
+    glUnmapBuffer(GL_SHADER_STORAGE_BUFFER);
 }
 
 void d_Shutdown()
@@ -662,89 +741,84 @@ GLuint d_CreateTexture(int32_t width, int32_t height, uint32_t internal_format, 
     return texture;
 }
 
-struct d_device_data_handle_t *d_AllocDeviceData()
+struct d_device_data_slot_t *d_AllocDeviceData()
 {
-    uint32_t handle_index = list_AddElement(&d_device_data_handles, NULL);
-    struct d_device_data_handle_t *handle = list_GetElement(&d_device_data_handles, handle_index);
-    handle->data_index = handle_index;
-    handle->update_index = D_DEVICE_DATA_HANDLE_INVALID_UPDATE_INDEX;
-    return handle;
+    uint32_t slot_index = list_AddElement(&d_device_data_update_slots, NULL);
+    struct d_device_data_slot_t *slot = list_GetElement(&d_device_data_update_slots, slot_index);
+    slot->device = NULL;
+    slot->data_index = slot_index;
+    slot->update_index = D_DEVICE_DATA_SLOT_INVALID_UPDATE_INDEX;
+    return slot;
 }
 
-void d_FreeDeviceData(struct d_device_data_handle_t *handle)
+void d_FreeDeviceData(struct d_device_data_slot_t *slot)
 {
     // struct d_device_data_handle_t *slot = list_GetValidElement(&d_device_data_slots, slot_index);
 
-    if(handle != NULL && handle->data_index != D_DEVICE_DATA_HANDLE_INVALID_INDEX)
+    if(slot != NULL && slot->data_index != D_DEVICE_DATA_SLOT_INVALID_INDEX)
     {
-        uint32_t handle_index = handle->data_index;
-        list_RemoveElement(&d_device_data_handles, handle_index);
+        uint32_t slot_index = slot->data_index;
+        list_RemoveElement(&d_device_data_update_slots, slot_index);
 
-        if(handle_index < d_device_data_handles.cursor)
+        if(slot_index < d_device_data_update_slots.cursor)
         {
-            handle->device->draw_data = handle;
-            handle->data_index = handle_index;
-            d_QueueDeviceDataUpdate(handle);
+            slot->device->draw_data = slot;
+            slot->data_index = slot_index;
+            d_QueueDeviceDataUpdate(slot);
         }
     }
 }
 
-void d_QueueDeviceDataUpdate(struct d_device_data_handle_t *handle)
+void d_QueueDeviceDataUpdate(struct d_device_data_slot_t *slot)
 {
-    if(handle->update_index == D_DEVICE_DATA_HANDLE_INVALID_UPDATE_INDEX)
+    if(slot->update_index == D_DEVICE_DATA_SLOT_INVALID_UPDATE_INDEX)
     {
-        handle->update_index = list_AddElement(&d_device_data_update_queue, NULL);
-        struct d_device_data_handle_t **update_slot = (struct d_device_data_handle_t **)list_GetElement(&d_device_data_update_queue, handle->update_index);
-        *update_slot = handle;
+        slot->update_index = list_AddElement(&d_device_data_update_queue, NULL);
+        struct d_device_data_slot_t **update_slot = (struct d_device_data_slot_t **)list_GetElement(&d_device_data_update_queue, slot->update_index);
+        *update_slot = slot;
     }
 }
 
-int32_t d_CompareDataHandles(const void *a, const void *b)
+int32_t d_CompareDataSlots(const void *a, const void *b)
 {
-    struct d_device_data_handle_t *handle_a = *(struct d_device_data_handle_t **)a;
-    struct d_device_data_handle_t *handle_b = *(struct d_device_data_handle_t **)b;
+    struct d_device_data_slot_t *slot_a = *(struct d_device_data_slot_t **)a;
+    struct d_device_data_slot_t *slot_b = *(struct d_device_data_slot_t **)b;
 
-    if(handle_a->data_index > handle_b->data_index) return 1;
-    if(handle_a->data_index < handle_b->data_index) return -1;
+    if(slot_a->data_index > slot_b->data_index) return 1;
+    if(slot_a->data_index < slot_b->data_index) return -1;
     return 0;
 }
 
-vec2_t d_device_axes[] = {
-    [DEV_DEVICE_AXIS_POS_X] = {1, 0},
-    [DEV_DEVICE_AXIS_POS_Y] = {0, 1},
-    [DEV_DEVICE_AXIS_NEG_X] = {-1, 0},
-    [DEV_DEVICE_AXIS_NEG_Y] = {0, -1},
-};
+// vec2_t d_device_axes[] = {
+//     [DEV_DEVICE_AXIS_POS_X] = {1, 0},
+//     [DEV_DEVICE_AXIS_POS_Y] = {0, 1},
+//     [DEV_DEVICE_AXIS_NEG_X] = {-1, 0},
+//     [DEV_DEVICE_AXIS_NEG_Y] = {0, -1},
+// };
 
-void d_UpdateDevicesData()
+void d_UpdateDeviceData()
 {
     if(d_device_data_update_queue.cursor > 0)
     {
         glBindBuffer(GL_SHADER_STORAGE_BUFFER, d_device_data_buffer);
         struct d_device_data_t *device_data = glMapBuffer(GL_SHADER_STORAGE_BUFFER, GL_WRITE_ONLY);
 
-        list_Qsort(&d_device_data_update_queue, d_CompareDataHandles);
+        list_Qsort(&d_device_data_update_queue, d_CompareDataSlots);
 
         for(uint32_t update_index = 0; update_index < d_device_data_update_queue.cursor; update_index++)
         {
-            struct d_device_data_handle_t *handle = *(struct d_device_data_handle_t **)list_GetElement(&d_device_data_update_queue, update_index);
-            struct dev_t *device = handle->device;
+            struct d_device_data_slot_t *slot = *(struct d_device_data_slot_t **)list_GetElement(&d_device_data_update_queue, update_index);
+            struct dev_t *device = slot->device;
 
-            struct d_device_data_t *data = device_data + handle->data_index;
+            struct d_device_data_t *data = device_data + slot->data_index;
             struct dev_desc_t *desc = dev_device_descs + device->type;
-            float width = (float)(desc->width / 2);
-            float height = (float)(desc->height / 2);
-            vec2_t_sub(&data->position, &(vec2_t){device->position.x, device->position.y}, &(vec2_t){device->origin.x, device->origin.y});
+            float width = (float)(desc->size.x);
+            float height = (float)(desc->size.y);
+            vec2_t_sub(&data->position, &cvt_ivec2_t_vec2_t(device->position), &cvt_ivec2_t_vec2_t(device->origin));
+            // data->position = cvt_ivec2_t_vec2_t(device->position);
 
-            mat2_t orientation = {
-                .rows[0] = d_device_axes[device->x_axis],
-                .rows[1] = d_device_axes[device->y_axis],
-            };
+            mat2_t orientation = { .rows[0] = dev_device_axes[device->x_axis], .rows[1] = dev_device_axes[device->y_axis] };
 
-            // data->orientation.rows[0].x = width * device->orientation.rows[0].x;
-            // data->orientation.rows[0].y = width * device->orientation.rows[0].y;
-            // data->orientation.rows[1].x = height * device->orientation.rows[1].x;
-            // data->orientation.rows[1].y = height * device->orientation.rows[1].y;
             data->orientation.rows[0].x = width * orientation.rows[0].x;
             data->orientation.rows[0].y = width * orientation.rows[0].y;
             data->orientation.rows[1].x = height * orientation.rows[1].x;
@@ -752,11 +826,32 @@ void d_UpdateDevicesData()
             data->type = device->type;
             data->selected = device->selection_index != INVALID_LIST_INDEX;
 
-            handle->update_index = D_DEVICE_DATA_HANDLE_INVALID_UPDATE_INDEX;
+            slot->update_index = D_DEVICE_DATA_SLOT_INVALID_UPDATE_INDEX;
         }
 
         glUnmapBuffer(GL_SHADER_STORAGE_BUFFER);
-        glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
+        glBindBuffer(GL_SHADER_STORAGE_BUFFER, d_pin_data_buffer);
+
+        struct d_pin_data_t *device_pin_data = glMapBuffer(GL_SHADER_STORAGE_BUFFER, GL_WRITE_ONLY);
+        d_pin_count = 0;
+
+        for(uint32_t index = 0; index < dev_devices.cursor; index++)
+        {
+            struct dev_t *device = dev_GetDevice(index);
+            if(device != NULL)
+            {
+                struct dev_desc_t *desc = dev_device_descs + device->type;
+                struct d_pin_data_t *pin_data = device_pin_data + d_pin_count;
+                for(uint32_t pin_index = 0; pin_index < desc->pin_count; pin_index++)
+                {
+                    pin_data[pin_index].device_index = device->draw_data->data_index;
+                    pin_data[pin_index].pin_index = pin_index;
+                }
+                d_pin_count += desc->pin_count;
+            }
+        }
+
+        glUnmapBuffer(GL_SHADER_STORAGE_BUFFER);
     }
 
     d_device_data_update_queue.cursor = 0;
@@ -769,18 +864,24 @@ void d_Draw()
     d_model_view_projection_matrix[12] = -m_offset_x * d_model_view_projection_matrix[0];
     d_model_view_projection_matrix[13] = -m_offset_y * d_model_view_projection_matrix[5];
 
-    d_UpdateDevicesData();
+    d_UpdateDeviceData();
 
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, D_WIRE_COLOR_BINDING, d_wire_value_color_buffer);
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, D_DEVICE_TYPE_DEF_BINDING, d_device_type_def_buffer);
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, D_DEVICE_PIN_DEF_BINDING, d_device_pin_def_buffer);
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, D_PIN_DATA_BINDING, d_pin_data_buffer);
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, D_DEVICE_DATA_BINDING, d_device_data_buffer);
 
     glDisable(GL_CULL_FACE);
     glDisable(GL_SCISSOR_TEST);
     glEnable(GL_DEPTH_TEST);
     glEnable(GL_BLEND);
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
 
+    d_DrawGrid();
     d_DrawWires();
     d_DrawDevices();
-    d_DrawGrid();
+    d_DrawPins();
     
     if(m_draw_selection_box)
     {
@@ -817,6 +918,9 @@ void d_DrawGrid()
     glDisableVertexAttribArray(2);
 
     glUniformMatrix4fv(d_grid_shader_model_view_projection_matrix, 1, GL_FALSE, d_model_view_projection_matrix);
+    glUniform2fv(d_grid_shader_screen_size, 1, (vec2_t){m_window_width, m_window_height}.comps);
+
+    // glDepthFunc(GL_LESS);
 
     glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, (void *)(sizeof(uint32_t) * 2));
 }
@@ -826,9 +930,9 @@ void d_DrawDevices()
     glBindBuffer(GL_ARRAY_BUFFER, d_device_vertex_buffer);
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, d_device_index_buffer);
     // glBindBufferBase(GL_SHADER_STORAGE_BUFFER, D_DEVICE_TEX_COORDS_BINDING, d_device_tex_coords_buffer);
-    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, D_DEVICE_TYPE_DATA_BINDING, d_device_type_data_buffer);
-    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, D_PIN_DATA_BINDING, d_pin_data_buffer);
-    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, D_DEVICE_DATA_BINDING, d_device_data_buffer);
+    // glBindBufferBase(GL_SHADER_STORAGE_BUFFER, D_DEVICE_TYPE_DEF_BINDING, d_device_type_def_buffer);
+    // glBindBufferBase(GL_SHADER_STORAGE_BUFFER, D_PIN_DATA_BINDING, d_pin_data_buffer);
+    // glBindBufferBase(GL_SHADER_STORAGE_BUFFER, D_DEVICE_DATA_BINDING, d_device_data_buffer);
     // glBindBufferBase(GL_SHADER_STORAGE_BUFFER, D_DEVICE_DATA_BINDING, d_device_data_buffer);
     glUseProgram(d_device_shader);
     glEnableVertexAttribArray(0);
@@ -840,6 +944,8 @@ void d_DrawDevices()
     glUniformMatrix4fv(d_device_shader_model_view_projection_matrix, 1, GL_FALSE, d_model_view_projection_matrix);
     glBindTexture(GL_TEXTURE_2D, d_devices_texture);
     glUniform1i(d_device_shader_texture, 0);
+
+    // glDepthFunc(GL_LESS);
 
     uint32_t device_count = dev_devices.cursor - (dev_devices.free_indices_top + 1);
     // uint32_t update_count = device_count / D_DEVICE_DATA_BUFFER_SIZE;
@@ -1062,7 +1168,7 @@ void d_DrawWires()
 {
     glBindBuffer(GL_ARRAY_BUFFER, d_wire_vertex_buffer);
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
-    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, D_WIRE_COLOR_BINDING, d_wire_value_color_buffer);
+    // glBindBufferBase(GL_SHADER_STORAGE_BUFFER, D_WIRE_COLOR_BINDING, d_wire_value_color_buffer);
     glUseProgram(d_wire_shader);
     glEnableVertexAttribArray(0);
     glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, sizeof(struct d_wire_vert_t), (void *)(offsetof(struct d_wire_vert_t, position)));
@@ -1072,7 +1178,7 @@ void d_DrawWires()
     glUniformMatrix4fv(d_wire_shader_model_view_projection_matrix, 1, GL_FALSE, d_model_view_projection_matrix);
     glLineWidth(2.0f);
     glPointSize(4.0f);
-    glDepthFunc(GL_LESS);
+    // glDepthFunc(GL_LESS);
 
     uint32_t vertex_count = (w_wire_segs.cursor - (w_wire_segs.free_indices_top + 1)) * 2;
     uint32_t update_count = vertex_count / D_WIRE_VERTEX_BUFFER_SIZE;
@@ -1216,4 +1322,39 @@ void d_DrawWires()
         glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(struct d_wire_vert_t) * buffer_offset, d_wire_vertices);
         glDrawArrays(GL_LINES, 0, buffer_offset);
     }    
+}
+
+void d_DrawPins()
+{
+    // struct d_pin_data_t *device_pin_data = glMapNamedBuffer(d_pin_data_buffer, GL_WRITE_ONLY);
+    // uint32_t pin_count = 0;
+
+    // for(uint32_t index = 0; index < dev_devices.cursor; index++)
+    // {
+    //     struct dev_t *device = dev_GetDevice(index);
+    //     if(device != NULL)
+    //     {
+    //         struct dev_desc_t *desc = dev_device_descs + device->type;
+    //         struct d_pin_data_t *pin_data = device_pin_data + pin_count;
+    //         for(uint32_t pin_index = 0; pin_index < desc->pin_count; pin_index++)
+    //         {
+    //             pin_data[pin_index].device_index = device->draw_data->data_index;
+    //             pin_data[pin_index].pin_index = pin_index;
+    //         }
+    //         pin_count += desc->pin_count;
+    //     }
+    // }
+
+    // glUnmapNamedBuffer(d_pin_data_buffer);
+
+    glBindBuffer(GL_ARRAY_BUFFER, d_wire_vertex_buffer);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+
+    glUseProgram(d_pin_shader);
+    glEnableVertexAttribArray(0);
+    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, sizeof(struct d_device_vert_t), (void *)(offsetof(struct d_device_vert_t, position)));
+    glPointSize(8.0f);
+
+    glUniformMatrix4fv(d_pin_shader_model_view_projection_matrix, 1, GL_FALSE, d_model_view_projection_matrix);
+    glDrawArrays(GL_POINTS, 0, d_pin_count);
 }

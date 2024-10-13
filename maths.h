@@ -24,6 +24,8 @@ extern uint32_t vec3_t_clear_w[];
 #define array_count(array) (sizeof((array)) / sizeof((array)[0]))
 #define align_to(value, alignment) (((value) + (alignment) - 1) & ~((alignment) - 1))
 #define suitable_align(value) align_to(value, alignof(max_align_t))
+#define cvt_ivec2_t_vec2_t(iv2) ((vec2_t){(float)(iv2).x, (float)(iv2).y})
+#define cvt_vec2_t_ivec2_t(v2) ((ivec2_t){(int32_t)(v2).x, (int32_t)(v2).y})
 
 uint32_t bitscan_forward64(uint64_t value);
 
