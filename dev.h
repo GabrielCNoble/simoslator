@@ -198,19 +198,15 @@ struct dev_t *dev_CreateDevice(uint32_t type);
 
 void dev_DestroyDevice(struct dev_t *device);
 
-// void dev_UpdateDeviceElement(struct elem_t *element);
+void dev_UpdateDevice(void *base_element, struct elem_t *element);
 
-// void dev_UpdateDeviceRotation(struct dev_t *device);
+void dev_TranslateDevice(void *base_element, ivec2_t *translation);
 
-void dev_TranslateDevice(void *element, ivec2_t *translation);
+void dev_RotateDevice(void *base_element, ivec2_t *pivot, uint32_t ccw);
 
-void dev_RotateDevice(void *element, ivec2_t *pivot, uint32_t ccw);
+void dev_FlipDeviceV(void *base_element, ivec2_t *pivot);
 
-void dev_FlipDeviceV(void *element, ivec2_t *pivot);
-
-void dev_FlipDeviceH(void *element, ivec2_t *pivot);
-
-void dev_UpdateDevice(struct dev_t *device);
+void dev_FlipDeviceH(void *base_element, ivec2_t *pivot);
 
 void dev_ClearDevices();
 

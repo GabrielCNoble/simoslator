@@ -1094,17 +1094,58 @@ void w_DisconnectPin(struct wire_t *wire, struct dev_t *device, uint16_t pin)
     }
 }
 
-
-void w_TranslateWire(void *element, ivec2_t *translation)
+void w_UpdateWire(void *base_element, struct elem_t *element)
 {
-    struct wire_seg_t *segment = element;
+    struct wire_seg_t *segment = base_element;
+    struct dbvt_node_t *node = element->node;
+    // node->min.x = FLT_MAX;
+    // node->min.y = FLT_MAX;
+
+    // node->max.x = -FLT_MAX;
+    // node->max.y = -FLT_MAX;
+
+    for(uint32_t index = 0; index < 2; index++)
+    {
+        float length;
+        if(segment->ends[WIRE_SEG_END_INDEX].comps[index] > segment->ends[WIRE_SEG_START_INDEX].comps[index])
+        {
+            node->max.comps[index] = (float)segment->ends[WIRE_SEG_END_INDEX].comps[index];
+            node->min.comps[index] = (float)segment->ends[WIRE_SEG_START_INDEX].comps[index];
+            // element->size[index] = segment->ends[WIRE_SEG_END_INDEX][index] - segment->ends[WIRE_SEG_START_INDEX][index];
+            // length = (float)segment->ends[WIRE_SEG_END_INDEX][index] - (float)segment->ends[WIRE_SEG_START_INDEX][index];
+        }
+        else
+        {
+            // element->size[index] = segment->ends[WIRE_SEG_START_INDEX][index] - segment->ends[WIRE_SEG_END_INDEX][index];
+            // length = (float)segment->ends[WIRE_SEG_START_INDEX][index] - (float)segment->ends[WIRE_SEG_END_INDEX][index]; 
+            node->min.comps[index] = (float)segment->ends[WIRE_SEG_END_INDEX].comps[index];
+            node->max.comps[index] = (float)segment->ends[WIRE_SEG_START_INDEX].comps[index];
+        }
+
+        // length = length / 2.0f + ELEM_WIRE_PIXEL_WIDTH;
+
+        // node->min.comps[index] = fminf(node->min.comps[index], -length);
+        // node->max.comps[index] = fmaxf(node->max.comps[index], length);
+
+        // element->size[index] = element->size[index] / 2 + ELEM_WIRE_PIXEL_WIDTH;
+    }
+
+    // element->position[0] = (segment->ends[WIRE_SEG_START_INDEX][0] + segment->ends[WIRE_SEG_END_INDEX][0]) / 2;
+    // element->position[1] = (segment->ends[WIRE_SEG_START_INDEX][1] + segment->ends[WIRE_SEG_END_INDEX][1]) / 2;
+    segment->selection_index = element->selection_index;
+    segment->element = element;
+}
+
+void w_TranslateWire(void *base_element, ivec2_t *translation)
+{
+    struct wire_seg_t *segment = base_element;
     ivec2_t_add(&segment->ends[0], &segment->ends[0], translation);
     ivec2_t_add(&segment->ends[1], &segment->ends[1], translation);
 }
 
-void w_RotateWire(void *element, ivec2_t *pivot, uint32_t ccw)
+void w_RotateWire(void *base_element, ivec2_t *pivot, uint32_t ccw)
 {
-    struct wire_seg_t *segment = element;
+    struct wire_seg_t *segment = base_element;
 
     for(uint32_t index = 0; index < 2; index++)
     {
@@ -1123,21 +1164,21 @@ void w_RotateWire(void *element, ivec2_t *pivot, uint32_t ccw)
             rotated_pivot_wire_vec.y = -pivot_wire_vec.x;
         }
 
-        if(pivot->x != segment->ends[index].x || pivot->y != segment->ends[index].y)
-        {
-            ivec2_t position_adjust;
-            ivec2_t_sub(&position_adjust, &rotated_pivot_wire_vec, &pivot_wire_vec);
-            ivec2_t_add(&segment->ends[index], &segment->ends[index], &position_adjust);
-        }
+        // if(pivot->x != segment->ends[index].x || pivot->y != segment->ends[index].y)
+        // {
+        ivec2_t position_adjust;
+        ivec2_t_sub(&position_adjust, &rotated_pivot_wire_vec, &pivot_wire_vec);
+        ivec2_t_add(&segment->ends[index], &segment->ends[index], &position_adjust);
+        // }
     }
 }
 
-void w_FlipWireV(void *element, ivec2_t *pivot)
+void w_FlipWireV(void *base_element, ivec2_t *pivot)
 {
 
 }
 
-void w_FlipWireH(void *element, ivec2_t *pivot)
+void w_FlipWireH(void *base_element, ivec2_t *pivot)
 {
 
 }

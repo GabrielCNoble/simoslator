@@ -155,8 +155,8 @@ const char *d_pin_fragment_shader =
     "void main()\n"
     "{\n"
         "vec2 point_coords = gl_PointCoord.xy * 2.0f - vec2(1, 1);\n"
-        "float center_dist = length(point_coords);\n"
-        "float alpha = max(1.0f - max(pow(center_dist, 10.0f) - 0.1f, 0.0f), 0.0f);\n"
+        "float center_dist_sqrd = dot(point_coords, point_coords);\n"
+        "float alpha = 1.0f - smoothstep(0.45f, 0.48f, center_dist_sqrd);\n"
         "gl_FragColor = vec4(0.0f, 0.0f, 0.6 * alpha, alpha);\n"
     "}\n";
 

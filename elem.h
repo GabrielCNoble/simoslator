@@ -18,16 +18,17 @@ enum ELEM_TYPES
     ELEM_TYPE_LAST
 };
 
+/* forward declaration */
+struct elem_t;
+
 struct elem_funcs_t
 {
+    void (*Update)(void *base_elem, struct elem_t *elem);
     void (*Translate)(void *base_elem, ivec2_t *translation);
     void (*Rotate)(void *base_elem, ivec2_t *pivot, uint32_t ccw);
     void (*FlipVertical)(void *base_elem, ivec2_t *pivot);
     void (*FlipHorizontal)(void *base_elem, ivec2_t *pivot);
 };
-
-/* forward declaration */
-struct elem_t;
 
 struct elem_link_t
 {
@@ -42,11 +43,30 @@ struct elem_t
     void *                      base_object; 
     uint32_t                    type;
     struct dbvt_node_t *        node;
+    ivec2_t                     position;
     // int32_t                     position[2];
     // int32_t                     size[2];
     struct m_object_link_t *    first_link;
     struct m_object_link_t *    last_link;
     uint64_t                    selection_index;
+};
+
+struct elem_create_args_t
+{
+    uint32_t type;
+
+    union
+    {
+        struct
+        {
+            uint32_t type;
+        } device;
+
+        struct 
+        {
+
+        } segment;
+    };
 };
 
 struct elem_t *elem_CreateElement(uint32_t type, void *base_object);

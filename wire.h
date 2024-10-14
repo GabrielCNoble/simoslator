@@ -225,13 +225,15 @@ void w_DisconnectJunctionFromPin(struct wire_junc_t *junction);
 
 void w_DisconnectPin(struct wire_t *wire, struct dev_t *device, uint16_t pin);
 
-void w_TranslateWire(void *element, ivec2_t *translation);
+void w_UpdateWire(void *base_element, struct elem_t *element);
 
-void w_RotateWire(void *element, ivec2_t *pivot, uint32_t ccw);
+void w_TranslateWire(void *base_element, ivec2_t *translation);
 
-void w_FlipWireV(void *element, ivec2_t *pivot);
+void w_RotateWire(void *base_element, ivec2_t *pivot, uint32_t ccw);
 
-void w_FlipWireH(void *element, ivec2_t *pivot);
+void w_FlipWireV(void *base_element, ivec2_t *pivot);
+
+void w_FlipWireH(void *base_element, ivec2_t *pivot);
 
 
 #endif

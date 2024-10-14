@@ -130,10 +130,10 @@ void m_DestroyEditorState(struct m_editor_state_t *editor_state)
 
 void m_SelectElement(struct elem_t *element, uint32_t multiple)
 {
-    vec2_t bounding_box_center;
-    vec2_t_add(&bounding_box_center, &element->node->max.xy, &element->node->min.xy);
-    vec2_t_scale(&bounding_box_center, &bounding_box_center, 0.5f);
-    ivec2_t element_position = cvt_vec2_t_ivec2_t(bounding_box_center);
+    // vec2_t bounding_box_center;
+    // vec2_t_add(&bounding_box_center, &element->node->max.xy, &element->node->min.xy);
+    // vec2_t_scale(&bounding_box_center, &bounding_box_center, 0.5f);
+    // ivec2_t element_position = cvt_vec2_t_ivec2_t(bounding_box_center);
 
     if(element->selection_index != INVALID_LIST_INDEX)
     {
@@ -150,7 +150,7 @@ void m_SelectElement(struct elem_t *element, uint32_t multiple)
                 elem_UpdateElement(moved_element);
             }
 
-            ivec2_t_sub(&m_selections_center, &m_selections_center, &element_position);
+            ivec2_t_sub(&m_selections_center, &m_selections_center, &element->position);
             return;
         }
     }
@@ -162,7 +162,7 @@ void m_SelectElement(struct elem_t *element, uint32_t multiple)
 
     element->selection_index = list_AddElement(&m_selections, &element);
     elem_UpdateElement(element);
-    ivec2_t_add(&m_selections_center, &m_selections_center, &element_position);
+    ivec2_t_add(&m_selections_center, &m_selections_center, &element->position);
 }
 
 void m_ClearSelections()
@@ -187,36 +187,18 @@ void m_DeleteSelections()
     }
 
     m_selections.cursor = 0;
+    m_selections_center = (ivec2_t){};
 }
 
 void m_TranslateSelections(ivec2_t *translation) 
 {
+    m_selections_center = (ivec2_t){};
+
     for(uint32_t index = 0; index < m_selections.cursor; index++)
     {
         struct elem_t *element = *(struct elem_t **)list_GetElement(&m_selections, index);
         elem_Translate(element, translation);
-        // switch(element->type)
-        // {
-        //     case ELEM_TYPE_DEVICE:
-        //     {
-        //         struct dev_t *device = element->base_object; 
-        //         device->position.x += dx;
-        //         device->position.y += dy;
-        //     }
-        //     break;
-
-        //     case ELEM_TYPE_SEGMENT:
-        //     {
-        //         struct wire_seg_t *segment = element->base_object;
-        //         segment->ends[WIRE_SEG_START_INDEX].x += dx;
-        //         segment->ends[WIRE_SEG_START_INDEX].y += dy;
-        //         segment->ends[WIRE_SEG_END_INDEX].x += dx;
-        //         segment->ends[WIRE_SEG_END_INDEX].y += dy;
-        //     }
-        //     break;
-        // }
-
-        elem_UpdateElement(element);
+        ivec2_t_add(&m_selections_center, &m_selections_center, &element->position);
     }
 }
 
@@ -258,11 +240,6 @@ void m_GetTypedElementsUnderMouse(uint32_t type, struct list_t *elements)
 {
     elem_GetTypedElementsInsideBox(type, &(vec2_t){m_mouse_pos.x, m_mouse_pos.y}, &(vec2_t){m_mouse_pos.x, m_mouse_pos.y}, elements);
 }
-
-// struct m_object_t *m_GetObjectUnderMouse()
-// {
-    
-// }
 
 struct m_picked_element_t m_GetPinUnderMouse()
 {

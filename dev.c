@@ -619,16 +619,41 @@ const char *dev_axis_names[] = {
 //     [DEV_DEVICE_AXIS_POS_X] = DEV_DEVICE_AXIS_POS_Y,
 // };
 
-void dev_TranslateDevice(void *element, ivec2_t *translation)
+void dev_UpdateDevice(void *base_element, struct elem_t *element)
 {
-    struct dev_t *device = element;
-    ivec2_t_add(&device->position, &device->position, translation);
-    dev_UpdateDevice(device);
+    struct dev_t *device = base_element;
+    struct dev_desc_t *desc = dev_device_descs + device->type;
+    struct dbvt_node_t *node = element->node;
+
+    device->origin.x = desc->origin.comps[device->x_axis & DEV_DEVICE_AXIS_POS_Y];
+    device->origin.y = desc->origin.comps[!(device->x_axis & DEV_DEVICE_AXIS_POS_Y)];
+
+    ivec2_t device_position;
+    ivec2_t_sub(&device_position, &device->position, &device->origin);
+
+    dev_GetDeviceLocalBoxPosition(device, &node->min.xy, &node->max.xy);
+    
+    node->min.x += device_position.x;
+    node->min.y += device_position.y;
+    node->max.x += device_position.x;
+    node->max.y += device_position.y;
+
+    device->selection_index = element->selection_index;
+    element->position = device->position;
+
+    d_QueueDeviceDataUpdate(device->draw_data);
 }
 
-void dev_RotateDevice(void *element, ivec2_t *pivot, uint32_t ccw)
+void dev_TranslateDevice(void *base_element, ivec2_t *translation)
 {
-    struct dev_t *device = element;
+    struct dev_t *device = base_element;
+    ivec2_t_add(&device->position, &device->position, translation);
+    // dev_UpdateDevice(device);
+}
+
+void dev_RotateDevice(void *base_element, ivec2_t *pivot, uint32_t ccw)
+{
+    struct dev_t *device = base_element;
 
     if(device != NULL)
     {
@@ -653,20 +678,20 @@ void dev_RotateDevice(void *element, ivec2_t *pivot, uint32_t ccw)
             rotated_pivot_device_vec.y = -pivot_device_vec.x;
         }
 
-        if(pivot->x != device->position.x || pivot->y != device->position.y)
-        {
-            ivec2_t position_adjust;
-            ivec2_t_sub(&position_adjust, &rotated_pivot_device_vec, &pivot_device_vec);
-            ivec2_t_add(&device->position, &device->position, &position_adjust);
-        }
+        // if(pivot->x != device->position.x || pivot->y != device->position.y)
+        // {
+        ivec2_t position_adjust;
+        ivec2_t_sub(&position_adjust, &rotated_pivot_device_vec, &pivot_device_vec);
+        ivec2_t_add(&device->position, &device->position, &position_adjust);
+        // }
 
-        dev_UpdateDevice(device);
+        // dev_UpdateDevice(device);
     }
 }
 
-void dev_FlipDeviceV(void *element, ivec2_t *pivot)
+void dev_FlipDeviceV(void *base_element, ivec2_t *pivot)
 {
-    struct dev_t *device = element;
+    struct dev_t *device = base_element;
     if(device != NULL)
     {
         // mat2_t flip_matrix = {1.0f, 0.0f, 0.0f, -1.0f};
@@ -687,13 +712,13 @@ void dev_FlipDeviceV(void *element, ivec2_t *pivot)
         int32_t pivot_distance = pivot->y - device->position.y;
         device->position.y += pivot_distance * 2;
 
-        dev_UpdateDevice(device);
+        // dev_UpdateDevice(device);
     }
 }
 
-void dev_FlipDeviceH(void *element, ivec2_t *pivot)
+void dev_FlipDeviceH(void *base_element, ivec2_t *pivot)
 {
-    struct dev_t *device = element;
+    struct dev_t *device = base_element;
     if(device != NULL)
     {
         // mat2_t flip_matrix = {-1.0f, 0.0f, 0.0f, 1.0f};
@@ -711,16 +736,8 @@ void dev_FlipDeviceH(void *element, ivec2_t *pivot)
         int32_t pivot_distance = pivot->x - device->position.x;
         device->position.x += pivot_distance * 2;
 
-        dev_UpdateDevice(device);
+        // dev_UpdateDevice(device);
     }
-}
-
-void dev_UpdateDevice(struct dev_t *device)
-{
-    struct dev_desc_t *desc = dev_device_descs + device->type;
-    device->origin.x = desc->origin.comps[device->x_axis & DEV_DEVICE_AXIS_POS_Y];
-    device->origin.y = desc->origin.comps[!(device->x_axis & DEV_DEVICE_AXIS_POS_Y)];
-    d_QueueDeviceDataUpdate(device->draw_data);
 }
 
 void dev_ClearDevices()
@@ -779,8 +796,9 @@ void dev_GetDeviceLocalPinPosition(struct dev_t *device, uint16_t pin, ivec2_t *
 void dev_GetDeviceLocalBoxPosition(struct dev_t *device, vec2_t *min, vec2_t *max)
 {
     struct dev_desc_t *dev_desc = dev_device_descs + device->type;
-    vec2_t scale = cvt_ivec2_t_vec2_t(dev_desc->size);
-    // vec2_t scale = {(float)(dev_desc->width >> 1), (float)(dev_desc->height >> 1)}; 
+    // vec2_t scale = cvt_ivec2_t_vec2_t(dev_desc->size);
+    vec2_t scale = {(float)(dev_desc->size.x >> 1), (float)(dev_desc->size.y >> 1)}; 
+    uint32_t x_axis_index = device->x_axis & DEV_DEVICE_AXIS_POS_Y;
     // float width = (float)(dev_desc->width >> 1);
     // float height = (float)(dev_desc->height >> 1);
 
@@ -788,14 +806,10 @@ void dev_GetDeviceLocalBoxPosition(struct dev_t *device, vec2_t *min, vec2_t *ma
     // max->x = fabsf(max->x);
     // max->y = fabsf(max->y);
 
-    max->x = scale.comps[device->x_axis & DEV_DEVICE_AXIS_POS_Y];
-    max->y = scale.comps[!(device->x_axis & DEV_DEVICE_AXIS_POS_Y)];
-
-    // max->x = fabsf(width * device->orientation[0][0] + height * device->orientation[1][0]);
-    // max->y = fabsf(width * device->orientation[0][1] + height * device->orientation[1][1]);
-
-    min->x = -max->x;
-    min->y = -max->y;
+    max->x = scale.comps[x_axis_index] - device->origin.comps[x_axis_index];
+    max->y = scale.comps[!x_axis_index] - device->origin.comps[!x_axis_index];
+    min->x = -scale.comps[x_axis_index] - device->origin.comps[x_axis_index];
+    min->y = -scale.comps[!x_axis_index] - device->origin.comps[!x_axis_index];
 
     // min[0] = -width;
     // min[1] = -height;
