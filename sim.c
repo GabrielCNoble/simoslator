@@ -287,7 +287,7 @@ void sim_BeginSimulation()
         struct sim_dev_data_t *dev_sim_data = list_GetElement(&sim_dev_data, device->sim_data);
         struct sim_dev_pin_t *sim_dev_pin = list_GetElement(&sim_dev_pins, dev_sim_data->first_pin + sim_wire_pin->pin);
         // struct wire_t *wire = w_GetWire(sim_dev_pin->wire);
-        struct wire_junc_t *junction = w_GetWireJunction(sim_dev_pin->wire);
+        struct wire_junc_t *junction = w_GetJunction(sim_dev_pin->wire);
         sim_dev_pin->wire = junction->base.wire->sim_data;
     }
 

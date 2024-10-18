@@ -60,7 +60,7 @@ void elem_DestroyElement(struct elem_t *element)
             if(segment->base.element_index != INVALID_POOL_INDEX)
             {
                 w_DisconnectSegment(segment);
-                w_FreeWireSegment(segment);
+                w_FreeSegment(segment);
             }
         }
         break;

@@ -138,7 +138,8 @@ struct dev_t
     // int32_t                     origin[2];
     // float                       orientation[2][2];
     // mat2_t                          orientation;
-    struct d_device_data_slot_t *   draw_data;
+    // struct d_device_data_slot_t *   draw_data;
+    struct d_draw_data_slot_t *     draw_data;
     struct dev_pin_block_t *        pin_blocks;
     uint32_t                        type : 28;
     uint32_t                        x_axis : 2;

@@ -95,7 +95,8 @@ struct m_picked_element_t
 
 union m_wire_seg_t
 {
-    struct wire_seg_pos_t     seg_pos;
+    // struct wire_seg_pos_t     seg_pos;
+    ivec2_t                   position;
     struct wire_seg_t *       segment;
 };
 
@@ -177,8 +178,8 @@ struct m_wire_record_t
 struct m_segment_record_t
 {
     uintptr_t deserialized_index;
-    uintptr_t segments[2];
-    ivec2_t   ends[2];
+    uintptr_t junctions[2];
+    // ivec2_t   ends[2];
 };
 
 struct m_junction_record_t 
@@ -220,7 +221,7 @@ void m_FlipSelectionsH();
 
 void m_FlipSelectionsV();
 
-struct wire_t *m_CreateWire(struct m_picked_element_t *first_contact, struct m_picked_element_t *second_contact, struct list_t *segments);
+struct wire_t *m_CreateWire(struct m_picked_element_t *first_element, struct m_picked_element_t *second_element, struct list_t *segments);
 
 void m_SerializeCircuit(void **file_buffer, size_t *file_buffer_size);
 

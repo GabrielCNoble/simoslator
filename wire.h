@@ -89,15 +89,28 @@ enum WIRE_SEGMENT_TYPES
     WIRE_SEGMENT_TYPE_LAST,
 };
 
-#define WIRE_SEG_START_INDEX 0
-#define WIRE_SEG_END_INDEX   1
+#define WIRE_SEG_HEAD_INDEX 0
+#define WIRE_SEG_TAIL_INDEX 1
+#define WIRE_SEG_ALLOC_JUNC_HEAD (1 << WIRE_SEG_HEAD_INDEX)
+#define WIRE_SEG_ALLOC_JUNC_TAIL (1 << WIRE_SEG_TAIL_INDEX)
+#define WIRE_SEG_ALLOC_JUNC_BOTH (WIRE_SEG_ALLOC_JUNC_HEAD | WIRE_SEG_ALLOC_JUNC_TAIL)
+
 
 struct wire_seg_junc_t
 {
     struct wire_junc_t *     junction;
-    struct wire_seg_t *      next;
-    struct wire_seg_t *      prev;
+    struct wire_seg_t *      segment;
+    // struct wire_seg_junc_t * links[2];
+
+    struct wire_seg_junc_t * next;
+    struct wire_seg_junc_t * prev;
 };
+
+// struct wire_junc_seg_t
+// {
+//     struct wire_junc_seg_t *    links[2];
+//     struct wire_seg_t *         segment;
+// };
 
 struct wire_elem_t
 {
@@ -109,15 +122,24 @@ struct wire_junc_t
 {
     struct wire_elem_t              base;
     // int32_t *                       pos;
-    ivec2_t *                       pos;
-    struct wire_seg_t *             first_segment;
-    struct wire_seg_t *             last_segment;
+    // ivec2_t *                       pos;
+    ivec2_t                         position;
+    // struct wire_seg_t *             first_segment;
+    // struct wire_seg_t *             last_segment;
+    struct wire_seg_junc_t *        first_segment;
+    struct wire_seg_junc_t *        last_segment;
     struct wire_pin_t               pin;
     struct wire_junc_t *            wire_next;
     struct wire_junc_t *            wire_prev;
+
+    /* those two could probably be in an union */
     uint64_t                        traversal_id;
+    uint64_t                        serialized_index;
+    struct d_draw_data_slot_t *     draw_data;
+
     uint32_t                        selection_index;
     uint32_t                        segment_count;
+    // uint32_t                        draw_data;
 };
 
 struct wire_seg_t
@@ -127,15 +149,21 @@ struct wire_seg_t
     /* this is here to simplify handling segments created during junction addition/removal */
     void *                          element;
 
-    ivec2_t                         ends[2];
-    struct wire_seg_junc_t          junctions[2];
+    // ivec2_t                         ends[2];
+    struct wire_seg_junc_t          ends[2];
+    // struct wire_junc_t *            ends[2];
 
     /* segments may be linked to one another in whatever orientation */
-    struct wire_seg_t *             segments[2];
+    // struct wire_seg_t *             segments[2];
     struct wire_seg_t *             wire_next;
     struct wire_seg_t *             wire_prev;
+
+    /* those two could probably be in an union */
     uint64_t                        traversal_id;
     uint64_t                        serialized_index; 
+    struct d_draw_data_slot_t *     draw_data;
+
+    // uint32_t                        draw_data;
     uint32_t                        selection_index;
 };
 
@@ -173,37 +201,42 @@ void w_ClearWires();
 
 struct wire_t *w_GetWire(uint32_t wire_index);
 
-struct wire_seg_t *w_AllocWireSegment(struct wire_t *wire);
+struct wire_seg_t *w_AllocSegment(struct wire_t *wire, uint32_t alloc_junc_bitmask);
 
-void w_FreeWireSegment(struct wire_seg_t *segment);
+void w_FreeSegment(struct wire_seg_t *segment);
 
 void w_LinkSegmentToWire(struct wire_t *wire, struct wire_seg_t *segment);
 
 void w_UnlinkSegmentFromWire(struct wire_seg_t *segment);
 
-struct wire_junc_t *w_AllocWireJunction(struct wire_t *wire); 
+struct wire_junc_t *w_AllocJunction(struct wire_t *wire); 
 
-void w_FreeWireJunction(struct wire_junc_t *junction);
+void w_FreeJunction(struct wire_junc_t *junction);
 
-struct wire_junc_t *w_GetWireJunction(uint64_t junction_index);
+struct wire_junc_t *w_GetJunction(uint64_t junction_index);
 
 void w_LinkJunctionToWire(struct wire_t *wire, struct wire_junc_t *junction);
 
 void w_UnlinkJunctionFromWire(struct wire_junc_t *junction);
 
-void w_LinkSegmentToJunction(struct wire_seg_t *segment, struct wire_junc_t *junction, uint32_t link_index);
+void w_LinkJunctionAndSegment(struct wire_seg_t *segment, struct wire_junc_t *junction, uint32_t link_index);
 
-void w_UnlinkSegmentFromJunction(struct wire_seg_t *segment, struct wire_junc_t *junction);
+struct wire_junc_t *w_UnlinkJunctionAndSegment(struct wire_seg_t *segment, struct wire_junc_t *junction, uint32_t free_empty_junction);
 
-void w_UnlinkSegmentFromJunctionLinkIndex(struct wire_seg_t *segment, uint32_t link_index);
+struct wire_junc_t *w_UnlinkJunctionFromSegmentEndIndex(struct wire_seg_t *segment, uint32_t segment_end_index, uint32_t free_empty_junction);
 
-struct wire_junc_t *w_AddJunction(struct wire_seg_t *segment, ivec2_t *position);
+struct wire_junc_t *w_SplitSegment(struct wire_seg_t *segment, ivec2_t *position);
 
-struct wire_junc_t *w_AddJunctionAtMiddle(struct wire_seg_t *segment, ivec2_t *position);
+void w_JoinSegments(struct wire_seg_t *segment0, struct wire_seg_t *segment1);
 
-struct wire_junc_t *w_AddJunctionAtTip(struct wire_seg_t *segment, uint32_t tip_index);
 
-struct wire_seg_t *w_RemoveJunction(struct wire_junc_t *junction);
+// struct wire_junc_t *w_AddJunction(struct wire_seg_t *segment, ivec2_t *position);
+
+// struct wire_junc_t *w_AddJunctionAtMiddle(struct wire_seg_t *segment, ivec2_t *position);
+
+// struct wire_junc_t *w_AddJunctionAtTip(struct wire_seg_t *segment, uint32_t tip_index);
+
+// struct wire_seg_t *w_RemoveJunction(struct wire_junc_t *junction);
 
 struct wire_t *w_MergeWires(struct wire_t *wire_a, struct wire_t *wire_b);
 

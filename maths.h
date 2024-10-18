@@ -41,6 +41,8 @@ void ivec2_t_add(ivec2_t *r, ivec2_t *a, ivec2_t *b);
 
 void ivec2_t_sub(ivec2_t *r, ivec2_t *a, ivec2_t *b);
 
+uint32_t ivec2_t_equal(ivec2_t *a, ivec2_t *b);
+
 /*================== vec2_t ================== */
 typedef union
 {

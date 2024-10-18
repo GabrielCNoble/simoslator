@@ -52,6 +52,10 @@ void ivec2_t_sub(ivec2_t *r, ivec2_t *a, ivec2_t *b)
     *r = (ivec2_t){a->x - b->x, a->y - b->y};
 }
 
+uint32_t ivec2_t_equal(ivec2_t *a, ivec2_t *b)
+{
+    return a->x == b->x && a->y == b->y;
+}
 
 /*================== vec2_t ================== */
 

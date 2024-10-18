@@ -495,7 +495,7 @@ struct dev_t *dev_CreateDevice(uint32_t type)
     }
 
     // dev_UpdateDeviceRotation(device);
-    device->draw_data = d_AllocDeviceData();
+    device->draw_data = d_AllocDeviceData(device);
     device->draw_data->device = device;
     device->element = elem_CreateElement(ELEM_TYPE_DEVICE, device);
     
@@ -525,7 +525,7 @@ void dev_DestroyDevice(struct dev_t *device)
                 struct dev_pin_t *pin = pin_block->pins + pin_index;
                 if(pin->junction != INVALID_POOL_INDEX)
                 {
-                    struct wire_junc_t *junction = w_GetWireJunction(pin->junction);
+                    struct wire_junc_t *junction = w_GetJunction(pin->junction);
                     w_DisconnectJunctionFromPin(junction);
                     // struct wire_t *wire = w_GetWire(pin->wire);
                     // w_DisconnectPin(wire, device, )

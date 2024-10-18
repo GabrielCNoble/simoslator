@@ -72,6 +72,25 @@
         "d_pin_data_t d_pin_data[];\n"                                                  \
     "};\n"                                                                              \
 
+#define D_WIRE_DATA_BUFFER                                                              \
+    "struct d_junction_data_t\n"                                                        \
+    "{\n"                                                                               \
+        "float position[2];\n"                                                          \
+    "};\n"                                                                              \
+    "struct d_segment_data_t\n"                                                         \
+    "{\n"                                                                               \
+        "uint ends[2];\n"                                                               \
+        "uint selected;\n"                                                              \
+    "};\n"                                                                              \
+    "layout (std430) buffer d_junction_data_buffer\n"                                   \
+    "{\n"                                                                               \
+        "d_junction_data_t d_junction_data[];\n"                                        \
+    "};\n"                                                                              \
+    "layout (std430) buffer d_segment_data_buffer\n"                                    \
+    "{\n"                                                                               \
+        "d_segment_data_t d_segment_data[];\n"                                          \
+    "};\n"                                                                              \
+
 const char *d_device_vertex_shader =
     D_VERSION_EXTS
 
@@ -238,8 +257,9 @@ const char *d_output_mask_fragment_shader =
 const char *d_wire_vertex_shader = 
     D_VERSION_EXTS
 
-    "layout (location = 0) in vec4 d_position;\n"
-    "layout (location = 1) in int d_value_sel;\n"
+    D_WIRE_DATA_BUFFER
+    // "layout (location = 0) in vec4 d_position;\n"
+    // "layout (location = 1) in int d_value_sel;\n"
 
     "uniform mat4 d_model_view_projection_matrix;\n"
     "flat out int wire_value;\n"
@@ -247,9 +267,14 @@ const char *d_wire_vertex_shader =
 
     "void main()\n"
     "{\n"
-        "gl_Position = d_model_view_projection_matrix * vec4(d_position.xy, 0.1f, 1.0f);\n"
-        "wire_value = d_value_sel & 0xffff;\n"
-        "selected = d_value_sel >> 16;"
+        "d_segment_data_t segment_data = d_segment_data[gl_InstanceID];\n"
+        "d_junction_data_t junction_data = d_junction_data[segment_data.ends[gl_VertexID]];\n"
+        // "gl_Position = d_model_view_projection_matrix * vec4(d_position.xy, 0.1f, 1.0f);\n"
+        "gl_Position = d_model_view_projection_matrix * vec4(junction_data.position[0], junction_data.position[1], 0.1f, 1.0f);\n"
+        // "wire_value = d_value_sel & 0xffff;\n"
+        // "selected = d_value_sel >> 16;"
+        "wire_value = 0;\n"
+        "selected = 0;\n"
     "}\n";
 
 const char *d_wire_fragment_shader = 
@@ -334,8 +359,8 @@ const char *d_grid_fragment_shader =
 
 #define D_DEVICE_TYPE_DATA_BUFFER_SIZE  DEV_DEVICE_TYPE_LAST
 
-#define D_WIRE_VERTEX_BUFFER_SIZE       0xfffff
-#define D_WIRE_VERTEX_BUFFER_COUNT      8
+// #define D_WIRE_VERTEX_BUFFER_SIZE       0xfffff
+// #define D_WIRE_VERTEX_BUFFER_COUNT      8
 
 #define D_7SEG_DISPLAY_DATA_BUFFER_SIZE 0xfff
 
@@ -357,6 +382,7 @@ GLuint                      d_device_data_buffer;
 GLuint                      d_pin_data_buffer;
 uint32_t                    d_pin_count;
 
+
 // uint32_t                    d_pin_data_cursor = 0;
 // struct d_pin_data_t *       d_pin_data;
 
@@ -365,7 +391,7 @@ GLuint                      d_device_type_def_buffer;
 GLuint                      d_device_pin_def_buffer;
 
 struct list_t               d_device_data_update_queue;
-struct list_t               d_device_data_update_slots;
+struct list_t               d_device_data_slots;
 GLuint                      d_devices_texture;
 uint32_t                    d_devices_texture_width;
 uint32_t                    d_devices_texture_height;
@@ -374,8 +400,14 @@ GLuint                      d_output_mask_texture;
 
 GLuint                      d_wire_shader;
 uint32_t                    d_wire_shader_model_view_projection_matrix;
-GLuint                      d_wire_vertex_buffer;
-struct d_wire_vert_t *      d_wire_vertices;
+GLuint                      d_junction_data_buffer;
+GLuint                      d_segment_data_buffer;
+struct list_t               d_junction_data_slots;
+struct list_t               d_junction_data_update_queue;
+struct list_t               d_segment_data_slots;
+struct list_t               d_segment_data_update_queue;
+// GLuint                      d_wire_vertex_buffer;
+// struct d_wire_vert_t *      d_wire_vertices;
 
 GLuint                      d_7seg_mask_shader;
 uint32_t                    d_7seg_mask_shader_model_view_projection_matrix;
@@ -444,7 +476,7 @@ extern int32_t              m_selection_box_max[2];
 extern int32_t              m_mouse_pos[2];
 extern int32_t              m_place_device_x;
 extern int32_t              m_place_device_y;
-extern struct list_t        m_wire_seg_pos;
+extern struct list_t        m_wire_segs;
 extern struct list_t        m_objects[];
 // extern struct list_t        m_wire_segments;
 
@@ -487,8 +519,8 @@ void d_Init()
     glGenBuffers(1, &d_device_data_buffer);
     glBindBuffer(GL_SHADER_STORAGE_BUFFER, d_device_data_buffer);
     glBufferData(GL_SHADER_STORAGE_BUFFER, D_DEVICE_DATA_BUFFER_SIZE * sizeof(struct d_device_data_t), NULL, GL_DYNAMIC_DRAW);
-    d_device_data_update_slots = list_Create(sizeof(struct d_device_data_slot_t), 16384);
-    d_device_data_update_queue = list_Create(sizeof(struct dev_t *), 16384);
+    d_device_data_slots = list_Create(sizeof(struct d_draw_data_slot_t), 16384);
+    d_device_data_update_queue = list_Create(sizeof(struct d_draw_data_slot_t *), 16384);
 
     glGenBuffers(1, &d_pin_data_buffer);
     glBindBuffer(GL_SHADER_STORAGE_BUFFER, d_pin_data_buffer);
@@ -504,10 +536,19 @@ void d_Init()
     glBufferData(GL_SHADER_STORAGE_BUFFER, D_7SEG_DISPLAY_DATA_BUFFER_SIZE * sizeof(uint32_t), NULL, GL_DYNAMIC_DRAW);
     d_output_data = calloc(D_7SEG_DISPLAY_DATA_BUFFER_SIZE, sizeof(uint32_t));
 
-    glGenBuffers(1, &d_wire_vertex_buffer);
-    glBindBuffer(GL_ARRAY_BUFFER, d_wire_vertex_buffer);
-    glBufferData(GL_ARRAY_BUFFER, D_WIRE_VERTEX_BUFFER_SIZE * sizeof(struct d_wire_vert_t), NULL, GL_STATIC_DRAW);
-    d_wire_vertices = calloc(D_WIRE_VERTEX_BUFFER_SIZE, sizeof(struct d_wire_vert_t));
+    glGenBuffers(1, &d_junction_data_buffer);
+    glBindBuffer(GL_SHADER_STORAGE_BUFFER, d_junction_data_buffer);
+    glBufferData(GL_SHADER_STORAGE_BUFFER, D_JUNCTION_DATA_BUFFER_SIZE * sizeof(struct d_junction_data_t), NULL, GL_DYNAMIC_DRAW);
+
+    glGenBuffers(1, &d_segment_data_buffer);
+    glBindBuffer(GL_SHADER_STORAGE_BUFFER, d_segment_data_buffer);
+    glBufferData(GL_SHADER_STORAGE_BUFFER, D_SEGMENT_DATA_BUFFER_SIZE * sizeof(struct d_segment_data_t), NULL, GL_DYNAMIC_DRAW);
+    d_junction_data_slots = list_Create(sizeof(struct d_draw_data_slot_t), 16384);
+    d_junction_data_update_queue = list_Create(sizeof(struct d_draw_data_slot_t *), 16384);
+    d_segment_data_slots = list_Create(sizeof(struct d_draw_data_slot_t), 16384);
+    d_segment_data_update_queue = list_Create(sizeof(struct d_draw_data_slot_t *), 16384);
+
+    // d_wire_vertices = calloc(D_WIRE_VERTEX_BUFFER_SIZE, sizeof(struct d_wire_vert_t));
 
     glGenBuffers(1, &d_selection_box_vertex_buffer);
     glBindBuffer(GL_ARRAY_BUFFER, d_selection_box_vertex_buffer);
@@ -533,12 +574,20 @@ void d_Init()
     glShaderStorageBlockBinding(d_pin_shader, pin_def_block, D_DEVICE_PIN_DEF_BINDING);
     GLuint pin_data_block = glGetProgramResourceIndex(d_pin_shader, GL_SHADER_STORAGE_BLOCK, "d_pin_data_buffer");
     glShaderStorageBlockBinding(d_pin_shader, pin_data_block, D_PIN_DATA_BINDING);
+
     /**************************************/
+
     d_wire_shader = d_CreateShader(d_wire_vertex_shader, d_wire_fragment_shader, "wire_shader");
     d_wire_shader_model_view_projection_matrix = glGetUniformLocation(d_wire_shader, "d_model_view_projection_matrix");
-    uint32_t wire_colors_block = glGetProgramResourceIndex(d_wire_shader, GL_SHADER_STORAGE_BLOCK, "d_wire_colors");
+    GLuint wire_colors_block = glGetProgramResourceIndex(d_wire_shader, GL_SHADER_STORAGE_BLOCK, "d_wire_colors");
     glShaderStorageBlockBinding(d_wire_shader, wire_colors_block, D_WIRE_COLOR_BINDING);
+    GLuint junction_data_block = glGetProgramResourceIndex(d_wire_shader, GL_SHADER_STORAGE_BLOCK, "d_junction_data_buffer");
+    glShaderStorageBlockBinding(d_wire_shader, junction_data_block, D_JUNCTION_DATA_BINDING);
+    GLuint segment_data_block = glGetProgramResourceIndex(d_wire_shader, GL_SHADER_STORAGE_BLOCK, "d_segment_data_buffer");
+    glShaderStorageBlockBinding(d_wire_shader, segment_data_block, D_SEGMENT_DATA_BINDING);
+
     /**************************************/
+
     d_7seg_mask_shader = d_CreateShader(d_7seg_mask_vertex_shader, d_7seg_mask_fragment_shader, "7seg_mask_shader");
     d_7seg_mask_shader_model_view_projection_matrix = glGetUniformLocation(d_7seg_mask_shader, "d_model_view_projection_matrix");
     d_7seg_mask_shader_texture = glGetUniformLocation(d_7seg_mask_shader, "d_texture");
@@ -546,9 +595,11 @@ void d_Init()
     glShaderStorageBlockBinding(d_7seg_mask_shader, device_data_block, D_DEVICE_DATA_BINDING);
     device_tex_coords_block = glGetProgramResourceIndex(d_7seg_mask_shader, GL_SHADER_STORAGE_BLOCK, "d_device_tex_coords_buffer");
     glShaderStorageBlockBinding(d_7seg_mask_shader, device_tex_coords_block, D_DEVICE_TEX_COORDS_BINDING);
-    uint32_t display_data_block = glGetProgramResourceIndex(d_7seg_mask_shader, GL_SHADER_STORAGE_BLOCK, "d_7seg_data_buffer");
+    GLuint display_data_block = glGetProgramResourceIndex(d_7seg_mask_shader, GL_SHADER_STORAGE_BLOCK, "d_7seg_data_buffer");
     glShaderStorageBlockBinding(d_7seg_mask_shader, display_data_block, D_7SEG_DATA_BINDING);
+
     /**************************************/
+
     d_output_mask_shader = d_CreateShader(d_7seg_mask_vertex_shader, d_output_mask_fragment_shader, "output_mask_shader");
     d_output_mask_shader_model_view_projection_matrix = glGetUniformLocation(d_output_mask_shader, "d_model_view_projection_matrix");
     d_output_mask_shader_texture = glGetUniformLocation(d_output_mask_shader, "d_texture");
@@ -558,7 +609,7 @@ void d_Init()
     glShaderStorageBlockBinding(d_output_mask_shader, device_tex_coords_block, D_DEVICE_TEX_COORDS_BINDING);
     wire_colors_block = glGetProgramResourceIndex(d_output_mask_shader, GL_SHADER_STORAGE_BLOCK, "d_wire_colors");
     glShaderStorageBlockBinding(d_output_mask_shader, wire_colors_block, D_WIRE_COLOR_BINDING);
-    uint32_t output_data_block = glGetProgramResourceIndex(d_output_mask_shader, GL_SHADER_STORAGE_BLOCK, "d_output_data_buffer");
+    GLuint output_data_block = glGetProgramResourceIndex(d_output_mask_shader, GL_SHADER_STORAGE_BLOCK, "d_output_data_buffer");
     glShaderStorageBlockBinding(d_output_mask_shader, output_data_block, D_OUTPUT_DATA_BINDING);
     
     d_selection_box_shader = d_CreateShader(d_selection_box_vertex_shader, d_selection_box_fragment_shader, "selection_box_shader");
@@ -745,60 +796,143 @@ GLuint d_CreateTexture(int32_t width, int32_t height, uint32_t internal_format, 
     return texture;
 }
 
-struct d_device_data_slot_t *d_AllocDeviceData()
+struct d_draw_data_slot_t *d_AllocDrawDataSlot(struct list_t *slots, void *object)
 {
-    uint32_t slot_index = list_AddElement(&d_device_data_update_slots, NULL);
-    struct d_device_data_slot_t *slot = list_GetElement(&d_device_data_update_slots, slot_index);
-    slot->device = NULL;
+    uint32_t slot_index = list_AddElement(slots, NULL);
+    struct d_draw_data_slot_t *slot = list_GetElement(slots, slot_index);
+    slot->object = object;
     slot->data_index = slot_index;
     slot->update_index = D_DEVICE_DATA_SLOT_INVALID_UPDATE_INDEX;
     return slot;
 }
 
-void d_FreeDeviceData(struct d_device_data_slot_t *slot)
+uint32_t d_FreeDrawDataSlot(struct d_draw_data_slot_t *slot, struct list_t *slots, struct list_t *queue)
 {
     // struct d_device_data_handle_t *slot = list_GetValidElement(&d_device_data_slots, slot_index);
 
     if(slot != NULL && slot->data_index != D_DEVICE_DATA_SLOT_INVALID_INDEX)
     {
         uint32_t slot_index = slot->data_index;
-        list_RemoveElement(&d_device_data_update_slots, slot_index);
+        list_RemoveElement(slots, slot_index);
 
-        if(slot_index < d_device_data_update_slots.cursor)
+        if(slot_index < slots->cursor)
         {
-            slot->device->draw_data = slot;
             slot->data_index = slot_index;
-            d_QueueDeviceDataUpdate(slot);
+            d_QueueDrawDataUpdate(slot, queue);
         }
+
+        return 1;
     }
+
+    return 0;
 }
 
-void d_QueueDeviceDataUpdate(struct d_device_data_slot_t *slot)
+void d_QueueDrawDataUpdate(struct d_draw_data_slot_t *slot, struct list_t *queue)
 {
     if(slot->update_index == D_DEVICE_DATA_SLOT_INVALID_UPDATE_INDEX)
     {
-        slot->update_index = list_AddElement(&d_device_data_update_queue, NULL);
-        struct d_device_data_slot_t **update_slot = (struct d_device_data_slot_t **)list_GetElement(&d_device_data_update_queue, slot->update_index);
+        slot->update_index = list_AddElement(queue, NULL);
+        struct d_draw_data_slot_t **update_slot = (struct d_draw_data_slot_t **)list_GetElement(queue, slot->update_index);
         *update_slot = slot;
     }
 }
 
+struct d_draw_data_slot_t *d_AllocDeviceData(struct dev_t *device)
+{
+    // uint32_t slot_index = list_AddElement(&d_device_data_slots, NULL);
+    // struct d_device_data_slot_t *slot = list_GetElement(&d_device_data_slots, slot_index);
+    // slot->device = NULL;
+    // slot->data_index = slot_index;
+    // slot->update_index = D_DEVICE_DATA_SLOT_INVALID_UPDATE_INDEX;
+    // return slot;
+
+    return d_AllocDrawDataSlot(&d_device_data_slots, device);
+}
+
+void d_FreeDeviceData(struct d_draw_data_slot_t *slot)
+{
+    uint32_t slot_index = slot->data_index;
+
+    if(d_FreeDrawDataSlot(slot, &d_device_data_slots, &d_device_data_update_queue) && slot_index < d_device_data_slots.cursor)
+    {
+        slot->device->draw_data = slot;
+    }
+    // struct d_device_data_handle_t *slot = list_GetValidElement(&d_device_data_slots, slot_index);
+
+    // if(slot != NULL && slot->data_index != D_DEVICE_DATA_SLOT_INVALID_INDEX)
+    // {
+    //     uint32_t slot_index = slot->data_index;
+    //     list_RemoveElement(&d_device_data_slots, slot_index);
+
+    //     if(slot_index < d_device_data_update_slots.cursor)
+    //     {
+    //         slot->device->draw_data = slot;
+    //         slot->data_index = slot_index;
+    //         d_QueueDeviceDataUpdate(slot);
+    //     }
+    // }
+}
+
+void d_QueueDeviceDataUpdate(struct d_draw_data_slot_t *slot)
+{
+    d_QueueDrawDataUpdate(slot, &d_device_data_update_queue);
+    // if(slot->update_index == D_DEVICE_DATA_SLOT_INVALID_UPDATE_INDEX)
+    // {
+        
+        // slot->update_index = list_AddElement(&d_device_data_update_queue, NULL);
+        // struct d_device_data_slot_t **update_slot = (struct d_device_data_slot_t **)list_GetElement(&d_device_data_update_queue, slot->update_index);
+        // *update_slot = slot;
+    // }
+}
+
+struct d_draw_data_slot_t *d_AllocJunctionData(struct wire_junc_t *junction)
+{
+    return d_AllocDrawDataSlot(&d_junction_data_slots, junction);
+}
+
+void d_FreeJunctionData(struct d_draw_data_slot_t *slot)
+{
+    uint32_t slot_index = slot->data_index;
+    if(d_FreeDrawDataSlot(slot, &d_junction_data_slots, &d_junction_data_update_queue) && slot_index < d_junction_data_slots.cursor)
+    {
+        slot->junction->draw_data = slot;
+    }
+}
+
+void d_QueueJunctionDataUpdate(struct d_draw_data_slot_t *slot)
+{
+    d_QueueDrawDataUpdate(slot, &d_junction_data_update_queue);
+}
+
+
+struct d_draw_data_slot_t *d_AllocSegmentData(struct wire_seg_t *segment)
+{
+    return d_AllocDrawDataSlot(&d_segment_data_slots, segment);
+}
+
+void d_FreeSegmentData(struct d_draw_data_slot_t *slot)
+{
+    uint32_t slot_index = slot->data_index;
+    if(d_FreeDrawDataSlot(slot, &d_segment_data_slots, &d_segment_data_update_queue) && slot_index < d_segment_data_slots.cursor)
+    {
+        slot->segment->draw_data = slot;
+    }
+}
+
+void d_QueueSegmentDataUpdate(struct d_draw_data_slot_t *slot)
+{
+    d_QueueDrawDataUpdate(slot, &d_segment_data_update_queue);
+}
+
 int32_t d_CompareDataSlots(const void *a, const void *b)
 {
-    struct d_device_data_slot_t *slot_a = *(struct d_device_data_slot_t **)a;
-    struct d_device_data_slot_t *slot_b = *(struct d_device_data_slot_t **)b;
+    struct d_draw_data_slot_t *slot_a = *(struct d_draw_data_slot_t **)a;
+    struct d_draw_data_slot_t *slot_b = *(struct d_draw_data_slot_t **)b;
 
     if(slot_a->data_index > slot_b->data_index) return 1;
     if(slot_a->data_index < slot_b->data_index) return -1;
     return 0;
 }
-
-// vec2_t d_device_axes[] = {
-//     [DEV_DEVICE_AXIS_POS_X] = {1, 0},
-//     [DEV_DEVICE_AXIS_POS_Y] = {0, 1},
-//     [DEV_DEVICE_AXIS_NEG_X] = {-1, 0},
-//     [DEV_DEVICE_AXIS_NEG_Y] = {0, -1},
-// };
 
 void d_UpdateDeviceData()
 {
@@ -834,11 +968,11 @@ void d_UpdateDeviceData()
         }
 
         glUnmapBuffer(GL_SHADER_STORAGE_BUFFER);
-        glBindBuffer(GL_SHADER_STORAGE_BUFFER, d_pin_data_buffer);
 
+        /* TODO: refactor this to not upload all pins every time */
+        glBindBuffer(GL_SHADER_STORAGE_BUFFER, d_pin_data_buffer);
         struct d_pin_data_t *device_pin_data = glMapBuffer(GL_SHADER_STORAGE_BUFFER, GL_WRITE_ONLY);
         d_pin_count = 0;
-
         for(uint32_t index = 0; index < dev_devices.cursor; index++)
         {
             struct dev_t *device = dev_GetDevice(index);
@@ -861,6 +995,49 @@ void d_UpdateDeviceData()
     d_device_data_update_queue.cursor = 0;
 }
 
+void d_UpdateWireData()
+{
+    if(d_junction_data_update_queue.cursor > 0)
+    {
+        glBindBuffer(GL_SHADER_STORAGE_BUFFER, d_junction_data_buffer);
+        struct d_junction_data_t *junction_data = glMapBuffer(GL_SHADER_STORAGE_BUFFER, GL_WRITE_ONLY);
+
+        for(uint32_t index = 0; index < d_junction_data_update_queue.cursor; index++)
+        {
+            struct d_draw_data_slot_t *slot = *(struct d_draw_data_slot_t **)list_GetElement(&d_junction_data_update_queue, index);
+            struct wire_junc_t *junction = slot->junction;
+            junction_data[slot->data_index].position[0] = junction->position.x;
+            junction_data[slot->data_index].position[1] = junction->position.y;
+        }
+
+        glUnmapBuffer(GL_SHADER_STORAGE_BUFFER);
+        glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
+    }
+
+    if(d_segment_data_update_queue.cursor > 0)
+    {
+        glBindBuffer(GL_SHADER_STORAGE_BUFFER, d_segment_data_buffer);
+        struct d_segment_data_t *segment_data = glMapBuffer(GL_SHADER_STORAGE_BUFFER, GL_WRITE_ONLY);
+
+        for(uint32_t index = 0; index < d_segment_data_update_queue.cursor; index++)
+        {
+            struct d_draw_data_slot_t *slot = *(struct d_draw_data_slot_t **)list_GetElement(&d_segment_data_update_queue, index);
+            struct wire_seg_t *segment = slot->segment;
+
+            for(uint32_t end_index = 0; end_index < 2; end_index++)
+            {
+                struct d_draw_data_slot_t *junction_data = segment->ends[end_index].junction->draw_data;
+                segment_data[slot->data_index].ends[end_index] = junction_data->data_index;
+            }
+
+            segment_data[slot->data_index].selected = segment->selection_index != 0xffffffff;
+        }
+
+        glUnmapBuffer(GL_SHADER_STORAGE_BUFFER);
+        glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
+    }
+}
+
 void d_Draw()
 {
     d_model_view_projection_matrix[0] = 2.0 / ((float)m_window_width +  m_zoom * ((float)m_window_width / (float)m_window_height));
@@ -869,12 +1046,15 @@ void d_Draw()
     d_model_view_projection_matrix[13] = -m_offset_y * d_model_view_projection_matrix[5];
 
     d_UpdateDeviceData();
+    d_UpdateWireData();
 
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, D_WIRE_COLOR_BINDING, d_wire_value_color_buffer);
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, D_DEVICE_TYPE_DEF_BINDING, d_device_type_def_buffer);
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, D_DEVICE_PIN_DEF_BINDING, d_device_pin_def_buffer);
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, D_PIN_DATA_BINDING, d_pin_data_buffer);
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, D_DEVICE_DATA_BINDING, d_device_data_buffer);
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, D_JUNCTION_DATA_BINDING, d_junction_data_buffer);
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, D_SEGMENT_DATA_BINDING, d_segment_data_buffer);
 
     glDisable(GL_CULL_FACE);
     glDisable(GL_SCISSOR_TEST);
@@ -1170,162 +1350,175 @@ void d_DrawDevices()
 
 void d_DrawWires()
 {
-    glBindBuffer(GL_ARRAY_BUFFER, d_wire_vertex_buffer);
+    glBindBuffer(GL_ARRAY_BUFFER, d_device_vertex_buffer);
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
     // glBindBufferBase(GL_SHADER_STORAGE_BUFFER, D_WIRE_COLOR_BINDING, d_wire_value_color_buffer);
     glUseProgram(d_wire_shader);
     glEnableVertexAttribArray(0);
-    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, sizeof(struct d_wire_vert_t), (void *)(offsetof(struct d_wire_vert_t, position)));
-    glEnableVertexAttribArray(1);
-    glVertexAttribIPointer(1, 1, GL_INT, sizeof(struct d_wire_vert_t), (void *)(offsetof(struct d_wire_vert_t, value_sel)));
+    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, sizeof(struct d_device_vert_t), (void *)(offsetof(struct d_device_vert_t, position)));
+    glDisableVertexAttribArray(1);
+    // glEnableVertexAttribArray(1);
+    // glVertexAttribIPointer(1, 1, GL_INT, sizeof(struct d_wire_vert_t), (void *)(offsetof(struct d_wire_vert_t, value_sel)));
 
     glUniformMatrix4fv(d_wire_shader_model_view_projection_matrix, 1, GL_FALSE, d_model_view_projection_matrix);
     glLineWidth(2.0f);
     glPointSize(4.0f);
+    glDrawArraysInstanced(GL_LINES, 0, 2, d_segment_data_slots.cursor);
+
+
     // glDepthFunc(GL_LESS);
 
-    uint32_t vertex_count = (w_wire_segs.cursor - (w_wire_segs.free_indices_top + 1)) * 2;
-    uint32_t update_count = vertex_count / D_WIRE_VERTEX_BUFFER_SIZE;
 
-    if(vertex_count % D_WIRE_VERTEX_BUFFER_SIZE)
-    {
-        update_count++;
-    }
 
-    uint32_t wire_index = 0;
-    uint32_t last_wire = w_wires.cursor;
+    // uint32_t vertex_count = (w_wire_segs.cursor - (w_wire_segs.free_indices_top + 1)) * 2;
+    // uint32_t update_count = vertex_count / D_WIRE_VERTEX_BUFFER_SIZE;
+
+    // if(vertex_count % D_WIRE_VERTEX_BUFFER_SIZE)
+    // {
+    //     update_count++;
+    // }
+
+    // uint32_t wire_index = 0;
+    // uint32_t last_wire = w_wires.cursor;
     
-    for(uint32_t update_index = 0; update_index < update_count; update_index++)
-    {
-        uint32_t buffer_offset = 0;
+    // for(uint32_t update_index = 0; update_index < update_count; update_index++)
+    // {
+    //     uint32_t buffer_offset = 0;
 
-        for(; wire_index < last_wire; wire_index++)
-        {
-            struct wire_t *wire = pool_GetValidElement(&w_wires, wire_index);
+    //     for(; wire_index < last_wire; wire_index++)
+    //     {
+    //         struct wire_t *wire = pool_GetValidElement(&w_wires, wire_index);
 
-            if(wire != NULL)
-            {
-                if(wire->segment_count * 2 + buffer_offset > D_WIRE_VERTEX_BUFFER_SIZE)
-                {
-                    break;
-                }
+    //         if(wire != NULL)
+    //         {
+    //             if(wire->segment_count * 2 + buffer_offset > D_WIRE_VERTEX_BUFFER_SIZE)
+    //             {
+    //                 break;
+    //             }
 
 
-                // struct wire_seg_pos_block_t *segment_block = wire->first_segment_pos;
-                struct wire_seg_t *segment = wire->first_segment;
-                struct sim_wire_data_t *wire_data = list_GetValidElement(&sim_wire_data, wire->sim_data);
-                uint8_t wire_value = (m_run_simulation || m_single_step) ? wire_data->value : WIRE_VALUE_Z;
-                // uint32_t total_segment_count = wire->segment_pos_count;
+    //             // struct wire_seg_pos_block_t *segment_block = wire->first_segment_pos;
+    //             struct wire_seg_t *segment = wire->first_segment;
+    //             struct sim_wire_data_t *wire_data = list_GetValidElement(&sim_wire_data, wire->sim_data);
+    //             uint8_t wire_value = (m_run_simulation || m_single_step) ? wire_data->value : WIRE_VALUE_Z;
+    //             // uint32_t total_segment_count = wire->segment_pos_count;
 
-                while(segment != NULL)
-                {
-                    // uint32_t segment_count = WIRE_SEGMENT_POS_BLOCK_SIZE;
-                    // if(segment_count > total_segment_count)
-                    // {
-                    //     segment_count = total_segment_count;
-                    // }
-                    // total_segment_count -= segment_count;
+    //             while(segment != NULL)
+    //             {
+    //                 // uint32_t segment_count = WIRE_SEGMENT_POS_BLOCK_SIZE;
+    //                 // if(segment_count > total_segment_count)
+    //                 // {
+    //                 //     segment_count = total_segment_count;
+    //                 // }
+    //                 // total_segment_count -= segment_count;
 
-                    // for(uint32_t segment_index = 0; segment_index < segment_count; segment_index++)
-                    // {
-                    // struct wire_seg_pos_t *segment = segment_block->segments + segment_index;
-                    d_wire_vertices[buffer_offset].position[0] = segment->ends[WIRE_SEG_START_INDEX].x;
-                    d_wire_vertices[buffer_offset].position[1] = segment->ends[WIRE_SEG_START_INDEX].y;
-                    d_wire_vertices[buffer_offset].value_sel = wire_value | ((segment->selection_index != 0xffffffff) << 16);
-                    buffer_offset++;
+    //                 // for(uint32_t segment_index = 0; segment_index < segment_count; segment_index++)
+    //                 // {
+    //                 // struct wire_seg_pos_t *segment = segment_block->segments + segment_index;
+    //                 struct wire_junc_t *junction = segment->ends[WIRE_SEG_HEAD_INDEX].junction;
+    //                 d_wire_vertices[buffer_offset].position[0] = junction->position.x;
+    //                 d_wire_vertices[buffer_offset].position[1] = junction->position.y;
+    //                 d_wire_vertices[buffer_offset].value_sel = wire_value | ((segment->selection_index != 0xffffffff) << 16);
+    //                 buffer_offset++;
 
-                    d_wire_vertices[buffer_offset].position[0] = segment->ends[WIRE_SEG_END_INDEX].x;
-                    d_wire_vertices[buffer_offset].position[1] = segment->ends[WIRE_SEG_END_INDEX].y;
-                    d_wire_vertices[buffer_offset].value_sel = wire_value | ((segment->selection_index != 0xffffffff) << 16);
-                    buffer_offset++;
-                    // }
-                    segment = segment->wire_next;
-                }
-            }
-        }
-        glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(struct d_wire_vert_t) * buffer_offset, d_wire_vertices);
-        glDrawArrays(GL_LINES, 0, buffer_offset);
-    }
+    //                 junction = segment->ends[WIRE_SEG_TAIL_INDEX].junction;
+    //                 d_wire_vertices[buffer_offset].position[0] = junction->position.x;
+    //                 d_wire_vertices[buffer_offset].position[1] = junction->position.y;
+    //                 d_wire_vertices[buffer_offset].value_sel = wire_value | ((segment->selection_index != 0xffffffff) << 16);
+    //                 buffer_offset++;
+    //                 // }
+    //                 segment = segment->wire_next;
+    //             }
+    //         }
+    //     }
+    //     glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(struct d_wire_vert_t) * buffer_offset, d_wire_vertices);
+    //     glDrawArrays(GL_LINES, 0, buffer_offset);
+    // }
 
-    vertex_count = w_wire_juncs.cursor;
-    update_count = vertex_count / D_WIRE_VERTEX_BUFFER_SIZE;
+    // vertex_count = w_wire_juncs.cursor;
+    // update_count = vertex_count / D_WIRE_VERTEX_BUFFER_SIZE;
 
-    if(vertex_count % D_WIRE_VERTEX_BUFFER_SIZE)
-    {
-        update_count++;
-    }
+    // if(vertex_count % D_WIRE_VERTEX_BUFFER_SIZE)
+    // {
+    //     update_count++;
+    // }
 
-    wire_index = 0;
-    last_wire = w_wires.cursor;
+    // wire_index = 0;
+    // last_wire = w_wires.cursor;
     
-    for(uint32_t update_index = 0; update_index < update_count; update_index++)
-    {
-        uint32_t buffer_offset = 0;
+    // for(uint32_t update_index = 0; update_index < update_count; update_index++)
+    // {
+    //     uint32_t buffer_offset = 0;
 
-        for(; wire_index < last_wire; wire_index++)
-        {
-            struct wire_t *wire = pool_GetValidElement(&w_wires, wire_index);
+    //     for(; wire_index < last_wire; wire_index++)
+    //     {
+    //         struct wire_t *wire = pool_GetValidElement(&w_wires, wire_index);
 
-            if(wire != NULL)
-            {
-                if(wire->junction_count + buffer_offset > D_WIRE_VERTEX_BUFFER_SIZE)
-                {
-                    break;
-                }
+    //         if(wire != NULL)
+    //         {
+    //             if(wire->junction_count + buffer_offset > D_WIRE_VERTEX_BUFFER_SIZE)
+    //             {
+    //                 break;
+    //             }
 
-                // struct wire_junc_pos_block_t *junction_block = wire->first_junction_pos;
-                struct sim_wire_data_t *wire_data = list_GetValidElement(&sim_wire_data, wire->sim_data);
-                uint8_t wire_value = (m_run_simulation || m_single_step) ? wire_data->value : WIRE_VALUE_Z;
-                uint32_t total_junction_count = wire->junction_count;
-                struct wire_junc_t *junction = wire->first_junction;
+    //             // struct wire_junc_pos_block_t *junction_block = wire->first_junction_pos;
+    //             struct sim_wire_data_t *wire_data = list_GetValidElement(&sim_wire_data, wire->sim_data);
+    //             uint8_t wire_value = (m_run_simulation || m_single_step) ? wire_data->value : WIRE_VALUE_Z;
+    //             uint32_t total_junction_count = wire->junction_count;
+    //             struct wire_junc_t *junction = wire->first_junction;
 
 
-                while(junction != NULL)
-                {
-                    // uint32_t junction_count = WIRE_JUNCTION_POS_BLOCK_SIZE;
-                    // if(junction_count > total_junction_count)
-                    // {
-                    //     junction_count = total_junction_count;
-                    // }
-                    // total_junction_count -= junction_count;
+    //             while(junction != NULL)
+    //             {
+    //                 // uint32_t junction_count = WIRE_JUNCTION_POS_BLOCK_SIZE;
+    //                 // if(junction_count > total_junction_count)
+    //                 // {
+    //                 //     junction_count = total_junction_count;
+    //                 // }
+    //                 // total_junction_count -= junction_count;
 
-                    // for(uint32_t junction_index = 0; junction_index < junction_count; junction_index++)
-                    // {
-                    //     struct wire_junc_pos_t *junction = junction_block->junctions + junction_index;
-                    d_wire_vertices[buffer_offset].position[0] = junction->pos->x;
-                    d_wire_vertices[buffer_offset].position[1] = junction->pos->y;
-                    d_wire_vertices[buffer_offset].value_sel = wire_value;
-                    buffer_offset++;
-                    // }
-                    // junction_block = junction_block->next;
-                    junction = junction->wire_next;
-                }
-            }
-        }
-        glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(struct d_wire_vert_t) * buffer_offset, d_wire_vertices);
-        glDrawArrays(GL_POINTS, 0, buffer_offset);
-    }
+    //                 // for(uint32_t junction_index = 0; junction_index < junction_count; junction_index++)
+    //                 // {
+    //                 //     struct wire_junc_pos_t *junction = junction_block->junctions + junction_index;
+    //                 d_wire_vertices[buffer_offset].position[0] = junction->pos->x;
+    //                 d_wire_vertices[buffer_offset].position[1] = junction->pos->y;
+    //                 d_wire_vertices[buffer_offset].value_sel = wire_value;
+    //                 buffer_offset++;
+    //                 // }
+    //                 // junction_block = junction_block->next;
+    //                 junction = junction->wire_next;
+    //             }
+    //         }
+    //     }
+    //     glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(struct d_wire_vert_t) * buffer_offset, d_wire_vertices);
+    //     glDrawArrays(GL_POINTS, 0, buffer_offset);
+    // }
 
-    if(m_wire_seg_pos.cursor != 0)
-    {
-        uint32_t buffer_offset = 0;
-        for(uint32_t index = 0; index < m_wire_seg_pos.cursor; index++)
-        {
-            union m_wire_seg_t *segment = list_GetElement(&m_wire_seg_pos, index);
-            d_wire_vertices[buffer_offset].position[0] = segment->seg_pos.ends[WIRE_SEG_START_INDEX].x;
-            d_wire_vertices[buffer_offset].position[1] = segment->seg_pos.ends[WIRE_SEG_START_INDEX].y;
-            d_wire_vertices[buffer_offset].value_sel = WIRE_VALUE_Z;
-            buffer_offset++;
+    // if(m_wire_segs.cursor != 0)
+    // {
+    //     union m_wire_seg_t *segment = list_GetElement(&m_wire_segs, 0);
+    //     uint32_t buffer_offset = 0;
+    //     ivec2_t prev_head_pos = segment->position;
 
-            d_wire_vertices[buffer_offset].position[0] = segment->seg_pos.ends[WIRE_SEG_END_INDEX].x;
-            d_wire_vertices[buffer_offset].position[1] = segment->seg_pos.ends[WIRE_SEG_END_INDEX].y;
-            d_wire_vertices[buffer_offset].value_sel = WIRE_VALUE_Z;
-            buffer_offset++;
-        }
+    //     for(uint32_t index = 0; index < m_wire_segs.cursor; index++)
+    //     {
+    //         union m_wire_seg_t *segment = list_GetElement(&m_wire_segs, index);
+    //         d_wire_vertices[buffer_offset].position[0] = prev_head_pos.x;
+    //         d_wire_vertices[buffer_offset].position[1] = prev_head_pos.y;
+    //         d_wire_vertices[buffer_offset].value_sel = WIRE_VALUE_Z;
+    //         buffer_offset++;
 
-        glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(struct d_wire_vert_t) * buffer_offset, d_wire_vertices);
-        glDrawArrays(GL_LINES, 0, buffer_offset);
-    }    
+    //         d_wire_vertices[buffer_offset].position[0] = segment->position.x;
+    //         d_wire_vertices[buffer_offset].position[1] = segment->position.y;
+    //         d_wire_vertices[buffer_offset].value_sel = WIRE_VALUE_Z;
+    //         buffer_offset++;
+
+    //         prev_head_pos = segment->position;
+    //     }
+
+    //     glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(struct d_wire_vert_t) * buffer_offset, d_wire_vertices);
+    //     glDrawArrays(GL_LINES, 0, buffer_offset);
+    // }    
 }
 
 void d_DrawPins()
@@ -1351,7 +1544,7 @@ void d_DrawPins()
 
     // glUnmapNamedBuffer(d_pin_data_buffer);
 
-    glBindBuffer(GL_ARRAY_BUFFER, d_wire_vertex_buffer);
+    glBindBuffer(GL_ARRAY_BUFFER, d_device_vertex_buffer);
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
 
     glEnable(GL_PROGRAM_POINT_SIZE);
